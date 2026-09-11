@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Linking, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Linking, RefreshControl, Platform } from 'react-native';
 import { Calendar } from 'react-native-calendars';
+import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../context/AuthContext';
 
 export default function TimesheetScreen() {
@@ -11,7 +12,6 @@ export default function TimesheetScreen() {
   const [allPunches, setAllPunches] = useState([]);
   const [markedDates, setMarkedDates] = useState({});
   
-  // Local date formatting YYYY-MM-DD
   const getLocalDateString = (d = new Date()) => {
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -91,57 +91,105 @@ export default function TimesheetScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.headerTitle}>My Timesheet</Text>
+      {/* Calendar Card Widget */}
+      <View style={styles.calendarCardContainer}>
+        <Calendar
+          current={selectedDate}
+          onDayPress={handleDateSelect}
+          markedDates={markedDates}
+          theme={{
+            calendarBackground: '#ffffff',
+            textSectionTitleColor: '#94a3b8',
+            selectedDayBackgroundColor: '#2563eb',
+            selectedDayTextColor: '#ffffff',
+            todayTextColor: '#2563eb',
+            dayTextColor: '#1e293b',
+            textDisabledColor: '#cbd5e1',
+            dotColor: '#2563eb',
+            selectedDotColor: '#ffffff',
+            arrowColor: '#2563eb',
+            monthTextColor: '#0f172a',
+            indicatorColor: '#2563eb',
+            textDayFontWeight: '600',
+            textMonthFontWeight: '700',
+            textDayHeaderFontWeight: '600',
+            textDayFontSize: 14,
+            textMonthFontSize: 16,
+            textDayHeaderFontSize: 12,
+          }}
+        />
+      </View>
 
-      <Calendar
-        current={selectedDate}
-        onDayPress={handleDateSelect}
-        markedDates={markedDates}
-        theme={{
-          todayTextColor: '#2563eb',
-          arrowColor: '#2563eb',
-          textDayFontWeight: '500',
-          textMonthFontWeight: 'bold',
-          textDayHeaderFontWeight: '600',
-        }}
-        style={styles.calendarCard}
-      />
-
-      <View style={styles.detailsHeader}>
-        <Text style={styles.detailsTitle}>
-          {selectedDayRecord ? selectedDayRecord.display_date : `Recent Activity (${displayList.length})`}
-        </Text>
+      {/* Date Header Summary Card */}
+      <View style={styles.summaryBar}>
+        <View style={styles.summaryLeft}>
+          <Ionicons name="calendar-outline" size={18} color="#2563eb" />
+          <Text style={styles.summaryTitle}>
+            {selectedDayRecord ? selectedDayRecord.display_date : `Recent Log History`}
+          </Text>
+        </View>
         {selectedDayRecord && (
-          <Text style={styles.durationBadge}>Total: {selectedDayRecord.total_duration}</Text>
+          <View style={styles.durationPill}>
+            <Ionicons name="time-outline" size={13} color="#ffffff" style={{ marginRight: 4 }} />
+            <Text style={styles.durationText}>{selectedDayRecord.total_duration}</Text>
+          </View>
         )}
       </View>
 
+      {/* Punch Feed List */}
       {loading ? (
-        <ActivityIndicator size="large" color="#2563eb" style={{ marginTop: 20 }} />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#2563eb" />
+        </View>
       ) : displayList.length > 0 ? (
         <FlatList
           data={displayList}
           keyExtractor={(item) => item.id.toString()}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchTimesheet(); }} />}
-          renderItem={({ item }) => (
-            <View style={styles.punchCard}>
-              <View style={styles.punchHeader}>
-                <Text style={[styles.badge, item.punch_type === 'CLOCK_IN' ? styles.badgeIn : styles.badgeOut]}>
-                  {item.punch_type}
-                </Text>
-                <Text style={styles.punchTime}>{item.date} | {item.time}</Text>
-              </View>
-              <Text style={styles.address}>📍 {item.address}</Text>
+          contentContainerStyle={{ paddingBottom: 20 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchTimesheet(); }} tintColor="#2563eb" />
+          }
+          renderItem={({ item }) => {
+            const isClockIn = item.punch_type === 'CLOCK_IN';
+            return (
+              <View style={styles.punchCard}>
+                <View style={styles.cardTopRow}>
+                  <View style={[styles.statusBadge, isClockIn ? styles.badgeIn : styles.badgeOut]}>
+                    <Ionicons 
+                      name={isClockIn ? "arrow-down-circle-outline" : "arrow-up-circle-outline"} 
+                      size={14} 
+                      color={isClockIn ? "#166534" : "#991b1b"} 
+                    />
+                    <Text style={[styles.statusBadgeText, isClockIn ? styles.textIn : styles.textOut]}>
+                      {isClockIn ? 'CLOCK IN' : 'CLOCK OUT'}
+                    </Text>
+                  </View>
 
-              <TouchableOpacity style={styles.mapBtn} onPress={() => openGoogleMaps(item.lat, item.lng)}>
-                <Text style={styles.mapBtnText}>View Location Pin</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+                  <Text style={styles.timestampText}>{item.time}</Text>
+                </View>
+
+                <View style={styles.locationRow}>
+                  <Ionicons name="location-sharp" size={15} color="#64748b" style={{ marginRight: 4 }} />
+                  <Text style={styles.addressText} numberOfLines={1}>{item.address}</Text>
+                </View>
+
+                <TouchableOpacity 
+                  style={styles.mapActionChip} 
+                  activeOpacity={0.7} 
+                  onPress={() => openGoogleMaps(item.lat, item.lng)}
+                >
+                  <Ionicons name="map-outline" size={14} color="#2563eb" />
+                  <Text style={styles.mapActionText}>View Location Pin</Text>
+                </TouchableOpacity>
+              </View>
+            );
+          }}
         />
       ) : (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No attendance records found.</Text>
+          <Ionicons name="document-text-outline" size={48} color="#cbd5e1" />
+          <Text style={styles.emptyText}>No attendance records found for this date.</Text>
         </View>
       )}
     </View>
@@ -150,20 +198,78 @@ export default function TimesheetScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16, backgroundColor: '#f8fafc' },
-  headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#0f172a', marginBottom: 12 },
-  calendarCard: { borderRadius: 12, elevation: 2, borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 16 },
-  detailsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  detailsTitle: { fontSize: 16, fontWeight: 'bold', color: '#1e293b' },
-  durationBadge: { backgroundColor: '#1e3a8a', color: '#ffffff', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, fontWeight: 'bold', fontSize: 12 },
-  punchCard: { backgroundColor: '#ffffff', padding: 12, borderRadius: 8, marginBottom: 8, borderWidth: 1, borderColor: '#e2e8f0' },
-  punchHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, fontWeight: 'bold', fontSize: 11, overflow: 'hidden' },
-  badgeIn: { backgroundColor: '#dcfce7', color: '#15803d' },
-  badgeOut: { backgroundColor: '#fee2e2', color: '#b91c1c' },
-  punchTime: { fontSize: 13, fontWeight: 'bold', color: '#334155' },
-  address: { fontSize: 12, color: '#64748b', marginBottom: 8 },
-  mapBtn: { backgroundColor: '#eff6ff', padding: 6, borderRadius: 6, alignItems: 'center' },
-  mapBtnText: { color: '#2563eb', fontWeight: 'bold', fontSize: 12 },
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 30 },
-  emptyText: { color: '#94a3b8', fontSize: 14 },
+  calendarCardContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8 },
+      android: { elevation: 3 },
+    }),
+  },
+  summaryBar: {
+    flexDirection: 'row',
+    justify: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  summaryLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  summaryTitle: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
+  durationPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  durationText: { color: '#ffffff', fontWeight: '700', fontSize: 12 },
+  punchCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4 },
+      android: { elevation: 2 },
+    }),
+  },
+  cardTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  badgeIn: { backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0' },
+  badgeOut: { backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecaca' },
+  statusBadgeText: { fontWeight: '700', fontSize: 11, letterSpacing: 0.3 },
+  textIn: { color: '#166534' },
+  textOut: { color: '#991b1b' },
+  timestampText: { fontSize: 13, fontWeight: '700', color: '#334155', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' },
+  locationRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  addressText: { fontSize: 13, color: '#64748b', flex: 1 },
+  mapActionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#eff6ff',
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+  },
+  mapActionText: { color: '#2563eb', fontWeight: '600', fontSize: 12 },
+  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 40, gap: 8 },
+  emptyText: { color: '#94a3b8', fontSize: 14, fontWeight: '500' },
 });
