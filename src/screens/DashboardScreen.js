@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Linking, ScrollView, Platform } from 'react-native';
+import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../context/AuthContext';
 
@@ -168,7 +169,7 @@ export default function DashboardScreen({ navigation }) {
           <Text style={styles.subGreeting}>{user.position || 'Staff'} · {user.department}</Text>
         </View>
         <TouchableOpacity style={styles.logoutIconButton} onPress={logout}>
-          <Ionicons name="log-out-outline" size={22" color="#64748b" />
+          <Ionicons name="log-out-outline" size={22} color="#64748b" />
         </TouchableOpacity>
       </View>
 
@@ -236,7 +237,7 @@ export default function DashboardScreen({ navigation }) {
         
         <View style={styles.chartRow}>
           {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, idx) => {
-            const isFilled = idx < 4; // Simulated current week days worked
+            const isFilled = idx < 5;
             return (
               <View key={day} style={styles.barColumn}>
                 <View style={styles.barTrack}>
