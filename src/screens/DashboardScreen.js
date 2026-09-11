@@ -1,6 +1,6 @@
 import React, { useState, useContext } from 'react';
-import { View, Text, Button, StyleSheet, ActivityIndicator, Alert, Linking, Platform } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Linking, Platform, ScrollView } from 'react-native';
+import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
 import { AuthContext } from '../context/AuthContext';
 
@@ -59,29 +59,45 @@ export default function DashboardScreen({ navigation }) {
   const openGoogleMaps = () => {
     if (!lastPunch) return;
     const { lat, lng } = lastPunch;
-    const scheme = Platform.OS === 'ios' ? 'maps:0,0?q=' : 'geo:0,0?q=';
-    const latLng = `${lat},${lng}`;
-    const label = `HRIS Punch Location (${lastPunch.type})`;
-    const url = Platform.select({
-      ios: `${scheme}${label}@${latLng}`,
-      android: `${scheme}${latLng}(${label})`,
-    });
-
-    Linking.openURL(url).catch(() => {
-      // Fallback to web browser if map app isn't installed
-      Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`);
-    });
+    const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+    Linking.openURL(url);
   };
 
+  const generateLeafletHTML = (lat, lng, label) => `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <style>
+          body, html, #map { height: 100%; margin: 0; padding: 0; }
+        </style>
+      </head>
+      <body>
+        <div id="map"></div>
+        <script>
+          var map = L.map('map', { zoomControl: false }).setView([${lat}], [${lng}], 16);
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19
+          }).addTo(map);
+          L.marker([${lat}], [${lng}]).addTo(map)
+            .bindPopup("${label}")
+            .openPopup();
+        </script>
+      </body>
+    </html>
+  `;
+
   return (
-    <View style={styles.container}>
+    <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
       <Text style={styles.welcome}>Welcome, {user.name}</Text>
       <Text style={styles.subtext}>Dept: {user.department} | Role: {user.role.toUpperCase()}</Text>
 
       {user.role === 'manager' && (
-        <View style={styles.managerBanner}>
-          <Button title="Open Manager Dashboard" onPress={() => navigation.navigate('Manager')} color="#2e7d32" />
-        </View>
+        <TouchableOpacity style={styles.managerBtn} onPress={() => navigation.navigate('Manager')}>
+          <Text style={styles.managerBtnText}>Open Manager Dashboard</Text>
+        </TouchableOpacity>
       )}
 
       <View style={styles.actionCard}>
@@ -89,59 +105,60 @@ export default function DashboardScreen({ navigation }) {
           <ActivityIndicator size="large" color="#007AFF" />
         ) : (
           <View style={styles.buttonGroup}>
-            <Button title="Clock In" onPress={handleClockIn} color="#1b5e20" />
-            <View style={{ height: 10 }} />
-            <Button title="Clock Out" onPress={handleClockOut} color="#b71c1c" />
+            <TouchableOpacity style={styles.clockInBtn} onPress={handleClockIn}>
+              <Text style={styles.btnText}>CLOCK IN</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.clockOutBtn} onPress={handleClockOut}>
+              <Text style={styles.btnText}>CLOCK OUT</Text>
+            </TouchableOpacity>
           </View>
         )}
       </View>
 
       {lastPunch && (
-        <View style={styles.punchInfo}>
+        <View style={styles.punchCard}>
           <Text style={styles.punchTitle}>Last Punch: {lastPunch.type} ({lastPunch.timestamp})</Text>
 
-          {/* Embedded Native Map */}
-          <View style={styles.mapContainer}>
-            <MapView
+          <View style={styles.mapFrame}>
+            <WebView
+              originWhitelist={['*']}
+              source={{ html: generateLeafletHTML(lastPunch.lat, lastPunch.lng, `${lastPunch.type} Location`) }}
               style={styles.map}
-              initialRegion={{
-                latitude: lastPunch.lat,
-                longitude: lastPunch.lng,
-                latitudeDelta: 0.005,
-                longitudeDelta: 0.005,
-              }}
-            >
-              <Marker
-                coordinate={{ latitude: lastPunch.lat, longitude: lastPunch.lng }}
-                title={lastPunch.type}
-                description={`Time: ${lastPunch.timestamp}`}
-              />
-            </MapView>
+              scrollEnabled={false}
+            />
           </View>
 
-          <View style={{ marginTop: 10 }}>
-            <Button title="Open in Google Maps App" onPress={openGoogleMaps} color="#007AFF" />
-          </View>
+          <TouchableOpacity style={styles.extMapBtn} onPress={openGoogleMaps}>
+            <Text style={styles.extMapBtnText}>OPEN IN GOOGLE MAPS APP</Text>
+          </TouchableOpacity>
         </View>
       )}
 
-      <View style={styles.footer}>
-        <Button title="Sign Out" onPress={logout} color="#555" />
-      </View>
-    </View>
+      <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
+        <Text style={styles.logoutBtnText}>SIGN OUT</Text>
+      </TouchableOpacity>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: '#f9f9f9' },
-  welcome: { fontSize: 22, fontWeight: 'bold', color: '#111' },
-  subtext: { fontSize: 14, color: '#666', marginBottom: 12 },
-  managerBanner: { marginBottom: 12, backgroundColor: '#e8f5e9', padding: 8, borderRadius: 8 },
-  actionCard: { backgroundColor: '#fff', padding: 16, borderRadius: 12, marginBottom: 12, elevation: 2 },
-  buttonGroup: { justifyContent: 'space-between' },
-  punchInfo: { backgroundColor: '#eef2f5', padding: 12, borderRadius: 8 },
-  punchTitle: { fontWeight: 'bold', marginBottom: 8, fontSize: 14 },
-  mapContainer: { height: 180, borderRadius: 8, overflow: 'hidden' },
+  scrollContainer: { flexGrow: 1, padding: 16, backgroundColor: '#f4f6f8', paddingBottom: 40 },
+  welcome: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
+  subtext: { fontSize: 13, color: '#6b7280', marginBottom: 16 },
+  managerBtn: { backgroundColor: '#2e7d32', padding: 12, borderRadius: 8, alignItems: 'center', marginBottom: 16 },
+  managerBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
+  actionCard: { backgroundColor: '#ffffff', padding: 16, borderRadius: 12, marginBottom: 16, elevation: 2, borderWidth: 1, borderColor: '#e5e7eb' },
+  buttonGroup: { gap: 10 },
+  clockInBtn: { backgroundColor: '#15803d', paddingVertical: 14, borderRadius: 8, alignItems: 'center' },
+  clockOutBtn: { backgroundColor: '#b91c1c', paddingVertical: 14, borderRadius: 8, alignItems: 'center' },
+  btnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 15, letterSpacing: 0.5 },
+  punchCard: { backgroundColor: '#ffffff', padding: 14, borderRadius: 12, marginBottom: 16, borderWidth: 1, borderColor: '#e5e7eb', elevation: 2 },
+  punchTitle: { fontWeight: 'bold', marginBottom: 10, fontSize: 14, color: '#1f2937' },
+  mapFrame: { height: 220, borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: '#d1d5db', marginBottom: 12 },
   map: { width: '100%', height: '100%' },
-  footer: { marginTop: 'auto', paddingTop: 12 },
+  extMapBtn: { backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
+  extMapBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 13 },
+  logoutBtn: { backgroundColor: '#4b5563', paddingVertical: 12, borderRadius: 8, alignItems: 'center', marginTop: 10 },
+  logoutBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 14 },
 });
