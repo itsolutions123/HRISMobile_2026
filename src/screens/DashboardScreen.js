@@ -75,7 +75,7 @@ export default function DashboardScreen({ navigation }) {
       </head>
       <body>
         <iframe
-          src="https://maps.google.com/maps?q=${lat},${lng}&z=16&output=embed"
+          src="https://maps.google.com/maps?q=loc:${lat}+${lng}&z=18&output=embed"
           allowfullscreen>
         </iframe>
       </body>
