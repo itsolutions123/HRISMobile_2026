@@ -4,32 +4,41 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../context/AuthContext';
 
-const DEPARTMENTS = [
-  'IT Operations',
-  'Executive',
-  'Operations',
-  'Admin',
-  'Sales'
-];
-
 export default function LoginScreen() {
-  const { login } = useContext(AuthContext);
+  const { login, API_BASE_URL } = useContext(AuthContext);
   const [employeeId, setEmployeeId] = useState('');
   const [password, setPassword] = useState('');
-  const [department, setDepartment] = useState('IT Operations');
+  const [showPassword, setShowPassword] = useState(false);
+  const [department, setDepartment] = useState('Admin');
+  const [departmentsList, setDepartmentsList] = useState(['Admin', 'IT Operations', 'Executive', 'Operations', 'Sales']);
   const [showDeptDropdown, setShowDeptDropdown] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     loadSavedCredentials();
+    fetchDynamicDepartments();
   }, []);
+
+  const fetchDynamicDepartments = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/departments`);
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setDepartmentsList(data);
+        }
+      }
+    } catch (e) {
+      console.log('Using default department list fallback:', e);
+    }
+  };
 
   const loadSavedCredentials = async () => {
     try {
       const savedEmpId = await AsyncStorage.getItem('hris_last_emp_id');
       const savedDept = await AsyncStorage.getItem('hris_last_dept');
       if (savedEmpId) setEmployeeId(savedEmpId);
-      if (savedDept && DEPARTMENTS.includes(savedDept)) setDepartment(savedDept);
+      if (savedDept) setDepartment(savedDept);
     } catch (e) {
       console.log('Error reading storage:', e);
     }
@@ -48,10 +57,10 @@ export default function LoginScreen() {
 
       const success = await login(employeeId, password, department);
       if (!success) {
-        Alert.alert('Authentication Failed', 'Invalid credentials or user record not found.');
+        Alert.alert('Authentication Failed', 'Invalid Employee ID, Password, or Department.');
       }
     } catch (error) {
-      Alert.alert('Login Error', error.message || 'Unable to connect to HRIS server.');
+      Alert.alert('Login Error', error.message || 'Unable to connect to HRIS backend server.');
     } finally {
       setLoading(false);
     }
@@ -95,7 +104,7 @@ export default function LoginScreen() {
 
           {showDeptDropdown && (
             <View style={styles.dropdownMenu}>
-              {DEPARTMENTS.map((dept) => (
+              {departmentsList.map((dept) => (
                 <TouchableOpacity
                   key={dept}
                   style={[styles.dropdownItem, department === dept && styles.dropdownItemActive]}
@@ -121,10 +130,13 @@ export default function LoginScreen() {
             <TextInput
               style={styles.input}
               placeholder="••••••••"
-              secureTextEntry
+              secureTextEntry={!showPassword}
               value={password}
               onChangeText={setPassword}
             />
+            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
+              <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#64748b" />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -150,6 +162,7 @@ const styles = StyleSheet.create({
   label: { fontSize: 12, fontWeight: '700', color: '#475569', marginBottom: 6 },
   inputWrapper: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, paddingHorizontal: 12, height: 46, backgroundColor: '#ffffff' },
   inputIcon: { marginRight: 8 },
+  eyeBtn: { padding: 4 },
   input: { flex: 1, fontSize: 14, color: '#0f172a' },
   dropdownTrigger: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, paddingHorizontal: 12, height: 46, backgroundColor: '#ffffff' },
   dropdownValueText: { flex: 1, fontSize: 14, color: '#0f172a' },

@@ -20,7 +20,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="HRIS Enterprise API", version="3.3.0")
+app = FastAPI(title="HRIS Enterprise API", version="3.4.0")
 
 MAX_SHIFT_SECONDS = 20 * 3600
 
@@ -75,7 +75,20 @@ class CreatePunchAdminRequest(BaseModel):
 @app.get("/health")
 @app.get("/api/health")
 def health_check():
-    return {"status": "online", "service": "HRIS FastAPI Backend", "version": "3.3.0"}
+    return {"status": "online", "service": "HRIS FastAPI Backend", "version": "3.4.0"}
+
+# --- Dynamic Departments Endpoint ---
+@app.get("/api/departments")
+def get_departments(db: Session = Depends(get_db)):
+    db_depts = db.query(models.User.department).distinct().all()
+    dept_list = [d[0] for d in db_depts if d[0]]
+    
+    defaults = ["Executive", "IT Operations", "Operations", "Admin", "Sales"]
+    for d in defaults:
+        if d not in dept_list:
+            dept_list.append(d)
+            
+    return sorted(dept_list)
 
 # --- Authentication ---
 @app.post("/api/login")
@@ -362,7 +375,7 @@ def export_dtr_csv(employee_id: Optional[str] = None, db: Session = Depends(get_
     response.headers["Content-Disposition"] = f"attachment; filename={filename}"
     return response
 
-# --- Modern Segmented Web Admin UI ---
+# --- Web Admin UI ---
 @app.get("/admin", response_class=HTMLResponse)
 def admin_dashboard_ui():
     html_content = """
@@ -422,13 +435,7 @@ def admin_dashboard_ui():
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <label class="block text-xs font-semibold text-slate-500 mb-1">Department</label>
-                            <select id="editDept" class="w-full border p-2 rounded-lg text-xs">
-                                <option value="Executive">Executive</option>
-                                <option value="IT Operations">IT Operations</option>
-                                <option value="Operations">Operations</option>
-                                <option value="Admin">Admin</option>
-                                <option value="Sales">Sales</option>
-                            </select>
+                            <select id="editDept" class="deptDropdownSelect w-full border p-2 rounded-lg text-xs"></select>
                         </div>
                         <div>
                             <label class="block text-xs font-semibold text-slate-500 mb-1">Position</label>
@@ -468,7 +475,6 @@ def admin_dashboard_ui():
                             </div>
                         </div>
 
-                        <!-- Top Tab Bar -->
                         <nav class="hidden md:flex gap-1 bg-slate-100 p-1 rounded-lg text-xs font-semibold">
                             <button id="tabBtnClocks" onclick="switchTab('clocks')" class="px-3 py-1.5 rounded-md bg-white text-blue-600 shadow-sm transition">Time Clocks & DTR</button>
                             <button id="tabBtnUsers" onclick="switchTab('users')" class="px-3 py-1.5 rounded-md text-slate-600 hover:text-slate-900 transition">User Directory & RBAC</button>
@@ -570,13 +576,7 @@ def admin_dashboard_ui():
                         <form id="createUserForm" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
                             <input type="text" id="uEmpId" placeholder="Emp ID (e.g. 3286)" required class="border border-slate-200 rounded-lg p-2 text-xs">
                             <input type="text" id="uName" placeholder="Full Name" required class="border border-slate-200 rounded-lg p-2 text-xs">
-                            <select id="uDept" class="border border-slate-200 rounded-lg p-2 text-xs">
-                                <option value="Executive">Executive</option>
-                                <option value="IT Operations" selected>IT Operations</option>
-                                <option value="Operations">Operations</option>
-                                <option value="Admin">Admin</option>
-                                <option value="Sales">Sales</option>
-                            </select>
+                            <select id="uDept" class="deptDropdownSelect border border-slate-200 rounded-lg p-2 text-xs"></select>
                             <input type="text" id="uPos" placeholder="Position" value="IT Specialist" required class="border border-slate-200 rounded-lg p-2 text-xs">
                             <select id="uRole" class="border border-slate-200 rounded-lg p-2 text-xs">
                                 <option value="employee">Employee</option>
@@ -593,7 +593,7 @@ def admin_dashboard_ui():
                     <div id="departmentDirectoryContainer" class="space-y-4"></div>
                 </div>
 
-                <!-- TAB 3: Smart Groups Management Page (Connecteams Layout) -->
+                <!-- TAB 3: Smart Groups Management Page -->
                 <div id="tabContentGroups" class="hidden space-y-6">
                     <div class="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm">
                         <div>
@@ -605,14 +605,12 @@ def admin_dashboard_ui():
                         </button>
                     </div>
 
-                    <!-- Smart Groups Table View -->
                     <div class="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
                         <div class="p-4 bg-slate-50/50 border-b border-slate-100 flex justify-between items-center text-xs font-bold text-slate-500 uppercase">
                             <span>Segment Name</span>
                             <span>Connected Services</span>
                         </div>
 
-                        <!-- Segment 1: Head Office -->
                         <div class="border-b border-slate-100">
                             <div class="p-3.5 bg-slate-50/30 flex items-center justify-between font-bold text-xs text-slate-800">
                                 <span class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-blue-600"></span> Head Office</span>
@@ -630,7 +628,6 @@ def admin_dashboard_ui():
                             </div>
                         </div>
 
-                        <!-- Segment 2: Operations -->
                         <div>
                             <div class="p-3.5 bg-slate-50/30 flex items-center justify-between font-bold text-xs text-slate-800">
                                 <span class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-emerald-600"></span> Operations</span>
@@ -657,10 +654,28 @@ def admin_dashboard_ui():
         <script>
             const API_BASE = "/api";
             let globalUsersCache = [];
+            let globalDeptsCache = [];
 
             const now = new Date();
             now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
             document.getElementById('addTime').value = now.toISOString().slice(0, 16);
+
+            async function fetchDynamicDepartments() {
+                try {
+                    const res = await fetch(`${API_BASE}/departments`);
+                    globalDeptsCache = await res.json();
+                    
+                    const dropdowns = document.querySelectorAll('.deptDropdownSelect');
+                    dropdowns.forEach(sel => {
+                        sel.innerHTML = "";
+                        globalDeptsCache.forEach(d => {
+                            sel.innerHTML += `<option value="${d}">${d}</option>`;
+                        });
+                    });
+                } catch (e) {
+                    console.log('Error fetching dynamic depts:', e);
+                }
+            }
 
             function switchTab(tabName) {
                 const clockTab = document.getElementById("tabContentClocks");
@@ -738,6 +753,7 @@ def admin_dashboard_ui():
             }
 
             async function loadDashboard() {
+                await fetchDynamicDepartments();
                 loadDepartments();
                 loadSegmentedUsers();
                 loadPunches();

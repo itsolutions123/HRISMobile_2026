@@ -7,7 +7,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const API_BASE_URL = 'http://10.0.10.37:8089';
 
-  const login = async (employeeId, role, password = 'password123') => {
+  const login = async (employeeId, password, department) => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/login`, {
         method: 'POST',
@@ -16,14 +16,14 @@ export const AuthProvider = ({ children }) => {
       });
 
       if (!response.ok) {
-        throw new Error('Invalid Employee Credentials');
+        throw new Error('Invalid Employee ID or Password');
       }
 
       const userData = await response.json();
       setUser(userData);
       return true;
     } catch (error) {
-      Alert.alert('Authentication Error', error.message || 'Unable to connect to HRIS Backend');
+      console.log('Login Error:', error.message);
       return false;
     }
   };
