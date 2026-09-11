@@ -63,9 +63,24 @@ export default function DashboardScreen({ navigation }) {
     Linking.openURL(url);
   };
 
-  const googleMapsWebUrl = lastPunch
-    ? `https://maps.google.com/maps?q=${lastPunch.lat},${lastPunch.lng}&z=16&output=embed`
-    : '';
+  const generateIframeHTML = (lat, lng) => `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+        <style>
+          html, body { height: 100%; width: 100%; margin: 0; padding: 0; overflow: hidden; background: #e5e7eb; }
+          iframe { width: 100%; height: 100%; border: 0; }
+        </style>
+      </head>
+      <body>
+        <iframe
+          src="https://maps.google.com/maps?q=${lat},${lng}&z=16&output=embed"
+          allowfullscreen>
+        </iframe>
+      </body>
+    </html>
+  `;
 
   return (
     <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
@@ -101,14 +116,11 @@ export default function DashboardScreen({ navigation }) {
           <View style={styles.mapFrame}>
             <WebView
               originWhitelist={['*']}
-              source={{ uri: googleMapsWebUrl }}
+              source={{ html: generateIframeHTML(lastPunch.lat, lastPunch.lng) }}
               style={styles.map}
               javaScriptEnabled={true}
               domStorageEnabled={true}
-              startInLoadingState={true}
-              renderLoading={() => (
-                <ActivityIndicator size="small" color="#007AFF" style={StyleSheet.absoluteFillObject} />
-              )}
+              scrollEnabled={false}
             />
           </View>
 
