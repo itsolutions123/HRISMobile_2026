@@ -1,6 +1,6 @@
 import React, { useState, useContext } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Linking, ScrollView } from 'react-native';
-import { WebView } from 'react-native-webview';
+import MapView, { Marker, UrlTile } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { AuthContext } from '../context/AuthContext';
 
@@ -63,41 +63,6 @@ export default function DashboardScreen({ navigation }) {
     Linking.openURL(url);
   };
 
-  const generateLeafletHTML = (lat, lng, label) => `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-        <style>
-          html, body, #map { height: 100%; width: 100%; margin: 0; padding: 0; background: #e5e7eb; }
-        </style>
-      </head>
-      <body>
-        <div id="map"></div>
-        <script>
-          document.addEventListener("DOMContentLoaded", function() {
-            var map = L.map('map', { zoomControl: true }).setView([${lat}], [${lng}], 16);
-            
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-              attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
-              subdomains: 'abcd',
-              maxZoom: 19
-            }).addTo(map);
-
-            var marker = L.marker([${lat}], [${lng}]).addTo(map);
-            marker.bindPopup("<b>${label}</b>").openPopup();
-
-            setTimeout(function() {
-              map.invalidateSize();
-            }, 300);
-          });
-        </script>
-      </body>
-    </html>
-  `;
-
   return (
     <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
       <Text style={styles.welcome}>Welcome, {user.name}</Text>
@@ -130,15 +95,27 @@ export default function DashboardScreen({ navigation }) {
           <Text style={styles.punchTitle}>Last Punch: {lastPunch.type} ({lastPunch.timestamp})</Text>
 
           <View style={styles.mapFrame}>
-            <WebView
-              originWhitelist={['*']}
-              source={{ html: generateLeafletHTML(lastPunch.lat, lastPunch.lng, `${lastPunch.type}`) }}
+            <MapView
               style={styles.map}
-              javaScriptEnabled={true}
-              domStorageEnabled={true}
-              mixedContentMode="always"
-              scrollEnabled={false}
-            />
+              region={{
+                latitude: lastPunch.lat,
+                longitude: lastPunch.lng,
+                latitudeDelta: 0.005,
+                longitudeDelta: 0.005,
+              }}
+              mapType="none"
+            >
+              <UrlTile
+                urlTemplate="https://a.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                maximumZ={19}
+                flipY={false}
+              />
+              <Marker
+                coordinate={{ latitude: lastPunch.lat, longitude: lastPunch.lng }}
+                title={lastPunch.type}
+                description={`Time: ${lastPunch.timestamp}`}
+              />
+            </MapView>
           </View>
 
           <TouchableOpacity style={styles.extMapBtn} onPress={openGoogleMaps}>
@@ -167,7 +144,7 @@ const styles = StyleSheet.create({
   btnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 15, letterSpacing: 0.5 },
   punchCard: { backgroundColor: '#ffffff', padding: 14, borderRadius: 12, marginBottom: 16, borderWidth: 1, borderColor: '#e5e7eb', elevation: 2 },
   punchTitle: { fontWeight: 'bold', marginBottom: 10, fontSize: 14, color: '#1f2937' },
-  mapFrame: { height: 220, borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: '#d1d5db', marginBottom: 12 },
+  mapFrame: { height: 220, width: '100%', borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: '#d1d5db', marginBottom: 12 },
   map: { width: '100%', height: '100%' },
   extMapBtn: { backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
   extMapBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 13 },
