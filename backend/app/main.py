@@ -20,7 +20,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="HRIS Enterprise API", version="3.5.0")
+app = FastAPI(title="HRIS Enterprise API", version="3.6.0")
 
 MAX_SHIFT_SECONDS = 20 * 3600
 
@@ -75,7 +75,7 @@ class CreatePunchAdminRequest(BaseModel):
 @app.get("/health")
 @app.get("/api/health")
 def health_check():
-    return {"status": "online", "service": "HRIS FastAPI Backend", "version": "3.5.0"}
+    return {"status": "online", "service": "HRIS FastAPI Backend", "version": "3.6.0"}
 
 # --- Dynamic Departments Endpoint ---
 @app.get("/api/departments")
@@ -240,7 +240,7 @@ def record_punch(req: PunchRequest, db: Session = Depends(get_db)):
         latitude=req.latitude,
         longitude=req.longitude,
         accuracy=req.accuracy,
-        address=req.address,
+        address=req.address or "Pasig, Metro Manila",
         timestamp=get_now_manila().replace(tzinfo=None)
     )
     db.add(punch)
@@ -377,7 +377,270 @@ def export_dtr_csv(employee_id: Optional[str] = None, db: Session = Depends(get_
     response.headers["Content-Disposition"] = f"attachment; filename={filename}"
     return response
 
-# --- Web Admin UI ---
+# --- WEB EMPLOYEE PORTAL UI (Clock In / Clock Out Workspace) ---
+@app.get("/", response_class=HTMLResponse)
+@app.get("/portal", response_class=HTMLResponse)
+def employee_portal_ui():
+    html_content = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>HRIS Employee Portal</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+        <style> body { font-family: 'Inter', sans-serif; } </style>
+    </head>
+    <body class="bg-slate-50 text-slate-900 min-h-screen antialiased flex flex-col justify-between">
+
+        <!-- Login Card Overlay -->
+        <div id="employeeLoginCard" class="min-h-screen flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-xl border border-slate-100 max-w-sm w-full p-6 space-y-5">
+                <div class="text-center space-y-1">
+                    <div class="w-12 h-12 bg-blue-600 text-white rounded-xl mx-auto flex items-center justify-center font-bold text-xl shadow-lg shadow-blue-500/30">H</div>
+                    <h2 class="text-xl font-bold text-slate-800">HRIS Employee Portal</h2>
+                    <p class="text-xs text-slate-500">Sign in to record your attendance</p>
+                </div>
+                <form id="empLoginForm" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Employee ID</label>
+                        <input type="text" id="loginEmpId" placeholder="e.g. 3286" required class="w-full border border-slate-200 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Department</label>
+                        <select id="loginDept" class="deptDropdownSelect w-full border border-slate-200 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"></select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Password</label>
+                        <input type="password" id="loginPass" placeholder="••••••••" required class="w-full border border-slate-200 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg text-sm transition shadow-sm">
+                        Sign In
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Clock-In / Clock-Out Workspace -->
+        <div id="employeeWorkspace" class="hidden min-h-screen flex flex-col">
+            <header class="bg-white border-b border-slate-200 sticky top-0 z-30">
+                <div class="max-w-md mx-auto px-4 h-16 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center font-bold text-base shadow-sm">H</div>
+                        <div>
+                            <h1 id="userDisplayName" class="text-sm font-bold text-slate-800 leading-tight">Employee Workspace</h1>
+                            <p id="userDeptTitle" class="text-[11px] text-slate-500">Active Session</p>
+                        </div>
+                    </div>
+                    <button onclick="logoutEmployee()" class="text-xs text-slate-400 hover:text-slate-600 font-semibold transition">Sign Out</button>
+                </div>
+            </header>
+
+            <main class="flex-1 max-w-md w-full mx-auto px-4 py-6 space-y-6">
+
+                <!-- Interactive Clock Punch Button Card -->
+                <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 text-center space-y-5">
+                    <div>
+                        <span id="statusBadge" class="inline-block px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600">OFF DUTY</span>
+                        <h2 id="liveTimerText" class="text-3xl font-extrabold text-slate-800 font-mono mt-3">00:00:00</h2>
+                        <p id="shiftSubText" class="text-xs text-slate-500 mt-1">Ready to start shift</p>
+                    </div>
+
+                    <button id="punchActionBtn" onclick="triggerPunch()" class="w-full py-4 rounded-xl font-bold text-base text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/25 transition">
+                        CLOCK IN NOW
+                    </button>
+
+                    <p id="geoStatusText" class="text-[11px] text-slate-400">GPS location verification enabled</p>
+                </div>
+
+                <!-- Daily Timesheet History -->
+                <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 space-y-3">
+                    <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Today's Activity Log</h3>
+                    <div id="timesheetLogContainer" class="space-y-2 text-xs divide-y divide-slate-100"></div>
+                </div>
+
+            </main>
+        </div>
+
+        <script>
+            const API_BASE = "/api";
+            let currentUser = null;
+            let activeTimerInterval = null;
+            let currentIsClockedIn = false;
+            let currentLat = 14.5764;
+            let currentLng = 121.0851;
+
+            // Fetch dynamic departments on load
+            async function initPortal() {
+                try {
+                    const res = await fetch(`${API_BASE}/departments`);
+                    const depts = await res.json();
+                    const sel = document.getElementById("loginDept");
+                    sel.innerHTML = "";
+                    depts.forEach(d => {
+                        sel.innerHTML += `<option value="${d}">${d}</option>`;
+                    });
+                } catch(e) {}
+
+                // Load saved credentials from localStorage
+                const savedEmpId = localStorage.getItem("hris_emp_id");
+                if (savedEmpId) document.getElementById("loginEmpId").value = savedEmpId;
+
+                // Watch geolocation
+                if ("geolocation" in navigator) {
+                    navigator.geolocation.getCurrentPosition(
+                        (pos) => {
+                            currentLat = pos.coords.latitude;
+                            currentLng = pos.coords.longitude;
+                            document.getElementById("geoStatusText").innerText = `GPS Active: ${currentLat.toFixed(4)}, ${currentLng.toFixed(4)}`;
+                        },
+                        (err) => {
+                            document.getElementById("geoStatusText").innerText = "GPS Location: Default Pasig Coordinates";
+                        }
+                    );
+                }
+            }
+
+            document.getElementById("empLoginForm").addEventListener("submit", async (e) => {
+                e.preventDefault();
+                const empId = document.getElementById("loginEmpId").value;
+                const pass = document.getElementById("loginPass").value;
+
+                try {
+                    const res = await fetch(`${API_BASE}/login`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ employee_id: empId, password: pass })
+                    });
+
+                    if (res.ok) {
+                        currentUser = await res.json();
+                        localStorage.setItem("hris_emp_id", currentUser.employee_id);
+                        document.getElementById("employeeLoginCard").classList.add("hidden");
+                        document.getElementById("employeeWorkspace").classList.remove("hidden");
+                        document.getElementById("userDisplayName").innerText = currentUser.name;
+                        document.getElementById("userDeptTitle").innerText = `${currentUser.department} • ${currentUser.position}`;
+                        loadActiveStatus();
+                        loadTimesheet();
+                    } else {
+                        alert("Invalid Employee ID or Password");
+                    }
+                } catch (err) {
+                    alert("Unable to reach HRIS server");
+                }
+            });
+
+            function logoutEmployee() {
+                clearInterval(activeTimerInterval);
+                currentUser = null;
+                document.getElementById("employeeWorkspace").classList.add("hidden");
+                document.getElementById("employeeLoginCard").classList.remove("hidden");
+            }
+
+            async function loadActiveStatus() {
+                if (!currentUser) return;
+                const res = await fetch(`${API_BASE}/punch/active/${currentUser.employee_id}`);
+                const data = await res.json();
+                
+                const badge = document.getElementById("statusBadge");
+                const btn = document.getElementById("punchActionBtn");
+                const subText = document.getElementById("shiftSubText");
+
+                clearInterval(activeTimerInterval);
+
+                if (data.is_clocked_in) {
+                    currentIsClockedIn = true;
+                    badge.innerText = "ON DUTY";
+                    badge.className = "inline-block px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800";
+                    btn.innerText = "CLOCK OUT NOW";
+                    btn.className = "w-full py-4 rounded-xl font-bold text-base text-white bg-rose-600 hover:bg-rose-700 shadow-lg shadow-rose-500/25 transition";
+                    subText.innerText = "Active shift running";
+
+                    let elapsed = data.elapsed_seconds || 0;
+                    startTimer(elapsed);
+                } else {
+                    currentIsClockedIn = false;
+                    badge.innerText = "OFF DUTY";
+                    badge.className = "inline-block px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600";
+                    btn.innerText = "CLOCK IN NOW";
+                    btn.className = "w-full py-4 rounded-xl font-bold text-base text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/25 transition";
+                    document.getElementById("liveTimerText").innerText = "00:00:00";
+                    subText.innerText = "Ready to start shift";
+                }
+            }
+
+            function startTimer(seconds) {
+                function update() {
+                    seconds++;
+                    const h = String(Math.floor(seconds / 3600)).padStart(2, '0');
+                    const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
+                    const s = String(seconds % 60).padStart(2, '0');
+                    document.getElementById("liveTimerText").innerText = `${h}:${m}:${s}`;
+                }
+                update();
+                activeTimerInterval = setInterval(update, 1000);
+            }
+
+            async function triggerPunch() {
+                if (!currentUser) return;
+                const punchType = currentIsClockedIn ? "CLOCK_OUT" : "CLOCK_IN";
+
+                const res = await fetch(`${API_BASE}/punch`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        employee_id: currentUser.employee_id,
+                        punch_type: punchType,
+                        latitude: currentLat,
+                        longitude: currentLng,
+                        accuracy: 10.0,
+                        address: "Pasig, Metro Manila"
+                    })
+                });
+
+                if (res.ok) {
+                    loadActiveStatus();
+                    loadTimesheet();
+                } else {
+                    alert("Failed to submit punch");
+                }
+            }
+
+            async function loadTimesheet() {
+                if (!currentUser) return;
+                const res = await fetch(`${API_BASE}/timesheet/${currentUser.employee_id}`);
+                const data = await res.json();
+                const container = document.getElementById("timesheetLogContainer");
+                container.innerHTML = "";
+
+                if (!data.all_punches || data.all_punches.length === 0) {
+                    container.innerHTML = `<p class="text-slate-400 text-center py-2">No punches recorded today</p>`;
+                    return;
+                }
+
+                data.all_punches.slice(0, 5).forEach(p => {
+                    const isIn = p.punch_type === 'CLOCK_IN';
+                    container.innerHTML += `
+                        <div class="pt-2 flex justify-between items-center">
+                            <div>
+                                <span class="font-bold ${isIn ? 'text-emerald-700' : 'text-rose-700'}">${p.punch_type}</span>
+                                <p class="text-[10px] text-slate-400">${p.address}</p>
+                            </div>
+                            <span class="font-mono text-slate-600 font-bold">${p.time}</span>
+                        </div>
+                    `;
+                });
+            }
+
+            initPortal();
+        </script>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+
+# --- WEB ADMIN PORTAL UI ---
 @app.get("/admin", response_class=HTMLResponse)
 def admin_dashboard_ui():
     html_content = """
@@ -390,7 +653,6 @@ def admin_dashboard_ui():
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         
-        <!-- Leaflet.js Mapping Library -->
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
@@ -398,7 +660,7 @@ def admin_dashboard_ui():
     </head>
     <body class="bg-slate-50 text-slate-900 min-h-screen antialiased">
 
-        <!-- Login Overlay -->
+        <!-- Admin Login Guard -->
         <div id="loginOverlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div class="bg-white rounded-2xl shadow-xl border border-slate-100 max-w-sm w-full p-6 space-y-5">
                 <div class="text-center space-y-1">
@@ -502,8 +764,6 @@ def admin_dashboard_ui():
 
                 <!-- TAB 1: Time Clocks & Interactive Map View -->
                 <div id="tabContentClocks" class="space-y-6">
-                    
-                    <!-- Time Clock Attendance Summary Cards -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div class="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between">
                             <div>
@@ -522,7 +782,6 @@ def admin_dashboard_ui():
                         </div>
                     </div>
 
-                    <!-- Live Interactive Map Section -->
                     <div class="bg-white rounded-xl border border-slate-200/80 shadow-sm p-5 space-y-4">
                         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-3">
                             <div>
@@ -533,20 +792,17 @@ def admin_dashboard_ui():
                         </div>
 
                         <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
-                            <!-- Sidebar User Status List -->
                             <div class="lg:col-span-1 bg-slate-50 p-3 rounded-xl border border-slate-200/60 max-h-[420px] overflow-y-auto space-y-2">
                                 <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Active Punch Locations</h3>
                                 <div id="mapUserList" class="space-y-1.5"></div>
                             </div>
 
-                            <!-- Map Canvas -->
                             <div class="lg:col-span-3">
                                 <div id="map"></div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Collapsible Manual Override Card -->
                     <div class="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
                         <button onclick="toggleCollapse('overrideBody', 'overrideIcon')" class="w-full p-4 sm:p-5 flex items-center justify-between bg-slate-50/50 hover:bg-slate-50 text-left transition border-b border-slate-100">
                             <div>
@@ -570,7 +826,6 @@ def admin_dashboard_ui():
                         </div>
                     </div>
 
-                    <!-- DTR Audit Table -->
                     <div class="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
                         <div class="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
                             <div class="flex items-center gap-3">
@@ -712,7 +967,6 @@ def admin_dashboard_ui():
 
             function initLeafletMap() {
                 if (leafletMap) return;
-                // Center Map over Metro Manila / Pasig
                 leafletMap = L.map('map').setView([14.5764, 121.0851], 12);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                     maxZoom: 19,
@@ -908,7 +1162,6 @@ def admin_dashboard_ui():
                 tbody.innerHTML = "";
                 mapUserList.innerHTML = "";
 
-                // Clear map markers
                 mapMarkers.forEach(m => leafletMap.removeLayer(m));
                 mapMarkers = [];
 
@@ -923,7 +1176,6 @@ def admin_dashboard_ui():
                         if (isClockIn) activeClockedInCount++;
                     }
 
-                    // Append DTR Row
                     tbody.innerHTML += `
                         <tr class="hover:bg-slate-50 transition">
                             <td class="p-3.5 pl-5 font-mono text-xs text-slate-400">#${p.id}</td>
@@ -941,7 +1193,6 @@ def admin_dashboard_ui():
                         </tr>
                     `;
 
-                    // Add map marker and location item if coordinates exist
                     const lat = parseFloat(p.latitude) || 14.5764;
                     const lng = parseFloat(p.longitude) || 121.0851;
 
