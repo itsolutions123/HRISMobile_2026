@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Linking, ScrollView } from 'react-native';
 import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
@@ -8,6 +8,29 @@ export default function DashboardScreen({ navigation }) {
   const { user, logout, API_BASE_URL } = useContext(AuthContext);
   const [loading, setLoading] = useState(false);
   const [lastPunch, setLastPunch] = useState(null);
+  
+  // Timer State
+  const [isClockedIn, setIsClockedIn] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    let interval = null;
+    if (isClockedIn) {
+      interval = setInterval(() => {
+        setElapsedSeconds((prev) => prev + 1);
+      }, 1000);
+    } else {
+      clearInterval(interval);
+    }
+    return () => clearInterval(interval);
+  }, [isClockedIn]);
+
+  const formatTimer = (totalSeconds) => {
+    const hrs = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
+    const mins = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
+    const secs = (totalSeconds % 60).toString().padStart(2, '0');
+    return `${hrs}:${mins}:${secs}`;
+  };
 
   const requestAndGetLocation = async () => {
     let { status } = await Location.requestForegroundPermissionsAsync();
@@ -21,8 +44,26 @@ export default function DashboardScreen({ navigation }) {
       let location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
       });
+
+      // Reverse Geocoding to get Street Name and City
+      let addressStr = 'Unknown Location';
+      try {
+        let geocode = await Location.reverseGeocodeAsync({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+
+        if (geocode && geocode.length > 0) {
+          const item = geocode[0];
+          const parts = [item.streetNumber, item.street, item.subregion || item.city, item.region];
+          addressStr = parts.filter(Boolean).join(', ');
+        }
+      } catch (e) {
+        addressStr = `${location.coords.latitude.toFixed(5)}, ${location.coords.longitude.toFixed(5)}`;
+      }
+
       setLoading(false);
-      return location.coords;
+      return { ...location.coords, address: addressStr };
     } catch (error) {
       setLoading(false);
       Alert.alert('Error', 'Unable to fetch current location.');
@@ -30,7 +71,7 @@ export default function DashboardScreen({ navigation }) {
     }
   };
 
-  const submitPunchToBackend = async (punchType, coords) => {
+  const submitPunchToBackend = async (punchType, coordsData) => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/punch`, {
         method: 'POST',
@@ -38,41 +79,50 @@ export default function DashboardScreen({ navigation }) {
         body: JSON.stringify({
           employee_id: user.employee_id,
           punch_type: punchType,
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-          accuracy: coords.accuracy || 0,
+          latitude: coordsData.latitude,
+          longitude: coordsData.longitude,
+          accuracy: coordsData.accuracy || 0,
+          address: coordsData.address,
         }),
       });
 
       if (!response.ok) throw new Error('Failed to persist punch to server');
 
       const data = await response.json();
+      const punchTime = new Date(data.timestamp).toLocaleTimeString();
+
       setLastPunch({
         type: punchType,
-        timestamp: new Date(data.timestamp).toLocaleTimeString(),
-        lat: coords.latitude,
-        lng: coords.longitude,
-        accuracy: coords.accuracy,
+        timestamp: punchTime,
+        lat: coordsData.latitude,
+        lng: coordsData.longitude,
+        address: coordsData.address,
       });
+
+      if (punchType === 'CLOCK_IN') {
+        setIsClockedIn(true);
+        setElapsedSeconds(0);
+      } else {
+        setIsClockedIn(false);
+      }
     } catch (error) {
       Alert.alert('Sync Error', error.message);
     }
   };
 
   const handleClockIn = async () => {
-    const coords = await requestAndGetLocation();
-    if (coords) await submitPunchToBackend('CLOCK_IN', coords);
+    const coordsData = await requestAndGetLocation();
+    if (coordsData) await submitPunchToBackend('CLOCK_IN', coordsData);
   };
 
   const handleClockOut = async () => {
-    const coords = await requestAndGetLocation();
-    if (coords) await submitPunchToBackend('CLOCK_OUT', coords);
+    const coordsData = await requestAndGetLocation();
+    if (coordsData) await submitPunchToBackend('CLOCK_OUT', coordsData);
   };
 
   const openGoogleMaps = () => {
     if (!lastPunch) return;
-    const { lat, lng } = lastPunch;
-    const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+    const url = `https://www.google.com/maps/search/?api=1&query=${lastPunch.lat},${lastPunch.lng}`;
     Linking.openURL(url);
   };
 
@@ -97,8 +147,18 @@ export default function DashboardScreen({ navigation }) {
 
   return (
     <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-      <Text style={styles.welcome}>Welcome, {user.name}</Text>
-      <Text style={styles.subtext}>Dept: {user.department} | Role: {user.role.toUpperCase()}</Text>
+      <View style={styles.profileCard}>
+        <Text style={styles.welcome}>Welcome, {user.name}</Text>
+        <Text style={styles.profileText}>Position: <Text style={styles.boldText}>{user.position || 'Staff'}</Text></Text>
+        <Text style={styles.profileText}>Department: <Text style={styles.boldText}>{user.department}</Text></Text>
+        <Text style={styles.profileText}>Role: <Text style={styles.boldText}>{user.role.toUpperCase()}</Text></Text>
+      </View>
+
+      {/* Live Timer Widget */}
+      <View style={[styles.timerCard, isClockedIn ? styles.timerActive : styles.timerInactive]}>
+        <Text style={styles.timerLabel}>{isClockedIn ? 'ON DUTY - SHIFT TIMER' : 'OFF DUTY'}</Text>
+        <Text style={styles.timerValue}>{formatTimer(elapsedSeconds)}</Text>
+      </View>
 
       {user.role === 'manager' && (
         <TouchableOpacity style={styles.managerBtn} onPress={() => navigation.navigate('Manager')}>
@@ -111,11 +171,19 @@ export default function DashboardScreen({ navigation }) {
           <ActivityIndicator size="large" color="#007AFF" />
         ) : (
           <View style={styles.buttonGroup}>
-            <TouchableOpacity style={styles.clockInBtn} onPress={handleClockIn}>
+            <TouchableOpacity 
+              style={[styles.clockInBtn, isClockedIn && styles.disabledBtn]} 
+              onPress={handleClockIn} 
+              disabled={isClockedIn}
+            >
               <Text style={styles.btnText}>CLOCK IN</Text>
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.clockOutBtn} onPress={handleClockOut}>
+            <TouchableOpacity 
+              style={[styles.clockOutBtn, !isClockedIn && styles.disabledBtn]} 
+              onPress={handleClockOut} 
+              disabled={!isClockedIn}
+            >
               <Text style={styles.btnText}>CLOCK OUT</Text>
             </TouchableOpacity>
           </View>
@@ -125,6 +193,7 @@ export default function DashboardScreen({ navigation }) {
       {lastPunch && (
         <View style={styles.punchCard}>
           <Text style={styles.punchTitle}>Last Punch: {lastPunch.type} ({lastPunch.timestamp})</Text>
+          <Text style={styles.locationText}>📍 Location: <Text style={styles.boldText}>{lastPunch.address}</Text></Text>
 
           <View style={styles.mapFrame}>
             <WebView
@@ -152,17 +221,26 @@ export default function DashboardScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   scrollContainer: { flexGrow: 1, padding: 16, backgroundColor: '#f4f6f8', paddingBottom: 40 },
-  welcome: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
-  subtext: { fontSize: 13, color: '#6b7280', marginBottom: 16 },
-  managerBtn: { backgroundColor: '#2e7d32', padding: 12, borderRadius: 8, alignItems: 'center', marginBottom: 16 },
+  profileCard: { backgroundColor: '#ffffff', padding: 16, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: '#e5e7eb', elevation: 1 },
+  welcome: { fontSize: 20, fontWeight: 'bold', color: '#111827', marginBottom: 4 },
+  profileText: { fontSize: 13, color: '#4b5563', marginTop: 2 },
+  boldText: { fontWeight: 'bold', color: '#111827' },
+  timerCard: { padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 12, elevation: 2 },
+  timerActive: { backgroundColor: '#1e3a8a' },
+  timerInactive: { backgroundColor: '#374151' },
+  timerLabel: { color: '#93c5fd', fontSize: 12, fontWeight: 'bold', letterSpacing: 1 },
+  timerValue: { color: '#ffffff', fontSize: 36, fontWeight: 'bold', marginTop: 4, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' },
+  managerBtn: { backgroundColor: '#2e7d32', padding: 12, borderRadius: 8, alignItems: 'center', marginBottom: 12 },
   managerBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
-  actionCard: { backgroundColor: '#ffffff', padding: 16, borderRadius: 12, marginBottom: 16, elevation: 2, borderWidth: 1, borderColor: '#e5e7eb' },
+  actionCard: { backgroundColor: '#ffffff', padding: 16, borderRadius: 12, marginBottom: 12, elevation: 2, borderWidth: 1, borderColor: '#e5e7eb' },
   buttonGroup: { gap: 10 },
   clockInBtn: { backgroundColor: '#15803d', paddingVertical: 14, borderRadius: 8, alignItems: 'center' },
   clockOutBtn: { backgroundColor: '#b91c1c', paddingVertical: 14, borderRadius: 8, alignItems: 'center' },
+  disabledBtn: { opacity: 0.4 },
   btnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 15, letterSpacing: 0.5 },
-  punchCard: { backgroundColor: '#ffffff', padding: 14, borderRadius: 12, marginBottom: 16, borderWidth: 1, borderColor: '#e5e7eb', elevation: 2 },
-  punchTitle: { fontWeight: 'bold', marginBottom: 10, fontSize: 14, color: '#1f2937' },
+  punchCard: { backgroundColor: '#ffffff', padding: 14, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: '#e5e7eb', elevation: 2 },
+  punchTitle: { fontWeight: 'bold', marginBottom: 4, fontSize: 14, color: '#1f2937' },
+  locationText: { fontSize: 13, color: '#374151', marginBottom: 10 },
   mapFrame: { height: 220, width: '100%', borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: '#d1d5db', marginBottom: 12 },
   map: { width: '100%', height: '100%' },
   extMapBtn: { backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },

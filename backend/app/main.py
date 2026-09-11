@@ -1,9 +1,9 @@
 import os
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from pydantic import BaseModel
-from typing import List
+from typing import Optional
 from . import models
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://hrisuser:hrispassword@hris-db:5432/hrisdb")
@@ -32,6 +32,7 @@ class PunchRequest(BaseModel):
     latitude: float
     longitude: float
     accuracy: float
+    address: Optional[str] = None
 
 @app.get("/health")
 def health_check():
@@ -41,12 +42,12 @@ def health_check():
 def login(req: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.employee_id == req.employee_id).first()
     if not user:
-        # Seed default test accounts on first login attempt
         if req.employee_id == "EMP-1001":
             user = models.User(
                 employee_id="EMP-1001",
-                name="John Doe (Employee)",
+                name="John Doe",
                 department="IT Operations",
+                position="Systems Administrator",
                 role="employee",
                 hashed_password="password123"
             )
@@ -56,8 +57,9 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
         elif req.employee_id == "MGR-2001":
             user = models.User(
                 employee_id="MGR-2001",
-                name="Jane Doe (Manager)",
+                name="Jane Doe",
                 department="IT Operations",
+                position="IT Operations Manager",
                 role="manager",
                 hashed_password="password123"
             )
@@ -71,6 +73,7 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
         "employee_id": user.employee_id,
         "name": user.name,
         "department": user.department,
+        "position": user.position,
         "role": user.role,
         "token": f"fake-jwt-token-{user.employee_id}"
     }
@@ -82,14 +85,10 @@ def record_punch(req: PunchRequest, db: Session = Depends(get_db)):
         punch_type=req.punch_type,
         latitude=req.latitude,
         longitude=req.longitude,
-        accuracy=req.accuracy
+        accuracy=req.accuracy,
+        address=req.address
     )
     db.add(punch)
     db.commit()
     db.refresh(punch)
     return {"status": "success", "punch_id": punch.id, "timestamp": punch.timestamp}
-
-@app.get("/api/manager/punches")
-def get_department_punches(department: str, db: Session = Depends(get_db)):
-    punches = db.query(models.TimePunch).all()
-    return {"department": department, "total_records": len(punches), "punches": punches}
