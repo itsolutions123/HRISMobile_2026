@@ -20,7 +20,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="HRIS Enterprise API", version="3.7.0")
+app = FastAPI(title="HRIS Enterprise API", version="3.8.0")
 
 MAX_SHIFT_SECONDS = 20 * 3600
 
@@ -75,7 +75,7 @@ class CreatePunchAdminRequest(BaseModel):
 @app.get("/health")
 @app.get("/api/health")
 def health_check():
-    return {"status": "online", "service": "HRIS FastAPI Backend", "version": "3.7.0"}
+    return {"status": "online", "service": "HRIS FastAPI Backend", "version": "3.8.0"}
 
 # --- Dynamic Departments ---
 @app.get("/api/departments")
@@ -516,12 +516,13 @@ def employee_portal_ui():
                         document.getElementById("employeeWorkspace").classList.remove("hidden");
                         document.getElementById("userDisplayName").innerText = currentUser.name;
                         document.getElementById("userDeptTitle").innerText = `${currentUser.department} • ${currentUser.position}`;
-                        loadActiveStatus();
-                        loadTimesheet();
+                        
+                        await loadActiveStatus();
+                        await loadTimesheet();
 
-                        // Start 4-second background state sync poller
+                        // 3-second polling loop
                         clearInterval(autoSyncPoller);
-                        autoSyncPoller = setInterval(loadActiveStatus, 4000);
+                        autoSyncPoller = setInterval(loadActiveStatus, 3000);
                     } else {
                         alert("Invalid Employee ID or Password");
                     }
@@ -540,19 +541,20 @@ def employee_portal_ui():
 
             async function loadActiveStatus() {
                 if (!currentUser) return;
-                const res = await fetch(`${API_BASE}/punch/active/${currentUser.employee_id}`);
-                const data = await res.json();
-                
-                const badge = document.getElementById("statusBadge");
-                const btn = document.getElementById("punchActionBtn");
-                const subText = document.getElementById("shiftSubText");
+                try {
+                    const res = await fetch(`${API_BASE}/punch/active/${currentUser.employee_id}`);
+                    const data = await res.json();
+                    
+                    const badge = document.getElementById("statusBadge");
+                    const btn = document.getElementById("punchActionBtn");
+                    const subText = document.getElementById("shiftSubText");
 
-                // Auto-sync UI state when altered externally (e.g. from Mobile App)
-                if (data.is_clocked_in !== currentIsClockedIn) {
-                    currentIsClockedIn = data.is_clocked_in;
-                    loadTimesheet();
-
-                    if (currentIsClockedIn) {
+                    // Deterministic state sync
+                    if (data.is_clocked_in) {
+                        if (!currentIsClockedIn) {
+                            currentIsClockedIn = true;
+                            loadTimesheet();
+                        }
                         badge.innerText = "ON DUTY";
                         badge.className = "inline-block px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800";
                         btn.innerText = "CLOCK OUT NOW";
@@ -560,12 +562,17 @@ def employee_portal_ui():
                         subText.innerText = "Active shift running";
                         
                         elapsedShiftSeconds = data.elapsed_seconds || 0;
-                        clearInterval(activeTimerInterval);
-                        activeTimerInterval = setInterval(() => {
-                            elapsedShiftSeconds++;
-                            updateTimerDisplay(elapsedShiftSeconds);
-                        }, 1000);
+                        if (!activeTimerInterval) {
+                            activeTimerInterval = setInterval(() => {
+                                elapsedShiftSeconds++;
+                                updateTimerDisplay(elapsedShiftSeconds);
+                            }, 1000);
+                        }
                     } else {
+                        if (currentIsClockedIn) {
+                            currentIsClockedIn = false;
+                            loadTimesheet();
+                        }
                         badge.innerText = "OFF DUTY";
                         badge.className = "inline-block px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600";
                         btn.innerText = "CLOCK IN NOW";
@@ -573,11 +580,9 @@ def employee_portal_ui():
                         document.getElementById("liveTimerText").innerText = "00:00:00";
                         subText.innerText = "Ready to start shift";
                         clearInterval(activeTimerInterval);
+                        activeTimerInterval = null;
                     }
-                } else if (currentIsClockedIn && data.elapsed_seconds) {
-                    // Sync clock drift
-                    elapsedShiftSeconds = data.elapsed_seconds;
-                }
+                } catch(e) {}
             }
 
             function updateTimerDisplay(seconds) {
@@ -605,8 +610,8 @@ def employee_portal_ui():
                 });
 
                 if (res.ok) {
-                    loadActiveStatus();
-                    loadTimesheet();
+                    await loadActiveStatus();
+                    await loadTimesheet();
                 } else {
                     alert("Failed to submit punch");
                 }
@@ -614,28 +619,30 @@ def employee_portal_ui():
 
             async function loadTimesheet() {
                 if (!currentUser) return;
-                const res = await fetch(`${API_BASE}/timesheet/${currentUser.employee_id}`);
-                const data = await res.json();
-                const container = document.getElementById("timesheetLogContainer");
-                container.innerHTML = "";
+                try {
+                    const res = await fetch(`${API_BASE}/timesheet/${currentUser.employee_id}`);
+                    const data = await res.json();
+                    const container = document.getElementById("timesheetLogContainer");
+                    container.innerHTML = "";
 
-                if (!data.all_punches || data.all_punches.length === 0) {
-                    container.innerHTML = `<p class="text-slate-400 text-center py-2">No punches recorded today</p>`;
-                    return;
-                }
+                    if (!data.all_punches || data.all_punches.length === 0) {
+                        container.innerHTML = `<p class="text-slate-400 text-center py-2">No punches recorded today</p>`;
+                        return;
+                    }
 
-                data.all_punches.slice(0, 5).forEach(p => {
-                    const isIn = p.punch_type === 'CLOCK_IN';
-                    container.innerHTML += `
-                        <div class="pt-2 flex justify-between items-center">
-                            <div>
-                                <span class="font-bold ${isIn ? 'text-emerald-700' : 'text-rose-700'}">${p.punch_type}</span>
-                                <p class="text-[10px] text-slate-400">${p.address}</p>
+                    data.all_punches.slice(0, 5).forEach(p => {
+                        const isIn = p.punch_type === 'CLOCK_IN';
+                        container.innerHTML += `
+                            <div class="pt-2 flex justify-between items-center">
+                                <div>
+                                    <span class="font-bold ${isIn ? 'text-emerald-700' : 'text-rose-700'}">${p.punch_type}</span>
+                                    <p class="text-[10px] text-slate-400">${p.address}</p>
+                                </div>
+                                <span class="font-mono text-slate-600 font-bold">${p.time}</span>
                             </div>
-                            <span class="font-mono text-slate-600 font-bold">${p.time}</span>
-                        </div>
-                    `;
-                });
+                        `;
+                    });
+                } catch(e) {}
             }
 
             initPortal();
@@ -1051,11 +1058,10 @@ def admin_dashboard_ui():
                             document.getElementById("loginOverlay").classList.add("hidden");
                             document.getElementById("adminWorkspace").classList.remove("hidden");
                             initLeafletMap();
-                            loadDashboard();
+                            await loadDashboard();
 
-                            // Start background map/DTR poller
                             clearInterval(adminSyncPoller);
-                            adminSyncPoller = setInterval(loadPunches, 5000);
+                            adminSyncPoller = setInterval(loadPunches, 3000);
                         } else {
                             alert("Access Denied: Account lacks Super Admin permissions.");
                         }
@@ -1159,75 +1165,77 @@ def admin_dashboard_ui():
             }
 
             async function loadPunches() {
-                const res = await fetch(`${API_BASE}/admin/dtr`);
-                const data = await res.json();
-                
-                const tbody = document.getElementById("dtrTableBody");
-                const mapUserList = document.getElementById("mapUserList");
-                tbody.innerHTML = "";
-                mapUserList.innerHTML = "";
+                try {
+                    const res = await fetch(`${API_BASE}/admin/dtr`);
+                    const data = await res.json();
+                    
+                    const tbody = document.getElementById("dtrTableBody");
+                    const mapUserList = document.getElementById("mapUserList");
+                    tbody.innerHTML = "";
+                    mapUserList.innerHTML = "";
 
-                mapMarkers.forEach(m => leafletMap.removeLayer(m));
-                mapMarkers = [];
+                    mapMarkers.forEach(m => leafletMap.removeLayer(m));
+                    mapMarkers = [];
 
-                let activeClockedInCount = 0;
-                const seenUsers = new Set();
+                    let activeClockedInCount = 0;
+                    const seenUsers = new Set();
 
-                data.forEach(p => {
-                    const isClockIn = p.punch_type === 'CLOCK_IN';
+                    data.forEach(p => {
+                        const isClockIn = p.punch_type === 'CLOCK_IN';
 
-                    if (!seenUsers.has(p.employee_id)) {
-                        seenUsers.add(p.employee_id);
-                        if (isClockIn) activeClockedInCount++;
-                    }
+                        if (!seenUsers.has(p.employee_id)) {
+                            seenUsers.add(p.employee_id);
+                            if (isClockIn) activeClockedInCount++;
+                        }
 
-                    tbody.innerHTML += `
-                        <tr class="hover:bg-slate-50 transition">
-                            <td class="p-3.5 pl-5 font-mono text-xs text-slate-400">#${p.id}</td>
-                            <td class="p-3.5 font-bold text-slate-800">${p.employee_name} (${p.employee_id})</td>
-                            <td class="p-3.5">
-                                <span class="px-2.5 py-0.5 rounded-full text-xs font-bold ${isClockIn ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}">
-                                    ${p.punch_type}
-                                </span>
-                            </td>
-                            <td class="p-3.5 text-xs font-mono font-semibold text-slate-700">${p.formatted_time}</td>
-                            <td class="p-3.5 text-xs text-slate-500">${p.address}</td>
-                            <td class="p-3.5 pr-5 text-right">
-                                <button onclick="deletePunch(${p.id})" class="text-xs text-rose-600 hover:underline font-semibold">Delete</button>
-                            </td>
-                        </tr>
-                    `;
+                        tbody.innerHTML += `
+                            <tr class="hover:bg-slate-50 transition">
+                                <td class="p-3.5 pl-5 font-mono text-xs text-slate-400">#${p.id}</td>
+                                <td class="p-3.5 font-bold text-slate-800">${p.employee_name} (${p.employee_id})</td>
+                                <td class="p-3.5">
+                                    <span class="px-2.5 py-0.5 rounded-full text-xs font-bold ${isClockIn ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}">
+                                        ${p.punch_type}
+                                    </span>
+                                </td>
+                                <td class="p-3.5 text-xs font-mono font-semibold text-slate-700">${p.formatted_time}</td>
+                                <td class="p-3.5 text-xs text-slate-500">${p.address}</td>
+                                <td class="p-3.5 pr-5 text-right">
+                                    <button onclick="deletePunch(${p.id})" class="text-xs text-rose-600 hover:underline font-semibold">Delete</button>
+                                </td>
+                            </tr>
+                        `;
 
-                    const lat = parseFloat(p.latitude) || 14.5764;
-                    const lng = parseFloat(p.longitude) || 121.0851;
+                        const lat = parseFloat(p.latitude) || 14.5764;
+                        const lng = parseFloat(p.longitude) || 121.0851;
 
-                    mapUserList.innerHTML += `
-                        <div onclick="focusMapLocation(${lat}, ${lng}, '${p.employee_name}')" class="bg-white p-2.5 rounded-lg border border-slate-200 cursor-pointer hover:border-blue-500 transition shadow-sm space-y-1">
-                            <div class="flex justify-between items-center">
-                                <span class="font-bold text-xs text-slate-800">${p.employee_name}</span>
-                                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${isClockIn ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">${p.punch_type}</span>
+                        mapUserList.innerHTML += `
+                            <div onclick="focusMapLocation(${lat}, ${lng}, '${p.employee_name}')" class="bg-white p-2.5 rounded-lg border border-slate-200 cursor-pointer hover:border-blue-500 transition shadow-sm space-y-1">
+                                <div class="flex justify-between items-center">
+                                    <span class="font-bold text-xs text-slate-800">${p.employee_name}</span>
+                                    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${isClockIn ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">${p.punch_type}</span>
+                                </div>
+                                <p class="text-[11px] text-slate-500 truncate">${p.address}</p>
+                                <p class="text-[10px] font-mono text-slate-400">${p.formatted_time}</p>
                             </div>
-                            <p class="text-[11px] text-slate-500 truncate">${p.address}</p>
-                            <p class="text-[10px] font-mono text-slate-400">${p.formatted_time}</p>
-                        </div>
-                    `;
+                        `;
 
-                    if (leafletMap) {
-                        const marker = L.marker([lat, lng]).addTo(leafletMap);
-                        marker.bindPopup(`
-                            <div class="p-1 space-y-1 font-sans">
-                                <h4 class="font-bold text-sm text-slate-800">${p.employee_name}</h4>
-                                <p class="text-xs text-slate-600"><b>ID:</b> ${p.employee_id} | <b>Dept:</b> ${p.department}</p>
-                                <p class="text-xs text-slate-600"><b>Action:</b> <span class="font-bold ${isClockIn ? 'text-emerald-600' : 'text-rose-600'}">${p.punch_type}</span></p>
-                                <p class="text-xs text-slate-500">${p.address}</p>
-                                <p class="text-[10px] text-slate-400">${p.formatted_time}</p>
-                            </div>
-                        `);
-                        mapMarkers.push(marker);
-                    }
-                });
+                        if (leafletMap) {
+                            const marker = L.marker([lat, lng]).addTo(leafletMap);
+                            marker.bindPopup(`
+                                <div class="p-1 space-y-1 font-sans">
+                                    <h4 class="font-bold text-sm text-slate-800">${p.employee_name}</h4>
+                                    <p class="text-xs text-slate-600"><b>ID:</b> ${p.employee_id} | <b>Dept:</b> ${p.department}</p>
+                                    <p class="text-xs text-slate-600"><b>Action:</b> <span class="font-bold ${isClockIn ? 'text-emerald-600' : 'text-rose-600'}">${p.punch_type}</span></p>
+                                    <p class="text-xs text-slate-500">${p.address}</p>
+                                    <p class="text-[10px] text-slate-400">${p.formatted_time}</p>
+                                </div>
+                            `);
+                            mapMarkers.push(marker);
+                        }
+                    });
 
-                document.getElementById("statClockedInCount").innerText = activeClockedInCount;
+                    document.getElementById("statClockedInCount").innerText = activeClockedInCount;
+                } catch(e) {}
             }
 
             function openEditModal(empId) {
