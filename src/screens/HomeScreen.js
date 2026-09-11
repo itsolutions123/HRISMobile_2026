@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext, useCallback, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, ScrollView, Platform } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../context/AuthContext';
 
@@ -10,8 +11,34 @@ export default function HomeScreen() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [loading, setLoading] = useState(false);
   const [fetchingStatus, setFetchingStatus] = useState(true);
+  const [locationText, setLocationText] = useState('Fetching GPS location...');
 
   const timerRef = useRef(null);
+
+  // Request foreground GPS permissions and acquire high-accuracy coordinates
+  const getCurrentLocation = async () => {
+    try {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setLocationText('Location permission denied');
+        return { latitude: 14.5764, longitude: 121.0851, address: 'Permission Denied - Default Pasig' };
+      }
+
+      let loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const lat = loc.coords.latitude;
+      const lng = loc.coords.longitude;
+      setLocationText(`GPS Active: ${lat.toFixed(4)}, ${lng.toFixed(4)} (±${Math.round(loc.coords.accuracy)}m)`);
+
+      return {
+        latitude: lat,
+        longitude: lng,
+        address: `GPS Pin: ${lat.toFixed(4)}, ${lng.toFixed(4)}`
+      };
+    } catch (e) {
+      setLocationText('Pasig Area Location');
+      return { latitude: 14.5764, longitude: 121.0851, address: 'Pasig, Metro Manila' };
+    }
+  };
 
   // Fetch active punch state directly from PostgreSQL via FastAPI
   const fetchActiveStatus = useCallback(async () => {
@@ -20,8 +47,6 @@ export default function HomeScreen() {
       const response = await fetch(`${API_BASE_URL}/api/punch/active/${user.employee_id}`);
       if (response.ok) {
         const data = await response.json();
-        
-        // Always sync boolean clock status
         setIsClockedIn(data.is_clocked_in);
 
         if (data.is_clocked_in) {
@@ -37,7 +62,10 @@ export default function HomeScreen() {
     }
   }, [user, API_BASE_URL]);
 
-  // Poller loop: Check backend every 3 seconds & re-check when screen gains focus
+  useEffect(() => {
+    getCurrentLocation();
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       fetchActiveStatus();
@@ -46,7 +74,6 @@ export default function HomeScreen() {
     }, [fetchActiveStatus])
   );
 
-  // Incremental local timer logic
   useEffect(() => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -79,6 +106,7 @@ export default function HomeScreen() {
   const handlePunch = async () => {
     setLoading(true);
     const punchType = isClockedIn ? 'CLOCK_OUT' : 'CLOCK_IN';
+    const locData = await getCurrentLocation();
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/punch`, {
@@ -87,10 +115,10 @@ export default function HomeScreen() {
         body: JSON.stringify({
           employee_id: user.employee_id,
           punch_type: punchType,
-          latitude: 14.5764,
-          longitude: 121.0851,
+          latitude: locData.latitude,
+          longitude: locData.longitude,
           accuracy: 10.0,
-          address: 'Pasig, Metro Manila',
+          address: locData.address,
         }),
       });
 
@@ -152,6 +180,8 @@ export default function HomeScreen() {
             </Text>
           )}
         </TouchableOpacity>
+
+        <Text style={styles.geoText}>{locationText}</Text>
       </View>
     </ScrollView>
   );
@@ -182,4 +212,5 @@ const styles = StyleSheet.create({
   punchBtnIn: { backgroundColor: '#2563eb' },
   punchBtnOut: { backgroundColor: '#dc2626' },
   punchBtnText: { color: '#ffffff', fontWeight: '800', fontSize: 16 },
+  geoText: { fontSize: 11, color: '#94a3b8', marginTop: 16, textAlign: 'center' },
 });

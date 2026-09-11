@@ -20,7 +20,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="HRIS Enterprise API", version="3.8.0")
+app = FastAPI(title="HRIS Enterprise API", version="3.9.0")
 
 MAX_SHIFT_SECONDS = 20 * 3600
 
@@ -75,7 +75,7 @@ class CreatePunchAdminRequest(BaseModel):
 @app.get("/health")
 @app.get("/api/health")
 def health_check():
-    return {"status": "online", "service": "HRIS FastAPI Backend", "version": "3.8.0"}
+    return {"status": "online", "service": "HRIS FastAPI Backend", "version": "3.9.0"}
 
 # --- Dynamic Departments ---
 @app.get("/api/departments")
@@ -240,7 +240,7 @@ def record_punch(req: PunchRequest, db: Session = Depends(get_db)):
         latitude=req.latitude,
         longitude=req.longitude,
         accuracy=req.accuracy,
-        address=req.address or "Pasig, Metro Manila",
+        address=req.address or "Captured GPS Coordinates",
         timestamp=get_now_manila().replace(tzinfo=None)
     )
     db.add(punch)
@@ -322,7 +322,7 @@ def list_all_dtr(employee_id: Optional[str] = None, db: Session = Depends(get_db
             "position": user.position if user else "Staff",
             "punch_type": p.punch_type,
             "formatted_time": p.timestamp.strftime("%Y-%m-%d %I:%M:%S %p"),
-            "address": p.address or "Pasig, Metro Manila",
+            "address": p.address or f"Lat: {p.latitude:.4f}, Lng: {p.longitude:.4f}",
             "latitude": p.latitude or 14.5764,
             "longitude": p.longitude or 121.0851
         })
@@ -469,6 +469,22 @@ def employee_portal_ui():
             let currentLat = 14.5764;
             let currentLng = 121.0851;
 
+            async function requestHardwareGPS() {
+                if ("geolocation" in navigator) {
+                    navigator.geolocation.getCurrentPosition(
+                        (pos) => {
+                            currentLat = pos.coords.latitude;
+                            currentLng = pos.coords.longitude;
+                            document.getElementById("geoStatusText").innerText = `High-Accuracy GPS: ${currentLat.toFixed(5)}, ${currentLng.toFixed(5)} (±${Math.round(pos.coords.accuracy)}m)`;
+                        },
+                        (err) => {
+                            document.getElementById("geoStatusText").innerText = "HTTP Unsecure Context: Browser using coarse network location";
+                        },
+                        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                    );
+                }
+            }
+
             async function initPortal() {
                 try {
                     const res = await fetch(`${API_BASE}/departments`);
@@ -482,19 +498,7 @@ def employee_portal_ui():
 
                 const savedEmpId = localStorage.getItem("hris_emp_id");
                 if (savedEmpId) document.getElementById("loginEmpId").value = savedEmpId;
-
-                if ("geolocation" in navigator) {
-                    navigator.geolocation.getCurrentPosition(
-                        (pos) => {
-                            currentLat = pos.coords.latitude;
-                            currentLng = pos.coords.longitude;
-                            document.getElementById("geoStatusText").innerText = `GPS Active: ${currentLat.toFixed(4)}, ${currentLng.toFixed(4)}`;
-                        },
-                        (err) => {
-                            document.getElementById("geoStatusText").innerText = "GPS Location: Pasig Area";
-                        }
-                    );
-                }
+                requestHardwareGPS();
             }
 
             document.getElementById("empLoginForm").addEventListener("submit", async (e) => {
@@ -520,7 +524,6 @@ def employee_portal_ui():
                         await loadActiveStatus();
                         await loadTimesheet();
 
-                        // 3-second polling loop
                         clearInterval(autoSyncPoller);
                         autoSyncPoller = setInterval(loadActiveStatus, 3000);
                     } else {
@@ -549,7 +552,6 @@ def employee_portal_ui():
                     const btn = document.getElementById("punchActionBtn");
                     const subText = document.getElementById("shiftSubText");
 
-                    // Deterministic state sync
                     if (data.is_clocked_in) {
                         if (!currentIsClockedIn) {
                             currentIsClockedIn = true;
@@ -594,6 +596,7 @@ def employee_portal_ui():
 
             async function triggerPunch() {
                 if (!currentUser) return;
+                await requestHardwareGPS();
                 const punchType = currentIsClockedIn ? "CLOCK_OUT" : "CLOCK_IN";
 
                 const res = await fetch(`${API_BASE}/punch`, {
@@ -605,7 +608,7 @@ def employee_portal_ui():
                         latitude: currentLat,
                         longitude: currentLng,
                         accuracy: 10.0,
-                        address: "Pasig, Metro Manila"
+                        address: `GPS Pin: ${currentLat.toFixed(4)}, ${currentLng.toFixed(4)}`
                     })
                 });
 
