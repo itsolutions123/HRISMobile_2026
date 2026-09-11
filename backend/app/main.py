@@ -20,7 +20,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="HRIS Enterprise API", version="3.2.0")
+app = FastAPI(title="HRIS Enterprise API", version="3.3.0")
 
 MAX_SHIFT_SECONDS = 20 * 3600
 
@@ -75,7 +75,7 @@ class CreatePunchAdminRequest(BaseModel):
 @app.get("/health")
 @app.get("/api/health")
 def health_check():
-    return {"status": "online", "service": "HRIS FastAPI Backend", "version": "3.2.0"}
+    return {"status": "online", "service": "HRIS FastAPI Backend", "version": "3.3.0"}
 
 # --- Authentication ---
 @app.post("/api/login")
@@ -107,7 +107,7 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
         "token": f"hris-session-{user.employee_id}"
     }
 
-# --- User Management API (RBAC CRUD) ---
+# --- User Management API ---
 @app.get("/api/admin/users")
 def list_users(db: Session = Depends(get_db)):
     return db.query(models.User).order_by(models.User.department.asc(), models.User.name.asc()).all()
@@ -140,7 +140,7 @@ def update_user(employee_id: str, req: UserUpdateRequest, db: Session = Depends(
     if req.new_employee_id and req.new_employee_id != employee_id:
         existing = db.query(models.User).filter(models.User.employee_id == req.new_employee_id).first()
         if existing:
-            raise HTTPException(status_code=400, detail="New Employee ID already assigned to another user")
+            raise HTTPException(status_code=400, detail="New Employee ID already exists")
         user.employee_id = req.new_employee_id
 
     user.name = req.name
@@ -404,7 +404,7 @@ def admin_dashboard_ui():
         <div id="editUserModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div class="bg-white rounded-xl shadow-xl border border-slate-200 max-w-lg w-full p-6 space-y-4">
                 <div class="flex justify-between items-center border-b pb-3">
-                    <h3 class="font-bold text-slate-800 text-base">Edit Employee Profile & RBAC</h3>
+                    <h3 class="font-bold text-slate-800 text-base">Edit Profile & Permissions</h3>
                     <button onclick="closeEditModal()" class="text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
                 </div>
                 <form id="editUserForm" class="space-y-3">
@@ -444,7 +444,7 @@ def admin_dashboard_ui():
                         </select>
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-slate-500 mb-1">New Password (Leave blank to keep unchanged)</label>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">New Password (Optional)</label>
                         <input type="password" id="editPass" placeholder="••••••••" class="w-full border p-2 rounded-lg text-xs">
                     </div>
                     <div class="flex justify-end gap-2 pt-2 border-t">
@@ -457,7 +457,6 @@ def admin_dashboard_ui():
 
         <!-- Main Workspace -->
         <div id="adminWorkspace" class="hidden min-h-screen flex flex-col">
-            <!-- Header -->
             <header class="bg-white border-b border-slate-200 sticky top-0 z-30">
                 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
                     <div class="flex items-center gap-6">
@@ -469,9 +468,11 @@ def admin_dashboard_ui():
                             </div>
                         </div>
 
+                        <!-- Top Tab Bar -->
                         <nav class="hidden md:flex gap-1 bg-slate-100 p-1 rounded-lg text-xs font-semibold">
                             <button id="tabBtnClocks" onclick="switchTab('clocks')" class="px-3 py-1.5 rounded-md bg-white text-blue-600 shadow-sm transition">Time Clocks & DTR</button>
                             <button id="tabBtnUsers" onclick="switchTab('users')" class="px-3 py-1.5 rounded-md text-slate-600 hover:text-slate-900 transition">User Directory & RBAC</button>
+                            <button id="tabBtnGroups" onclick="switchTab('groups')" class="px-3 py-1.5 rounded-md text-slate-600 hover:text-slate-900 transition">Smart Groups</button>
                         </nav>
                     </div>
                     
@@ -550,8 +551,6 @@ def admin_dashboard_ui():
 
                 <!-- TAB 2: User Directory & RBAC Control Page -->
                 <div id="tabContentUsers" class="hidden space-y-6">
-                    
-                    <!-- Clean Directory Top Header Bar -->
                     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm">
                         <div>
                             <h2 class="text-base font-bold text-slate-800">User Directory & Permissions</h2>
@@ -563,7 +562,6 @@ def admin_dashboard_ui():
                         </button>
                     </div>
 
-                    <!-- Collapsible Create User Drawer -->
                     <div id="newUserFormCard" class="hidden bg-white rounded-xl border border-slate-200/80 shadow-sm p-5 space-y-4">
                         <div class="border-b border-slate-100 pb-2">
                             <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Provision New Account</h3>
@@ -592,8 +590,65 @@ def admin_dashboard_ui():
                         </form>
                     </div>
 
-                    <!-- Department-Segmented Directory Accordions -->
                     <div id="departmentDirectoryContainer" class="space-y-4"></div>
+                </div>
+
+                <!-- TAB 3: Smart Groups Management Page (Connecteams Layout) -->
+                <div id="tabContentGroups" class="hidden space-y-6">
+                    <div class="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm">
+                        <div>
+                            <h2 class="text-base font-bold text-slate-800">Smart Groups</h2>
+                            <p class="text-xs text-slate-500">Segment users by operational assignment, feature access, and automated rules</p>
+                        </div>
+                        <button class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition shadow-sm">
+                            + Add Segment
+                        </button>
+                    </div>
+
+                    <!-- Smart Groups Table View -->
+                    <div class="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
+                        <div class="p-4 bg-slate-50/50 border-b border-slate-100 flex justify-between items-center text-xs font-bold text-slate-500 uppercase">
+                            <span>Segment Name</span>
+                            <span>Connected Services</span>
+                        </div>
+
+                        <!-- Segment 1: Head Office -->
+                        <div class="border-b border-slate-100">
+                            <div class="p-3.5 bg-slate-50/30 flex items-center justify-between font-bold text-xs text-slate-800">
+                                <span class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-blue-600"></span> Head Office</span>
+                                <span class="text-slate-500">10 Groups</span>
+                            </div>
+                            <div class="divide-y divide-slate-100 text-xs">
+                                <div class="p-3.5 pl-8 flex justify-between items-center hover:bg-slate-50">
+                                    <span class="font-semibold text-slate-800">Head Office - Management</span>
+                                    <span class="bg-blue-50 text-blue-700 font-bold px-2 py-0.5 rounded-full">14 / 14 Connected</span>
+                                </div>
+                                <div class="p-3.5 pl-8 flex justify-between items-center hover:bg-slate-50">
+                                    <span class="font-semibold text-slate-800">Head Office - Finance & HR</span>
+                                    <span class="bg-blue-50 text-blue-700 font-bold px-2 py-0.5 rounded-full">8 / 8 Connected</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Segment 2: Operations -->
+                        <div>
+                            <div class="p-3.5 bg-slate-50/30 flex items-center justify-between font-bold text-xs text-slate-800">
+                                <span class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-emerald-600"></span> Operations</span>
+                                <span class="text-slate-500">5 Groups</span>
+                            </div>
+                            <div class="divide-y divide-slate-100 text-xs">
+                                <div class="p-3.5 pl-8 flex justify-between items-center hover:bg-slate-50">
+                                    <span class="font-semibold text-slate-800">Operations - TSG</span>
+                                    <span class="bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full">8 / 8 Selected</span>
+                                </div>
+                                <div class="p-3.5 pl-8 flex justify-between items-center hover:bg-slate-50">
+                                    <span class="font-semibold text-slate-800">Operations - Technical Support</span>
+                                    <span class="bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full">10 / 10 Selected</span>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
                 </div>
 
             </main>
@@ -610,19 +665,29 @@ def admin_dashboard_ui():
             function switchTab(tabName) {
                 const clockTab = document.getElementById("tabContentClocks");
                 const userTab = document.getElementById("tabContentUsers");
+                const groupTab = document.getElementById("tabContentGroups");
+
                 const btnClocks = document.getElementById("tabBtnClocks");
                 const btnUsers = document.getElementById("tabBtnUsers");
+                const btnGroups = document.getElementById("tabBtnGroups");
+
+                clockTab.classList.add("hidden");
+                userTab.classList.add("hidden");
+                groupTab.classList.add("hidden");
+
+                btnClocks.className = "px-3 py-1.5 rounded-md text-slate-600 hover:text-slate-900 transition";
+                btnUsers.className = "px-3 py-1.5 rounded-md text-slate-600 hover:text-slate-900 transition";
+                btnGroups.className = "px-3 py-1.5 rounded-md text-slate-600 hover:text-slate-900 transition";
 
                 if (tabName === 'clocks') {
                     clockTab.classList.remove("hidden");
-                    userTab.classList.add("hidden");
                     btnClocks.className = "px-3 py-1.5 rounded-md bg-white text-blue-600 shadow-sm transition";
-                    btnUsers.className = "px-3 py-1.5 rounded-md text-slate-600 hover:text-slate-900 transition";
-                } else {
-                    clockTab.classList.add("hidden");
+                } else if (tabName === 'users') {
                     userTab.classList.remove("hidden");
                     btnUsers.className = "px-3 py-1.5 rounded-md bg-white text-blue-600 shadow-sm transition";
-                    btnClocks.className = "px-3 py-1.5 rounded-md text-slate-600 hover:text-slate-900 transition";
+                } else if (tabName === 'groups') {
+                    groupTab.classList.remove("hidden");
+                    btnGroups.className = "px-3 py-1.5 rounded-md bg-white text-blue-600 shadow-sm transition";
                 }
             }
 
