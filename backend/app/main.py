@@ -20,7 +20,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="HRIS Enterprise API", version="3.6.0")
+app = FastAPI(title="HRIS Enterprise API", version="3.7.0")
 
 MAX_SHIFT_SECONDS = 20 * 3600
 
@@ -75,9 +75,9 @@ class CreatePunchAdminRequest(BaseModel):
 @app.get("/health")
 @app.get("/api/health")
 def health_check():
-    return {"status": "online", "service": "HRIS FastAPI Backend", "version": "3.6.0"}
+    return {"status": "online", "service": "HRIS FastAPI Backend", "version": "3.7.0"}
 
-# --- Dynamic Departments Endpoint ---
+# --- Dynamic Departments ---
 @app.get("/api/departments")
 def get_departments(db: Session = Depends(get_db)):
     db_depts = db.query(models.User.department).distinct().all()
@@ -377,7 +377,7 @@ def export_dtr_csv(employee_id: Optional[str] = None, db: Session = Depends(get_
     response.headers["Content-Disposition"] = f"attachment; filename={filename}"
     return response
 
-# --- WEB EMPLOYEE PORTAL UI (Clock In / Clock Out Workspace) ---
+# --- WEB EMPLOYEE PORTAL UI ---
 @app.get("/", response_class=HTMLResponse)
 @app.get("/portal", response_class=HTMLResponse)
 def employee_portal_ui():
@@ -394,7 +394,6 @@ def employee_portal_ui():
     </head>
     <body class="bg-slate-50 text-slate-900 min-h-screen antialiased flex flex-col justify-between">
 
-        <!-- Login Card Overlay -->
         <div id="employeeLoginCard" class="min-h-screen flex items-center justify-center p-4">
             <div class="bg-white rounded-2xl shadow-xl border border-slate-100 max-w-sm w-full p-6 space-y-5">
                 <div class="text-center space-y-1">
@@ -422,7 +421,6 @@ def employee_portal_ui():
             </div>
         </div>
 
-        <!-- Clock-In / Clock-Out Workspace -->
         <div id="employeeWorkspace" class="hidden min-h-screen flex flex-col">
             <header class="bg-white border-b border-slate-200 sticky top-0 z-30">
                 <div class="max-w-md mx-auto px-4 h-16 flex items-center justify-between">
@@ -439,7 +437,6 @@ def employee_portal_ui():
 
             <main class="flex-1 max-w-md w-full mx-auto px-4 py-6 space-y-6">
 
-                <!-- Interactive Clock Punch Button Card -->
                 <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 text-center space-y-5">
                     <div>
                         <span id="statusBadge" class="inline-block px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600">OFF DUTY</span>
@@ -454,7 +451,6 @@ def employee_portal_ui():
                     <p id="geoStatusText" class="text-[11px] text-slate-400">GPS location verification enabled</p>
                 </div>
 
-                <!-- Daily Timesheet History -->
                 <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 space-y-3">
                     <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Today's Activity Log</h3>
                     <div id="timesheetLogContainer" class="space-y-2 text-xs divide-y divide-slate-100"></div>
@@ -467,11 +463,12 @@ def employee_portal_ui():
             const API_BASE = "/api";
             let currentUser = null;
             let activeTimerInterval = null;
+            let autoSyncPoller = null;
             let currentIsClockedIn = false;
+            let elapsedShiftSeconds = 0;
             let currentLat = 14.5764;
             let currentLng = 121.0851;
 
-            // Fetch dynamic departments on load
             async function initPortal() {
                 try {
                     const res = await fetch(`${API_BASE}/departments`);
@@ -483,11 +480,9 @@ def employee_portal_ui():
                     });
                 } catch(e) {}
 
-                // Load saved credentials from localStorage
                 const savedEmpId = localStorage.getItem("hris_emp_id");
                 if (savedEmpId) document.getElementById("loginEmpId").value = savedEmpId;
 
-                // Watch geolocation
                 if ("geolocation" in navigator) {
                     navigator.geolocation.getCurrentPosition(
                         (pos) => {
@@ -496,7 +491,7 @@ def employee_portal_ui():
                             document.getElementById("geoStatusText").innerText = `GPS Active: ${currentLat.toFixed(4)}, ${currentLng.toFixed(4)}`;
                         },
                         (err) => {
-                            document.getElementById("geoStatusText").innerText = "GPS Location: Default Pasig Coordinates";
+                            document.getElementById("geoStatusText").innerText = "GPS Location: Pasig Area";
                         }
                     );
                 }
@@ -523,6 +518,10 @@ def employee_portal_ui():
                         document.getElementById("userDeptTitle").innerText = `${currentUser.department} • ${currentUser.position}`;
                         loadActiveStatus();
                         loadTimesheet();
+
+                        // Start 4-second background state sync poller
+                        clearInterval(autoSyncPoller);
+                        autoSyncPoller = setInterval(loadActiveStatus, 4000);
                     } else {
                         alert("Invalid Employee ID or Password");
                     }
@@ -533,6 +532,7 @@ def employee_portal_ui():
 
             function logoutEmployee() {
                 clearInterval(activeTimerInterval);
+                clearInterval(autoSyncPoller);
                 currentUser = null;
                 document.getElementById("employeeWorkspace").classList.add("hidden");
                 document.getElementById("employeeLoginCard").classList.remove("hidden");
@@ -547,39 +547,44 @@ def employee_portal_ui():
                 const btn = document.getElementById("punchActionBtn");
                 const subText = document.getElementById("shiftSubText");
 
-                clearInterval(activeTimerInterval);
+                // Auto-sync UI state when altered externally (e.g. from Mobile App)
+                if (data.is_clocked_in !== currentIsClockedIn) {
+                    currentIsClockedIn = data.is_clocked_in;
+                    loadTimesheet();
 
-                if (data.is_clocked_in) {
-                    currentIsClockedIn = true;
-                    badge.innerText = "ON DUTY";
-                    badge.className = "inline-block px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800";
-                    btn.innerText = "CLOCK OUT NOW";
-                    btn.className = "w-full py-4 rounded-xl font-bold text-base text-white bg-rose-600 hover:bg-rose-700 shadow-lg shadow-rose-500/25 transition";
-                    subText.innerText = "Active shift running";
-
-                    let elapsed = data.elapsed_seconds || 0;
-                    startTimer(elapsed);
-                } else {
-                    currentIsClockedIn = false;
-                    badge.innerText = "OFF DUTY";
-                    badge.className = "inline-block px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600";
-                    btn.innerText = "CLOCK IN NOW";
-                    btn.className = "w-full py-4 rounded-xl font-bold text-base text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/25 transition";
-                    document.getElementById("liveTimerText").innerText = "00:00:00";
-                    subText.innerText = "Ready to start shift";
+                    if (currentIsClockedIn) {
+                        badge.innerText = "ON DUTY";
+                        badge.className = "inline-block px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800";
+                        btn.innerText = "CLOCK OUT NOW";
+                        btn.className = "w-full py-4 rounded-xl font-bold text-base text-white bg-rose-600 hover:bg-rose-700 shadow-lg shadow-rose-500/25 transition";
+                        subText.innerText = "Active shift running";
+                        
+                        elapsedShiftSeconds = data.elapsed_seconds || 0;
+                        clearInterval(activeTimerInterval);
+                        activeTimerInterval = setInterval(() => {
+                            elapsedShiftSeconds++;
+                            updateTimerDisplay(elapsedShiftSeconds);
+                        }, 1000);
+                    } else {
+                        badge.innerText = "OFF DUTY";
+                        badge.className = "inline-block px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600";
+                        btn.innerText = "CLOCK IN NOW";
+                        btn.className = "w-full py-4 rounded-xl font-bold text-base text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/25 transition";
+                        document.getElementById("liveTimerText").innerText = "00:00:00";
+                        subText.innerText = "Ready to start shift";
+                        clearInterval(activeTimerInterval);
+                    }
+                } else if (currentIsClockedIn && data.elapsed_seconds) {
+                    // Sync clock drift
+                    elapsedShiftSeconds = data.elapsed_seconds;
                 }
             }
 
-            function startTimer(seconds) {
-                function update() {
-                    seconds++;
-                    const h = String(Math.floor(seconds / 3600)).padStart(2, '0');
-                    const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
-                    const s = String(seconds % 60).padStart(2, '0');
-                    document.getElementById("liveTimerText").innerText = `${h}:${m}:${s}`;
-                }
-                update();
-                activeTimerInterval = setInterval(update, 1000);
+            function updateTimerDisplay(seconds) {
+                const h = String(Math.floor(seconds / 3600)).padStart(2, '0');
+                const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
+                const s = String(seconds % 60).padStart(2, '0');
+                document.getElementById("liveTimerText").innerText = `${h}:${m}:${s}`;
             }
 
             async function triggerPunch() {
@@ -660,7 +665,6 @@ def admin_dashboard_ui():
     </head>
     <body class="bg-slate-50 text-slate-900 min-h-screen antialiased">
 
-        <!-- Admin Login Guard -->
         <div id="loginOverlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div class="bg-white rounded-2xl shadow-xl border border-slate-100 max-w-sm w-full p-6 space-y-5">
                 <div class="text-center space-y-1">
@@ -682,7 +686,6 @@ def admin_dashboard_ui():
             </div>
         </div>
 
-        <!-- Edit Profile Modal -->
         <div id="editUserModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div class="bg-white rounded-xl shadow-xl border border-slate-200 max-w-lg w-full p-6 space-y-4">
                 <div class="flex justify-between items-center border-b pb-3">
@@ -731,7 +734,6 @@ def admin_dashboard_ui():
             </div>
         </div>
 
-        <!-- Main Workspace -->
         <div id="adminWorkspace" class="hidden min-h-screen flex flex-col">
             <header class="bg-white border-b border-slate-200 sticky top-0 z-30">
                 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -762,7 +764,6 @@ def admin_dashboard_ui():
 
             <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
 
-                <!-- TAB 1: Time Clocks & Interactive Map View -->
                 <div id="tabContentClocks" class="space-y-6">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div class="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between">
@@ -858,7 +859,6 @@ def admin_dashboard_ui():
                     </div>
                 </div>
 
-                <!-- TAB 2: User Directory & RBAC Control Page -->
                 <div id="tabContentUsers" class="hidden space-y-6">
                     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm">
                         <div>
@@ -896,7 +896,6 @@ def admin_dashboard_ui():
                     <div id="departmentDirectoryContainer" class="space-y-4"></div>
                 </div>
 
-                <!-- TAB 3: Smart Groups -->
                 <div id="tabContentGroups" class="hidden space-y-6">
                     <div class="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm">
                         <div>
@@ -960,6 +959,7 @@ def admin_dashboard_ui():
             let globalDeptsCache = [];
             let leafletMap = null;
             let mapMarkers = [];
+            let adminSyncPoller = null;
 
             const now = new Date();
             now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
@@ -1052,6 +1052,10 @@ def admin_dashboard_ui():
                             document.getElementById("adminWorkspace").classList.remove("hidden");
                             initLeafletMap();
                             loadDashboard();
+
+                            // Start background map/DTR poller
+                            clearInterval(adminSyncPoller);
+                            adminSyncPoller = setInterval(loadPunches, 5000);
                         } else {
                             alert("Access Denied: Account lacks Super Admin permissions.");
                         }
@@ -1064,6 +1068,7 @@ def admin_dashboard_ui():
             });
 
             function logoutAdmin() {
+                clearInterval(adminSyncPoller);
                 document.getElementById("adminWorkspace").classList.add("hidden");
                 document.getElementById("loginOverlay").classList.remove("hidden");
             }
