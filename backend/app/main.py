@@ -20,7 +20,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="HRIS Enterprise API", version="3.4.0")
+app = FastAPI(title="HRIS Enterprise API", version="3.5.0")
 
 MAX_SHIFT_SECONDS = 20 * 3600
 
@@ -34,7 +34,7 @@ def get_db():
 def get_now_manila():
     return datetime.now(MANILA_TZ)
 
-# --- Pydantic Request Models ---
+# --- Schemas ---
 class LoginRequest(BaseModel):
     employee_id: str
     password: str
@@ -67,27 +67,25 @@ class CreatePunchAdminRequest(BaseModel):
     employee_id: str
     punch_type: str
     timestamp: str
-    latitude: float = 0.0
-    longitude: float = 0.0
-    address: Optional[str] = "Manual Admin Entry"
+    latitude: float = 14.5764
+    longitude: float = 121.0851
+    address: Optional[str] = "Pasig, Metro Manila"
 
 # --- Health Check ---
 @app.get("/health")
 @app.get("/api/health")
 def health_check():
-    return {"status": "online", "service": "HRIS FastAPI Backend", "version": "3.4.0"}
+    return {"status": "online", "service": "HRIS FastAPI Backend", "version": "3.5.0"}
 
 # --- Dynamic Departments Endpoint ---
 @app.get("/api/departments")
 def get_departments(db: Session = Depends(get_db)):
     db_depts = db.query(models.User.department).distinct().all()
     dept_list = [d[0] for d in db_depts if d[0]]
-    
-    defaults = ["Executive", "IT Operations", "Operations", "Admin", "Sales"]
+    defaults = ["Admin", "IT Operations", "Executive", "Operations", "Sales"]
     for d in defaults:
         if d not in dept_list:
             dept_list.append(d)
-            
     return sorted(dept_list)
 
 # --- Authentication ---
@@ -315,14 +313,18 @@ def list_all_dtr(employee_id: Optional[str] = None, db: Session = Depends(get_db
     
     result = []
     for p in punches:
+        user = db.query(models.User).filter(models.User.employee_id == p.employee_id).first()
         result.append({
             "id": p.id,
             "employee_id": p.employee_id,
+            "employee_name": user.name if user else f"Emp #{p.employee_id}",
+            "department": user.department if user else "General",
+            "position": user.position if user else "Staff",
             "punch_type": p.punch_type,
             "formatted_time": p.timestamp.strftime("%Y-%m-%d %I:%M:%S %p"),
             "address": p.address or "Pasig, Metro Manila",
-            "latitude": p.latitude,
-            "longitude": p.longitude
+            "latitude": p.latitude or 14.5764,
+            "longitude": p.longitude or 121.0851
         })
     return result
 
@@ -387,11 +389,16 @@ def admin_dashboard_ui():
         <title>HRIS Administration Portal</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-        <style> body { font-family: 'Inter', sans-serif; } </style>
+        
+        <!-- Leaflet.js Mapping Library -->
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+        <style> body { font-family: 'Inter', sans-serif; } #map { height: 420px; width: 100%; border-radius: 0.75rem; z-index: 10; } </style>
     </head>
     <body class="bg-slate-50 text-slate-900 min-h-screen antialiased">
 
-        <!-- Login Overlay Guard -->
+        <!-- Login Overlay -->
         <div id="loginOverlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div class="bg-white rounded-2xl shadow-xl border border-slate-100 max-w-sm w-full p-6 space-y-5">
                 <div class="text-center space-y-1">
@@ -413,7 +420,7 @@ def admin_dashboard_ui():
             </div>
         </div>
 
-        <!-- Edit User Modal -->
+        <!-- Edit Profile Modal -->
         <div id="editUserModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div class="bg-white rounded-xl shadow-xl border border-slate-200 max-w-lg w-full p-6 space-y-4">
                 <div class="flex justify-between items-center border-b pb-3">
@@ -476,7 +483,7 @@ def admin_dashboard_ui():
                         </div>
 
                         <nav class="hidden md:flex gap-1 bg-slate-100 p-1 rounded-lg text-xs font-semibold">
-                            <button id="tabBtnClocks" onclick="switchTab('clocks')" class="px-3 py-1.5 rounded-md bg-white text-blue-600 shadow-sm transition">Time Clocks & DTR</button>
+                            <button id="tabBtnClocks" onclick="switchTab('clocks')" class="px-3 py-1.5 rounded-md bg-white text-blue-600 shadow-sm transition">Time Clocks & Map</button>
                             <button id="tabBtnUsers" onclick="switchTab('users')" class="px-3 py-1.5 rounded-md text-slate-600 hover:text-slate-900 transition">User Directory & RBAC</button>
                             <button id="tabBtnGroups" onclick="switchTab('groups')" class="px-3 py-1.5 rounded-md text-slate-600 hover:text-slate-900 transition">Smart Groups</button>
                         </nav>
@@ -493,13 +500,53 @@ def admin_dashboard_ui():
 
             <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
 
-                <!-- TAB 1: Time Clocks & DTR Management -->
+                <!-- TAB 1: Time Clocks & Interactive Map View -->
                 <div id="tabContentClocks" class="space-y-6">
-                    <div>
-                        <h2 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Department Time Clocks</h2>
-                        <div id="deptGrid" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+                    
+                    <!-- Time Clock Attendance Summary Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Clocked In Now</p>
+                                <h3 id="statClockedInCount" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                            <div class="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center font-bold">✓</div>
+                        </div>
+
+                        <div class="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Active Users</p>
+                                <h3 id="statTotalUsersCount" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                            <div class="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center font-bold">👥</div>
+                        </div>
                     </div>
 
+                    <!-- Live Interactive Map Section -->
+                    <div class="bg-white rounded-xl border border-slate-200/80 shadow-sm p-5 space-y-4">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-3">
+                            <div>
+                                <h2 class="text-sm font-bold text-slate-800 uppercase tracking-wider">Live Geo-Location GPS Tracker</h2>
+                                <p class="text-xs text-slate-500">Real-time GPS punch locations mapped across Metro Manila</p>
+                            </div>
+                            <button onclick="loadDashboard()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-3 py-1.5 rounded-lg transition">Refresh Map Pins</button>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                            <!-- Sidebar User Status List -->
+                            <div class="lg:col-span-1 bg-slate-50 p-3 rounded-xl border border-slate-200/60 max-h-[420px] overflow-y-auto space-y-2">
+                                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Active Punch Locations</h3>
+                                <div id="mapUserList" class="space-y-1.5"></div>
+                            </div>
+
+                            <!-- Map Canvas -->
+                            <div class="lg:col-span-3">
+                                <div id="map"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Collapsible Manual Override Card -->
                     <div class="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
                         <button onclick="toggleCollapse('overrideBody', 'overrideIcon')" class="w-full p-4 sm:p-5 flex items-center justify-between bg-slate-50/50 hover:bg-slate-50 text-left transition border-b border-slate-100">
                             <div>
@@ -523,6 +570,7 @@ def admin_dashboard_ui():
                         </div>
                     </div>
 
+                    <!-- DTR Audit Table -->
                     <div class="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
                         <div class="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
                             <div class="flex items-center gap-3">
@@ -593,7 +641,7 @@ def admin_dashboard_ui():
                     <div id="departmentDirectoryContainer" class="space-y-4"></div>
                 </div>
 
-                <!-- TAB 3: Smart Groups Management Page -->
+                <!-- TAB 3: Smart Groups -->
                 <div id="tabContentGroups" class="hidden space-y-6">
                     <div class="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm">
                         <div>
@@ -655,10 +703,22 @@ def admin_dashboard_ui():
             const API_BASE = "/api";
             let globalUsersCache = [];
             let globalDeptsCache = [];
+            let leafletMap = null;
+            let mapMarkers = [];
 
             const now = new Date();
             now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
             document.getElementById('addTime').value = now.toISOString().slice(0, 16);
+
+            function initLeafletMap() {
+                if (leafletMap) return;
+                // Center Map over Metro Manila / Pasig
+                leafletMap = L.map('map').setView([14.5764, 121.0851], 12);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(leafletMap);
+            }
 
             async function fetchDynamicDepartments() {
                 try {
@@ -697,6 +757,7 @@ def admin_dashboard_ui():
                 if (tabName === 'clocks') {
                     clockTab.classList.remove("hidden");
                     btnClocks.className = "px-3 py-1.5 rounded-md bg-white text-blue-600 shadow-sm transition";
+                    if (leafletMap) leafletMap.invalidateSize();
                 } else if (tabName === 'users') {
                     userTab.classList.remove("hidden");
                     btnUsers.className = "px-3 py-1.5 rounded-md bg-white text-blue-600 shadow-sm transition";
@@ -735,6 +796,7 @@ def admin_dashboard_ui():
                         if (data.role === "super_admin") {
                             document.getElementById("loginOverlay").classList.add("hidden");
                             document.getElementById("adminWorkspace").classList.remove("hidden");
+                            initLeafletMap();
                             loadDashboard();
                         } else {
                             alert("Access Denied: Account lacks Super Admin permissions.");
@@ -754,34 +816,16 @@ def admin_dashboard_ui():
 
             async function loadDashboard() {
                 await fetchDynamicDepartments();
-                loadDepartments();
-                loadSegmentedUsers();
-                loadPunches();
-            }
-
-            async function loadDepartments() {
-                const res = await fetch(`${API_BASE}/admin/departments`);
-                const data = await res.json();
-                const grid = document.getElementById("deptGrid");
-                grid.innerHTML = "";
-
-                data.forEach(d => {
-                    grid.innerHTML += `
-                        <div class="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm space-y-2">
-                            <div class="flex justify-between items-center">
-                                <h3 class="font-bold text-slate-800 text-sm">${d.department}</h3>
-                                <span class="text-xs bg-blue-50 text-blue-700 font-bold px-2 py-0.5 rounded-full">${d.active_clocked_in} On Duty</span>
-                            </div>
-                            <p class="text-xs text-slate-500">${d.total_users} Total Users Assigned</p>
-                        </div>
-                    `;
-                });
+                await loadSegmentedUsers();
+                await loadPunches();
             }
 
             async function loadSegmentedUsers() {
                 const res = await fetch(`${API_BASE}/admin/users`);
                 const users = await res.json();
                 globalUsersCache = users;
+                document.getElementById("statTotalUsersCount").innerText = users.length;
+
                 const container = document.getElementById("departmentDirectoryContainer");
                 container.innerHTML = "";
 
@@ -844,6 +888,92 @@ def admin_dashboard_ui():
                 });
             }
 
+            function focusMapLocation(lat, lng, name) {
+                if (leafletMap) {
+                    leafletMap.setView([lat, lng], 15);
+                    mapMarkers.forEach(m => {
+                        if (m.getLatLng().lat === lat && m.getLatLng().lng === lng) {
+                            m.openPopup();
+                        }
+                    });
+                }
+            }
+
+            async function loadPunches() {
+                const res = await fetch(`${API_BASE}/admin/dtr`);
+                const data = await res.json();
+                
+                const tbody = document.getElementById("dtrTableBody");
+                const mapUserList = document.getElementById("mapUserList");
+                tbody.innerHTML = "";
+                mapUserList.innerHTML = "";
+
+                // Clear map markers
+                mapMarkers.forEach(m => leafletMap.removeLayer(m));
+                mapMarkers = [];
+
+                let activeClockedInCount = 0;
+                const seenUsers = new Set();
+
+                data.forEach(p => {
+                    const isClockIn = p.punch_type === 'CLOCK_IN';
+
+                    if (!seenUsers.has(p.employee_id)) {
+                        seenUsers.add(p.employee_id);
+                        if (isClockIn) activeClockedInCount++;
+                    }
+
+                    // Append DTR Row
+                    tbody.innerHTML += `
+                        <tr class="hover:bg-slate-50 transition">
+                            <td class="p-3.5 pl-5 font-mono text-xs text-slate-400">#${p.id}</td>
+                            <td class="p-3.5 font-bold text-slate-800">${p.employee_name} (${p.employee_id})</td>
+                            <td class="p-3.5">
+                                <span class="px-2.5 py-0.5 rounded-full text-xs font-bold ${isClockIn ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}">
+                                    ${p.punch_type}
+                                </span>
+                            </td>
+                            <td class="p-3.5 text-xs font-mono font-semibold text-slate-700">${p.formatted_time}</td>
+                            <td class="p-3.5 text-xs text-slate-500">${p.address}</td>
+                            <td class="p-3.5 pr-5 text-right">
+                                <button onclick="deletePunch(${p.id})" class="text-xs text-rose-600 hover:underline font-semibold">Delete</button>
+                            </td>
+                        </tr>
+                    `;
+
+                    // Add map marker and location item if coordinates exist
+                    const lat = parseFloat(p.latitude) || 14.5764;
+                    const lng = parseFloat(p.longitude) || 121.0851;
+
+                    mapUserList.innerHTML += `
+                        <div onclick="focusMapLocation(${lat}, ${lng}, '${p.employee_name}')" class="bg-white p-2.5 rounded-lg border border-slate-200 cursor-pointer hover:border-blue-500 transition shadow-sm space-y-1">
+                            <div class="flex justify-between items-center">
+                                <span class="font-bold text-xs text-slate-800">${p.employee_name}</span>
+                                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${isClockIn ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">${p.punch_type}</span>
+                            </div>
+                            <p class="text-[11px] text-slate-500 truncate">${p.address}</p>
+                            <p class="text-[10px] font-mono text-slate-400">${p.formatted_time}</p>
+                        </div>
+                    `;
+
+                    if (leafletMap) {
+                        const marker = L.marker([lat, lng]).addTo(leafletMap);
+                        marker.bindPopup(`
+                            <div class="p-1 space-y-1 font-sans">
+                                <h4 class="font-bold text-sm text-slate-800">${p.employee_name}</h4>
+                                <p class="text-xs text-slate-600"><b>ID:</b> ${p.employee_id} | <b>Dept:</b> ${p.department}</p>
+                                <p class="text-xs text-slate-600"><b>Action:</b> <span class="font-bold ${isClockIn ? 'text-emerald-600' : 'text-rose-600'}">${p.punch_type}</span></p>
+                                <p class="text-xs text-slate-500">${p.address}</p>
+                                <p class="text-[10px] text-slate-400">${p.formatted_time}</p>
+                            </div>
+                        `);
+                        mapMarkers.push(marker);
+                    }
+                });
+
+                document.getElementById("statClockedInCount").innerText = activeClockedInCount;
+            }
+
             function openEditModal(empId) {
                 const user = globalUsersCache.find(u => u.employee_id === empId);
                 if (!user) return;
@@ -891,38 +1021,10 @@ def admin_dashboard_ui():
                 if (res.ok) {
                     closeEditModal();
                     loadSegmentedUsers();
-                    loadDepartments();
                 } else {
                     alert("Failed to update user profile");
                 }
             });
-
-            async function loadPunches() {
-                const res = await fetch(`${API_BASE}/admin/dtr`);
-                const data = await res.json();
-                const tbody = document.getElementById("dtrTableBody");
-                tbody.innerHTML = "";
-
-                data.forEach(p => {
-                    const isClockIn = p.punch_type === 'CLOCK_IN';
-                    tbody.innerHTML += `
-                        <tr class="hover:bg-slate-50 transition">
-                            <td class="p-3.5 pl-5 font-mono text-xs text-slate-400">#${p.id}</td>
-                            <td class="p-3.5 font-bold text-slate-800">${p.employee_id}</td>
-                            <td class="p-3.5">
-                                <span class="px-2.5 py-0.5 rounded-full text-xs font-bold ${isClockIn ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}">
-                                    ${p.punch_type}
-                                </span>
-                            </td>
-                            <td class="p-3.5 text-xs font-mono font-semibold text-slate-700">${p.formatted_time}</td>
-                            <td class="p-3.5 text-xs text-slate-500">${p.address}</td>
-                            <td class="p-3.5 pr-5 text-right">
-                                <button onclick="deletePunch(${p.id})" class="text-xs text-rose-600 hover:underline font-semibold">Delete</button>
-                            </td>
-                        </tr>
-                    `;
-                });
-            }
 
             document.getElementById("createUserForm").addEventListener("submit", async (e) => {
                 e.preventDefault();
@@ -940,7 +1042,6 @@ def admin_dashboard_ui():
                 });
                 toggleCollapse('newUserFormCard', 'newUserIcon');
                 loadSegmentedUsers();
-                loadDepartments();
             });
 
             document.getElementById("addForm").addEventListener("submit", async (e) => {
@@ -952,7 +1053,9 @@ def admin_dashboard_ui():
                         employee_id: document.getElementById("addEmpId").value,
                         punch_type: document.getElementById("addType").value,
                         timestamp: document.getElementById("addTime").value + ":00",
-                        address: "Manual Admin Entry"
+                        latitude: 14.5764,
+                        longitude: 121.0851,
+                        address: "Pasig, Metro Manila"
                     })
                 });
                 loadPunches();
@@ -962,7 +1065,6 @@ def admin_dashboard_ui():
                 if (confirm(`Remove user ${empId}?`)) {
                     await fetch(`${API_BASE}/admin/users/${empId}`, { method: "DELETE" });
                     loadSegmentedUsers();
-                    loadDepartments();
                 }
             }
 
