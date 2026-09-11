@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useContext, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import React, { useState, useEffect, useContext, useCallback, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, ScrollView, Platform } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../context/AuthContext';
@@ -11,14 +11,19 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(false);
   const [fetchingStatus, setFetchingStatus] = useState(true);
 
-  // Fetch current active punch status from FastAPI backend
+  const timerRef = useRef(null);
+
+  // Fetch active punch state directly from PostgreSQL via FastAPI
   const fetchActiveStatus = useCallback(async () => {
     if (!user || !user.employee_id) return;
     try {
       const response = await fetch(`${API_BASE_URL}/api/punch/active/${user.employee_id}`);
       if (response.ok) {
         const data = await response.json();
+        
+        // Always sync boolean clock status
         setIsClockedIn(data.is_clocked_in);
+
         if (data.is_clocked_in) {
           setElapsedSeconds(data.elapsed_seconds || 0);
         } else {
@@ -32,27 +37,35 @@ export default function HomeScreen() {
     }
   }, [user, API_BASE_URL]);
 
-  // Re-fetch state whenever the screen gains focus
+  // Poller loop: Check backend every 3 seconds & re-check when screen gains focus
   useFocusEffect(
     useCallback(() => {
       fetchActiveStatus();
-      const interval = setInterval(fetchActiveStatus, 4000); // 4-second poller
-      return () => clearInterval(interval);
+      const poller = setInterval(fetchActiveStatus, 3000);
+      return () => clearInterval(poller);
     }, [fetchActiveStatus])
   );
 
-  // Timer counter for active shift
+  // Incremental local timer logic
   useEffect(() => {
-    let timer = null;
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
     if (isClockedIn) {
-      timer = setInterval(() => {
+      timerRef.current = setInterval(() => {
         setElapsedSeconds((prev) => prev + 1);
       }, 1000);
     } else {
       setElapsedSeconds(0);
     }
+
     return () => {
-      if (timer) clearInterval(timer);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
     };
   }, [isClockedIn]);
 
@@ -95,7 +108,7 @@ export default function HomeScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      {/* Header Profile Card */}
+      {/* Profile Header */}
       <View style={styles.headerCard}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{user?.name ? user.name.charAt(0) : 'U'}</Text>
