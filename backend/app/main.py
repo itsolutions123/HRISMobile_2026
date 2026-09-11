@@ -1,10 +1,11 @@
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy import create_engine, desc
 from sqlalchemy.orm import sessionmaker, Session
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
+from collections import defaultdict
 from . import models
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://hrisuser:hrispassword@hris-db:5432/hrisdb")
@@ -14,9 +15,9 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="HRIS Core API", version="1.1.0")
+app = FastAPI(title="HRIS Core API", version="1.2.0")
 
-MAX_SHIFT_SECONDS = 20 * 3600  # 20 hours limit
+MAX_SHIFT_SECONDS = 20 * 3600
 
 def get_db():
     db = SessionLocal()
@@ -70,7 +71,6 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 
 @app.get("/api/punch/active/{employee_id}")
 def get_active_punch(employee_id: str, db: Session = Depends(get_db)):
-    # Retrieve the latest punch for this employee
     last_punch = db.query(models.TimePunch)\
         .filter(models.TimePunch.employee_id == employee_id)\
         .order_by(desc(models.TimePunch.timestamp))\
@@ -79,12 +79,10 @@ def get_active_punch(employee_id: str, db: Session = Depends(get_db)):
     if not last_punch or last_punch.punch_type == "CLOCK_OUT":
         return {"is_clocked_in": False, "last_punch": last_punch}
 
-    # Evaluate 20-Hour Auto-Checkout Rule
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     elapsed_seconds = int((now - last_punch.timestamp).total_seconds())
 
     if elapsed_seconds >= MAX_SHIFT_SECONDS:
-        # Auto-Clock Out
         auto_out = models.TimePunch(
             employee_id=employee_id,
             punch_type="CLOCK_OUT",
@@ -120,3 +118,51 @@ def record_punch(req: PunchRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(punch)
     return {"status": "success", "punch_id": punch.id, "timestamp": punch.timestamp}
+
+@app.get("/api/timesheet/{employee_id}")
+def get_employee_timesheet(employee_id: str, db: Session = Depends(get_db)):
+    punches = db.query(models.TimePunch)\
+        .filter(models.TimePunch.employee_id == employee_id)\
+        .order_by(models.TimePunch.timestamp.asc())\
+        .all()
+
+    # Group punches by YYYY-MM-DD
+    timesheet_by_date = defaultdict(list)
+    for p in punches:
+        date_str = p.timestamp.strftime("%Y-%m-%d")
+        timesheet_by_date[date_str].append({
+            "id": p.id,
+            "punch_type": p.punch_type,
+            "time": p.timestamp.strftime("%I:%M:%S %p"),
+            "timestamp": p.timestamp.isoformat(),
+            "address": p.address or "Location Captured",
+            "lat": p.latitude,
+            "lng": p.longitude
+        })
+
+    formatted_history = []
+    for date_key, day_punches in timesheet_by_date.items():
+        # Calculate daily hours worked based on clock-in / clock-out pairs
+        total_seconds = 0
+        in_time = None
+
+        for p in day_punches:
+            dt = datetime.fromisoformat(p["timestamp"])
+            if p["punch_type"] == "CLOCK_IN":
+                in_time = dt
+            elif p["punch_type"] == "CLOCK_OUT" and in_time:
+                total_seconds += (dt - in_time).total_seconds()
+                in_time = None
+
+        hrs = int(total_seconds // 3600)
+        mins = int((total_seconds % 3600) // 60)
+
+        formatted_history.append({
+            "date": date_key,
+            "display_date": datetime.strptime(date_key, "%Y-%m-%d").strftime("%A, %b %d, %Y"),
+            "total_duration": f"{hrs}h {mins}m",
+            "punches": day_punches
+        })
+
+    # Return reverse chronological order
+    return {"employee_id": employee_id, "timesheet": list(reversed(formatted_history))}
