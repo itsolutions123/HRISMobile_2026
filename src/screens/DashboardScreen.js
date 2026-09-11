@@ -1,5 +1,5 @@
 import React, { useState, useContext } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Linking, Platform, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Linking, ScrollView } from 'react-native';
 import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
 import { AuthContext } from '../context/AuthContext';
@@ -71,19 +71,28 @@ export default function DashboardScreen({ navigation }) {
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
         <style>
-          body, html, #map { height: 100%; margin: 0; padding: 0; }
+          html, body, #map { height: 100%; width: 100%; margin: 0; padding: 0; background: #e5e7eb; }
         </style>
       </head>
       <body>
         <div id="map"></div>
         <script>
-          var map = L.map('map', { zoomControl: false }).setView([${lat}], [${lng}], 16);
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19
-          }).addTo(map);
-          L.marker([${lat}], [${lng}]).addTo(map)
-            .bindPopup("${label}")
-            .openPopup();
+          document.addEventListener("DOMContentLoaded", function() {
+            var map = L.map('map', { zoomControl: true }).setView([${lat}], [${lng}], 16);
+            
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+              attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
+              subdomains: 'abcd',
+              maxZoom: 19
+            }).addTo(map);
+
+            var marker = L.marker([${lat}], [${lng}]).addTo(map);
+            marker.bindPopup("<b>${label}</b>").openPopup();
+
+            setTimeout(function() {
+              map.invalidateSize();
+            }, 300);
+          });
         </script>
       </body>
     </html>
@@ -123,8 +132,11 @@ export default function DashboardScreen({ navigation }) {
           <View style={styles.mapFrame}>
             <WebView
               originWhitelist={['*']}
-              source={{ html: generateLeafletHTML(lastPunch.lat, lastPunch.lng, `${lastPunch.type} Location`) }}
+              source={{ html: generateLeafletHTML(lastPunch.lat, lastPunch.lng, `${lastPunch.type}`) }}
               style={styles.map}
+              javaScriptEnabled={true}
+              domStorageEnabled={true}
+              mixedContentMode="always"
               scrollEnabled={false}
             />
           </View>
