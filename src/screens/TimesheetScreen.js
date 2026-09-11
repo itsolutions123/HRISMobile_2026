@@ -8,28 +8,38 @@ export default function TimesheetScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [timesheetData, setTimesheetData] = useState([]);
+  const [allPunches, setAllPunches] = useState([]);
   const [markedDates, setMarkedDates] = useState({});
   
-  const todayStr = new Date().toISOString().split('T')[0];
-  const [selectedDate, setSelectedDate] = useState(todayStr);
+  // Local date formatting YYYY-MM-DD
+  const getLocalDateString = (d = new Date()) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const [selectedDate, setSelectedDate] = useState(getLocalDateString());
 
   const fetchTimesheet = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/timesheet/${user.employee_id}`);
       if (response.ok) {
         const data = await response.json();
-        setTimesheetData(data.timesheet || []);
+        const history = data.timesheet || [];
+        const rawPunches = data.all_punches || [];
 
-        // Mark calendar dates that contain punches
+        setTimesheetData(history);
+        setAllPunches(rawPunches);
+
         let marks = {};
-        (data.timesheet || []).forEach((item) => {
+        history.forEach((item) => {
           marks[item.date] = {
             marked: true,
             dotColor: '#2563eb',
           };
         });
 
-        // Highlight selected date
         marks[selectedDate] = {
           ...(marks[selectedDate] || {}),
           selected: true,
@@ -77,12 +87,12 @@ export default function TimesheetScreen() {
   };
 
   const selectedDayRecord = timesheetData.find((item) => item.date === selectedDate);
+  const displayList = selectedDayRecord ? selectedDayRecord.punches : allPunches;
 
   return (
     <View style={styles.container}>
       <Text style={styles.headerTitle}>My Timesheet</Text>
 
-      {/* Interactive Calendar Component */}
       <Calendar
         current={selectedDate}
         onDayPress={handleDateSelect}
@@ -99,7 +109,7 @@ export default function TimesheetScreen() {
 
       <View style={styles.detailsHeader}>
         <Text style={styles.detailsTitle}>
-          {selectedDayRecord ? selectedDayRecord.display_date : selectedDate}
+          {selectedDayRecord ? selectedDayRecord.display_date : `Recent Activity (${displayList.length})`}
         </Text>
         {selectedDayRecord && (
           <Text style={styles.durationBadge}>Total: {selectedDayRecord.total_duration}</Text>
@@ -108,9 +118,9 @@ export default function TimesheetScreen() {
 
       {loading ? (
         <ActivityIndicator size="large" color="#2563eb" style={{ marginTop: 20 }} />
-      ) : selectedDayRecord && selectedDayRecord.punches.length > 0 ? (
+      ) : displayList.length > 0 ? (
         <FlatList
-          data={selectedDayRecord.punches}
+          data={displayList}
           keyExtractor={(item) => item.id.toString()}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchTimesheet(); }} />}
           renderItem={({ item }) => (
@@ -119,7 +129,7 @@ export default function TimesheetScreen() {
                 <Text style={[styles.badge, item.punch_type === 'CLOCK_IN' ? styles.badgeIn : styles.badgeOut]}>
                   {item.punch_type}
                 </Text>
-                <Text style={styles.punchTime}>{item.time}</Text>
+                <Text style={styles.punchTime}>{item.date} | {item.time}</Text>
               </View>
               <Text style={styles.address}>📍 {item.address}</Text>
 
@@ -131,7 +141,7 @@ export default function TimesheetScreen() {
         />
       ) : (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No attendance records for this date.</Text>
+          <Text style={styles.emptyText}>No attendance records found.</Text>
         </View>
       )}
     </View>
@@ -150,7 +160,7 @@ const styles = StyleSheet.create({
   badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, fontWeight: 'bold', fontSize: 11, overflow: 'hidden' },
   badgeIn: { backgroundColor: '#dcfce7', color: '#15803d' },
   badgeOut: { backgroundColor: '#fee2e2', color: '#b91c1c' },
-  punchTime: { fontSize: 14, fontWeight: 'bold', color: '#334155' },
+  punchTime: { fontSize: 13, fontWeight: 'bold', color: '#334155' },
   address: { fontSize: 12, color: '#64748b', marginBottom: 8 },
   mapBtn: { backgroundColor: '#eff6ff', padding: 6, borderRadius: 6, alignItems: 'center' },
   mapBtnText: { color: '#2563eb', fontWeight: 'bold', fontSize: 12 },

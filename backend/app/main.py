@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy import create_engine, desc
 from sqlalchemy.orm import sessionmaker, Session
@@ -15,7 +15,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="HRIS Core API", version="1.2.0")
+app = FastAPI(title="HRIS Core API", version="1.2.1")
 
 MAX_SHIFT_SECONDS = 20 * 3600
 
@@ -123,30 +123,35 @@ def record_punch(req: PunchRequest, db: Session = Depends(get_db)):
 def get_employee_timesheet(employee_id: str, db: Session = Depends(get_db)):
     punches = db.query(models.TimePunch)\
         .filter(models.TimePunch.employee_id == employee_id)\
-        .order_by(models.TimePunch.timestamp.asc())\
+        .order_by(desc(models.TimePunch.timestamp))\
         .all()
 
-    # Group punches by YYYY-MM-DD
     timesheet_by_date = defaultdict(list)
+    raw_list = []
+
     for p in punches:
         date_str = p.timestamp.strftime("%Y-%m-%d")
-        timesheet_by_date[date_str].append({
+        punch_obj = {
             "id": p.id,
             "punch_type": p.punch_type,
             "time": p.timestamp.strftime("%I:%M:%S %p"),
             "timestamp": p.timestamp.isoformat(),
+            "date": date_str,
             "address": p.address or "Location Captured",
             "lat": p.latitude,
             "lng": p.longitude
-        })
+        }
+        timesheet_by_date[date_str].append(punch_obj)
+        raw_list.append(punch_obj)
 
     formatted_history = []
     for date_key, day_punches in timesheet_by_date.items():
-        # Calculate daily hours worked based on clock-in / clock-out pairs
         total_seconds = 0
         in_time = None
 
-        for p in day_punches:
+        # Sort ascending for duration math
+        chronological = sorted(day_punches, key=lambda x: x["timestamp"])
+        for p in chronological:
             dt = datetime.fromisoformat(p["timestamp"])
             if p["punch_type"] == "CLOCK_IN":
                 in_time = dt
@@ -164,5 +169,8 @@ def get_employee_timesheet(employee_id: str, db: Session = Depends(get_db)):
             "punches": day_punches
         })
 
-    # Return reverse chronological order
-    return {"employee_id": employee_id, "timesheet": list(reversed(formatted_history))}
+    return {
+        "employee_id": employee_id,
+        "timesheet": formatted_history,
+        "all_punches": raw_list
+    }
