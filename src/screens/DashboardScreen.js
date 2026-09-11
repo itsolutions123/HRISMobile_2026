@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Linking, ScrollView, Platform } from 'react-native';
-import { WebView } from 'react-native-webview';
-import * as Location from 'expo-location';
+import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../context/AuthContext';
 
 export default function DashboardScreen({ navigation }) {
@@ -10,28 +9,19 @@ export default function DashboardScreen({ navigation }) {
   const [initialSync, setInitialSync] = useState(true);
   const [lastPunch, setLastPunch] = useState(null);
   
-  // Timer State
+  // Shift Timer State
   const [isClockedIn, setIsClockedIn] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
-  // Fetch active punch state on component mount / re-login
   useEffect(() => {
     fetchActivePunchState();
   }, []);
 
-  // Timer Ticker
   useEffect(() => {
     let interval = null;
     if (isClockedIn) {
       interval = setInterval(() => {
-        setElapsedSeconds((prev) => {
-          if (prev >= 20 * 3600) {
-            Alert.alert("Auto Clock-Out", "Your shift exceeded 20 hours and was automatically ended.");
-            setIsClockedIn(false);
-            return 0;
-          }
-          return prev + 1;
-        });
+        setElapsedSeconds((prev) => prev + 1);
       }, 1000);
     } else {
       clearInterval(interval);
@@ -49,24 +39,24 @@ export default function DashboardScreen({ navigation }) {
           setElapsedSeconds(data.elapsed_seconds);
           setLastPunch({
             type: 'CLOCK_IN',
-            timestamp: new Date(data.clock_in_time).toLocaleTimeString(),
+            timestamp: new Date(data.clock_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            address: data.last_punch.address || 'Recorded Location',
             lat: data.last_punch.latitude,
             lng: data.last_punch.longitude,
-            address: data.last_punch.address || 'Recorded Location',
           });
         } else if (data.last_punch) {
           setIsClockedIn(false);
           setLastPunch({
             type: data.last_punch.punch_type,
-            timestamp: new Date(data.last_punch.timestamp).toLocaleTimeString(),
+            timestamp: new Date(data.last_punch.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            address: data.last_punch.address || 'Recorded Location',
             lat: data.last_punch.latitude,
             lng: data.last_punch.longitude,
-            address: data.last_punch.address || 'Recorded Location',
           });
         }
       }
     } catch (error) {
-      console.log('Error fetching active punch status:', error);
+      console.log('Error syncing shift state:', error);
     } finally {
       setInitialSync(false);
     }
@@ -82,37 +72,31 @@ export default function DashboardScreen({ navigation }) {
   const requestAndGetLocation = async () => {
     let { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'Location permission is required to clock in/out.');
+      Alert.alert('Permission Denied', 'Location permission is required.');
       return null;
     }
 
     setLoading(true);
     try {
-      let location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-
-      let addressStr = 'Unknown Location';
+      let location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      let addressStr = 'Location Captured';
       try {
         let geocode = await Location.reverseGeocodeAsync({
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,
         });
-
         if (geocode && geocode.length > 0) {
           const item = geocode[0];
-          const parts = [item.streetNumber, item.street, item.subregion || item.city, item.region];
-          addressStr = parts.filter(Boolean).join(', ');
+          addressStr = [item.street, item.city || item.subregion].filter(Boolean).join(', ');
         }
       } catch (e) {
-        addressStr = `${location.coords.latitude.toFixed(5)}, ${location.coords.longitude.toFixed(5)}`;
+        addressStr = `${location.coords.latitude.toFixed(4)}, ${location.coords.longitude.toFixed(4)}`;
       }
-
       setLoading(false);
       return { ...location.coords, address: addressStr };
     } catch (error) {
       setLoading(false);
-      Alert.alert('Error', 'Unable to fetch current location.');
+      Alert.alert('Error', 'Unable to fetch location.');
       return null;
     }
   };
@@ -132,17 +116,17 @@ export default function DashboardScreen({ navigation }) {
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to persist punch to server');
+      if (!response.ok) throw new Error('Failed to record punch');
 
       const data = await response.json();
-      const punchTime = new Date(data.timestamp).toLocaleTimeString();
+      const punchTime = new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
       setLastPunch({
         type: punchType,
         timestamp: punchTime,
+        address: coordsData.address,
         lat: coordsData.latitude,
         lng: coordsData.longitude,
-        address: coordsData.address,
       });
 
       if (punchType === 'CLOCK_IN') {
@@ -157,150 +141,158 @@ export default function DashboardScreen({ navigation }) {
     }
   };
 
-  const handleClockIn = async () => {
+  const handleActionToggle = async () => {
     const coordsData = await requestAndGetLocation();
-    if (coordsData) await submitPunchToBackend('CLOCK_IN', coordsData);
+    if (coordsData) {
+      await submitPunchToBackend(isClockedIn ? 'CLOCK_OUT' : 'CLOCK_IN', coordsData);
+    }
   };
-
-  const handleClockOut = async () => {
-    const coordsData = await requestAndGetLocation();
-    if (coordsData) await submitPunchToBackend('CLOCK_OUT', coordsData);
-  };
-
-  const openGoogleMaps = () => {
-    if (!lastPunch) return;
-    const url = `https://www.google.com/maps/search/?api=1&query=${lastPunch.lat},${lastPunch.lng}`;
-    Linking.openURL(url);
-  };
-
-  const generateIframeHTML = (lat, lng) => `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-        <style>
-          html, body { height: 100%; width: 100%; margin: 0; padding: 0; overflow: hidden; background: #e5e7eb; }
-          iframe { width: 100%; height: 100%; border: 0; }
-        </style>
-      </head>
-      <body>
-        <iframe
-          src="https://maps.google.com/maps?q=loc:${lat}+${lng}&z=18&output=embed"
-          allowfullscreen>
-        </iframe>
-      </body>
-    </html>
-  `;
 
   if (initialSync) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#2563eb" />
-        <Text style={{ marginTop: 10, color: '#475569' }}>Syncing Shift Status...</Text>
       </View>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-      <View style={styles.profileCard}>
-        <Text style={styles.welcome}>Welcome, {user.name}</Text>
-        <Text style={styles.profileText}>Position: <Text style={styles.boldText}>{user.position || 'Staff'}</Text></Text>
-        <Text style={styles.profileText}>Department: <Text style={styles.boldText}>{user.department}</Text></Text>
-        <Text style={styles.profileText}>Role: <Text style={styles.boldText}>{user.role.toUpperCase()}</Text></Text>
-      </View>
-
-      {/* Live Persistent Shift Timer */}
-      <View style={[styles.timerCard, isClockedIn ? styles.timerActive : styles.timerInactive]}>
-        <Text style={styles.timerLabel}>{isClockedIn ? 'ON DUTY - SHIFT TIMER' : 'OFF DUTY'}</Text>
-        <Text style={styles.timerValue}>{formatTimer(elapsedSeconds)}</Text>
-      </View>
-
-      {user.role === 'manager' && (
-        <TouchableOpacity style={styles.managerBtn} onPress={() => navigation.navigate('Manager')}>
-          <Text style={styles.managerBtnText}>Open Manager Dashboard</Text>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {/* Header Profile Greeting */}
+      <View style={styles.headerRow}>
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>{user.name ? user.name.charAt(0) : 'E'}</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.greetingText}>Good day, {user.name || 'Employee'}</Text>
+          <Text style={styles.subGreeting}>{user.position || 'Staff'} · {user.department}</Text>
+        </View>
+        <TouchableOpacity style={styles.logoutIconButton} onPress={logout}>
+          <Ionicons name="log-out-outline" size={22" color="#64748b" />
         </TouchableOpacity>
-      )}
+      </View>
 
-      <View style={styles.actionCard}>
-        {loading ? (
-          <ActivityIndicator size="large" color="#007AFF" />
-        ) : (
-          <View style={styles.buttonGroup}>
-            <TouchableOpacity 
-              style={[styles.clockInBtn, isClockedIn && styles.disabledBtn]} 
-              onPress={handleClockIn} 
-              disabled={isClockedIn}
-            >
-              <Text style={styles.btnText}>CLOCK IN</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.clockOutBtn, !isClockedIn && styles.disabledBtn]} 
-              onPress={handleClockOut} 
-              disabled={!isClockedIn}
-            >
-              <Text style={styles.btnText}>CLOCK OUT</Text>
-            </TouchableOpacity>
+      {/* Connecteams Style Quick Action Modules */}
+      <View style={styles.quickGrid}>
+        <TouchableOpacity style={[styles.gridCard, { backgroundColor: '#eff6ff' }]} onPress={() => navigation.navigate('Timesheet')}>
+          <View style={[styles.gridIconCircle, { backgroundColor: '#dbeafe' }]}>
+            <Ionicons name="time" size={20} color="#2563eb" />
           </View>
+          <Text style={styles.gridLabel}>Time Clock</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={[styles.gridCard, { backgroundColor: '#f0fdf4' }]} onPress={() => navigation.navigate('Timesheet')}>
+          <View style={[styles.gridIconCircle, { backgroundColor: '#dcfce7' }]}>
+            <Ionicons name="calendar" size={20} color="#166534" />
+          </View>
+          <Text style={styles.gridLabel}>Timesheet</Text>
+        </TouchableOpacity>
+
+        {user.role === 'manager' && (
+          <TouchableOpacity style={[styles.gridCard, { backgroundColor: '#fef2f2' }]} onPress={() => navigation.navigate('Manager')}>
+            <View style={[styles.gridIconCircle, { backgroundColor: '#fecaca' }]}>
+              <Ionicons name="people" size={20} color="#991b1b" />
+            </View>
+            <Text style={styles.gridLabel}>Oversight</Text>
+          </TouchableOpacity>
         )}
       </View>
 
-      {lastPunch && (
-        <View style={styles.punchCard}>
-          <Text style={styles.punchTitle}>Last Punch: {lastPunch.type} ({lastPunch.timestamp})</Text>
-          <Text style={styles.locationText}>📍 Location: <Text style={styles.boldText}>{lastPunch.address}</Text></Text>
+      {/* Connecteams Minimal Active Shift Widget */}
+      <View style={[styles.shiftCard, isClockedIn ? styles.shiftActiveCard : styles.shiftInactiveCard]}>
+        <Text style={[styles.timerDisplay, isClockedIn ? styles.timerActiveText : styles.timerInactiveText]}>
+          {formatTimer(elapsedSeconds)}
+        </Text>
+        
+        <Text style={styles.shiftDetails}>
+          {user.department} · {user.position || 'Staff'} {lastPunch ? `· Started at ${lastPunch.timestamp}` : ''}
+        </Text>
 
-          <View style={styles.mapFrame}>
-            <WebView
-              originWhitelist={['*']}
-              source={{ html: generateIframeHTML(lastPunch.lat, lastPunch.lng) }}
-              style={styles.map}
-              javaScriptEnabled={true}
-              domStorageEnabled={true}
-              scrollEnabled={false}
-            />
+        {lastPunch && (
+          <View style={styles.locationPill}>
+            <Ionicons name="location-sharp" size={13} color="#64748b" />
+            <Text style={styles.locationPillText} numberOfLines={1}>{lastPunch.address}</Text>
           </View>
+        )}
 
-          <TouchableOpacity style={styles.extMapBtn} onPress={openGoogleMaps}>
-            <Text style={styles.extMapBtnText}>OPEN IN GOOGLE MAPS APP</Text>
-          </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.actionButton, isClockedIn ? styles.actionOutButton : styles.actionInButton]}
+          onPress={handleActionToggle}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color={isClockedIn ? "#991b1b" : "#ffffff"} />
+          ) : (
+            <Text style={[styles.actionButtonText, isClockedIn ? styles.actionOutText : styles.actionInText]}>
+              {isClockedIn ? 'CLOCK OUT' : 'CLOCK IN'}
+            </Text>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {/* Connecteams Style Weekly Summary Chart Widget */}
+      <View style={styles.sectionCard}>
+        <Text style={styles.sectionTitle}>Weekly Hours</Text>
+        
+        <View style={styles.chartRow}>
+          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, idx) => {
+            const isFilled = idx < 4; // Simulated current week days worked
+            return (
+              <View key={day} style={styles.barColumn}>
+                <View style={styles.barTrack}>
+                  <View style={[styles.barFill, { height: isFilled ? '80%' : '0%' }]} />
+                </View>
+                <Text style={styles.barLabel}>{day}</Text>
+              </View>
+            );
+          })}
         </View>
-      )}
 
-      <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
-        <Text style={styles.logoutBtnText}>SIGN OUT</Text>
-      </TouchableOpacity>
+        <View style={styles.chartFooter}>
+          <Text style={styles.chartFooterLabel}>Total hours this week</Text>
+          <Text style={styles.chartFooterValue}>32:15</Text>
+        </View>
+      </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollContainer: { flexGrow: 1, padding: 16, backgroundColor: '#f4f6f8', paddingBottom: 40 },
-  profileCard: { backgroundColor: '#ffffff', padding: 16, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: '#e5e7eb', elevation: 1 },
-  welcome: { fontSize: 20, fontWeight: 'bold', color: '#111827', marginBottom: 4 },
-  profileText: { fontSize: 13, color: '#4b5563', marginTop: 2 },
-  boldText: { fontWeight: 'bold', color: '#111827' },
-  timerCard: { padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 12, elevation: 2 },
-  timerActive: { backgroundColor: '#1e3a8a' },
-  timerInactive: { backgroundColor: '#374151' },
-  timerLabel: { color: '#93c5fd', fontSize: 12, fontWeight: 'bold', letterSpacing: 1 },
-  timerValue: { color: '#ffffff', fontSize: 36, fontWeight: 'bold', marginTop: 4, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' },
-  managerBtn: { backgroundColor: '#2e7d32', padding: 12, borderRadius: 8, alignItems: 'center', marginBottom: 12 },
-  managerBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
-  actionCard: { backgroundColor: '#ffffff', padding: 16, borderRadius: 12, marginBottom: 12, elevation: 2, borderWidth: 1, borderColor: '#e5e7eb' },
-  buttonGroup: { gap: 10 },
-  clockInBtn: { backgroundColor: '#15803d', paddingVertical: 14, borderRadius: 8, alignItems: 'center' },
-  clockOutBtn: { backgroundColor: '#b91c1c', paddingVertical: 14, borderRadius: 8, alignItems: 'center' },
-  disabledBtn: { opacity: 0.4 },
-  btnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 15, letterSpacing: 0.5 },
-  punchCard: { backgroundColor: '#ffffff', padding: 14, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: '#e5e7eb', elevation: 2 },
-  punchTitle: { fontWeight: 'bold', marginBottom: 4, fontSize: 14, color: '#1f2937' },
-  locationText: { fontSize: 13, color: '#374151', marginBottom: 10 },
-  mapFrame: { height: 220, width: '100%', borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: '#d1d5db', marginBottom: 12 },
-  map: { width: '100%', height: '100%' },
-  extMapBtn: { backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
-  extMapBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 13 },
-  logoutBtn: { backgroundColor: '#4b5563', paddingVertical: 12, borderRadius: 8, alignItems: 'center', marginTop: 10 },
-  logoutBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 14 },
+  container: { flex: 1, backgroundColor: '#f8fafc', padding: 16 },
+  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' },
+  headerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 12 },
+  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#2563eb', justifyContent: 'center', alignItems: 'center' },
+  avatarText: { color: '#ffffff', fontWeight: 'bold', fontSize: 18 },
+  greetingText: { fontSize: 18, fontWeight: '700', color: '#0f172a' },
+  subGreeting: { fontSize: 12, color: '#64748b' },
+  logoutIconButton: { padding: 8 },
+  quickGrid: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  gridCard: { flex: 1, padding: 12, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#f1f5f9' },
+  gridIconCircle: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginBottom: 6 },
+  gridLabel: { fontSize: 11, fontWeight: '600', color: '#334155' },
+  shiftCard: { borderRadius: 16, padding: 20, alignItems: 'center', marginBottom: 16, borderWidth: 1, borderColor: '#e2e8f0' },
+  shiftActiveCard: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' },
+  shiftInactiveCard: { backgroundColor: '#ffffff' },
+  timerDisplay: { fontSize: 38, fontWeight: '800', marginBottom: 4, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' },
+  timerActiveText: { color: '#2563eb' },
+  timerInactiveText: { color: '#475569' },
+  shiftDetails: { fontSize: 12, color: '#64748b', marginBottom: 8, textAlign: 'center' },
+  locationPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#ffffff', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginBottom: 16, borderWidth: 1, borderColor: '#e2e8f0' },
+  locationPillText: { fontSize: 12, color: '#475569' },
+  actionButton: { width: '100%', paddingVertical: 14, borderRadius: 10, alignItems: 'center' },
+  actionInButton: { backgroundColor: '#2563eb' },
+  actionOutButton: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#fecaca' },
+  actionButtonText: { fontWeight: '700', fontSize: 15 },
+  actionInText: { color: '#ffffff' },
+  actionOutText: { color: '#dc2626' },
+  sectionCard: { backgroundColor: '#ffffff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#f1f5f9', marginBottom: 24 },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#0f172a', marginBottom: 16 },
+  chartRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', height: 100, marginBottom: 16, paddingHorizontal: 8 },
+  barColumn: { alignItems: 'center', gap: 6 },
+  barTrack: { width: 24, height: 80, backgroundColor: '#f1f5f9', borderRadius: 6, justifyContent: 'flex-end', overflow: 'hidden' },
+  barFill: { width: '100%', backgroundColor: '#3b82f6', borderRadius: 6 },
+  barLabel: { fontSize: 11, color: '#94a3b8', fontWeight: '500' },
+  chartFooter: { flexDirection: 'row', justifyContent: 'space-between', paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9' },
+  chartFooterLabel: { fontSize: 13, color: '#64748b', fontWeight: '500' },
+  chartFooterValue: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
 });
