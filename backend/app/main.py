@@ -20,7 +20,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="HRIS Enterprise API", version="3.1.0")
+app = FastAPI(title="HRIS Enterprise API", version="3.2.0")
 
 MAX_SHIFT_SECONDS = 20 * 3600
 
@@ -34,7 +34,7 @@ def get_db():
 def get_now_manila():
     return datetime.now(MANILA_TZ)
 
-# --- Pydantic Schemas ---
+# --- Pydantic Request Models ---
 class LoginRequest(BaseModel):
     employee_id: str
     password: str
@@ -48,6 +48,7 @@ class UserCreateRequest(BaseModel):
     password: str
 
 class UserUpdateRequest(BaseModel):
+    new_employee_id: Optional[str] = None
     name: str
     department: str
     position: str
@@ -69,6 +70,12 @@ class CreatePunchAdminRequest(BaseModel):
     latitude: float = 0.0
     longitude: float = 0.0
     address: Optional[str] = "Manual Admin Entry"
+
+# --- Health Check ---
+@app.get("/health")
+@app.get("/api/health")
+def health_check():
+    return {"status": "online", "service": "HRIS FastAPI Backend", "version": "3.2.0"}
 
 # --- Authentication ---
 @app.post("/api/login")
@@ -100,10 +107,10 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
         "token": f"hris-session-{user.employee_id}"
     }
 
-# --- User Management API (RBAC) ---
+# --- User Management API (RBAC CRUD) ---
 @app.get("/api/admin/users")
 def list_users(db: Session = Depends(get_db)):
-    return db.query(models.User).all()
+    return db.query(models.User).order_by(models.User.department.asc(), models.User.name.asc()).all()
 
 @app.post("/api/admin/users")
 def create_user(req: UserCreateRequest, db: Session = Depends(get_db)):
@@ -129,6 +136,12 @@ def update_user(employee_id: str, req: UserUpdateRequest, db: Session = Depends(
     user = db.query(models.User).filter(models.User.employee_id == employee_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    if req.new_employee_id and req.new_employee_id != employee_id:
+        existing = db.query(models.User).filter(models.User.employee_id == req.new_employee_id).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="New Employee ID already assigned to another user")
+        user.employee_id = req.new_employee_id
 
     user.name = req.name
     user.department = req.department
@@ -172,7 +185,7 @@ def list_departments(db: Session = Depends(get_db)):
 
     return [{"department": k, **v} for k, v in dept_map.items()]
 
-# --- Mobile Punch Endpoints ---
+# --- Punch Endpoints ---
 @app.get("/api/punch/active/{employee_id}")
 def get_active_punch(employee_id: str, db: Session = Depends(get_db)):
     last_punch = db.query(models.TimePunch)\
@@ -387,9 +400,64 @@ def admin_dashboard_ui():
             </div>
         </div>
 
+        <!-- Edit User Modal -->
+        <div id="editUserModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-xl border border-slate-200 max-w-lg w-full p-6 space-y-4">
+                <div class="flex justify-between items-center border-b pb-3">
+                    <h3 class="font-bold text-slate-800 text-base">Edit Employee Profile & RBAC</h3>
+                    <button onclick="closeEditModal()" class="text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
+                </div>
+                <form id="editUserForm" class="space-y-3">
+                    <input type="hidden" id="editOriginalEmpId">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 mb-1">Employee ID</label>
+                            <input type="text" id="editEmpId" required class="w-full border p-2 rounded-lg text-xs font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 mb-1">Full Name</label>
+                            <input type="text" id="editName" required class="w-full border p-2 rounded-lg text-xs">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 mb-1">Department</label>
+                            <select id="editDept" class="w-full border p-2 rounded-lg text-xs">
+                                <option value="Executive">Executive</option>
+                                <option value="IT Operations">IT Operations</option>
+                                <option value="Operations">Operations</option>
+                                <option value="Admin">Admin</option>
+                                <option value="Sales">Sales</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 mb-1">Position</label>
+                            <input type="text" id="editPos" required class="w-full border p-2 rounded-lg text-xs">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">Role (RBAC Privilege)</label>
+                        <select id="editRole" class="w-full border p-2 rounded-lg text-xs">
+                            <option value="employee">Employee</option>
+                            <option value="manager">Manager</option>
+                            <option value="super_admin">Super Admin</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">New Password (Leave blank to keep unchanged)</label>
+                        <input type="password" id="editPass" placeholder="••••••••" class="w-full border p-2 rounded-lg text-xs">
+                    </div>
+                    <div class="flex justify-end gap-2 pt-2 border-t">
+                        <button type="button" onclick="closeEditModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg text-xs transition">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-xs transition">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <!-- Main Workspace -->
         <div id="adminWorkspace" class="hidden min-h-screen flex flex-col">
-            <!-- Navigation Header -->
+            <!-- Header -->
             <header class="bg-white border-b border-slate-200 sticky top-0 z-30">
                 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
                     <div class="flex items-center gap-6">
@@ -401,7 +469,6 @@ def admin_dashboard_ui():
                             </div>
                         </div>
 
-                        <!-- Navigation Tab Switcher -->
                         <nav class="hidden md:flex gap-1 bg-slate-100 p-1 rounded-lg text-xs font-semibold">
                             <button id="tabBtnClocks" onclick="switchTab('clocks')" class="px-3 py-1.5 rounded-md bg-white text-blue-600 shadow-sm transition">Time Clocks & DTR</button>
                             <button id="tabBtnUsers" onclick="switchTab('users')" class="px-3 py-1.5 rounded-md text-slate-600 hover:text-slate-900 transition">User Directory & RBAC</button>
@@ -421,13 +488,11 @@ def admin_dashboard_ui():
 
                 <!-- TAB 1: Time Clocks & DTR Management -->
                 <div id="tabContentClocks" class="space-y-6">
-                    <!-- Department Time Clocks Grid -->
                     <div>
                         <h2 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Department Time Clocks</h2>
                         <div id="deptGrid" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
                     </div>
 
-                    <!-- Collapsible Manual Override Card -->
                     <div class="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
                         <button onclick="toggleCollapse('overrideBody', 'overrideIcon')" class="w-full p-4 sm:p-5 flex items-center justify-between bg-slate-50/50 hover:bg-slate-50 text-left transition border-b border-slate-100">
                             <div>
@@ -451,7 +516,6 @@ def admin_dashboard_ui():
                         </div>
                     </div>
 
-                    <!-- Collapsible DTR Audit Table -->
                     <div class="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
                         <div class="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
                             <div class="flex items-center gap-3">
@@ -486,19 +550,35 @@ def admin_dashboard_ui():
 
                 <!-- TAB 2: User Directory & RBAC Control Page -->
                 <div id="tabContentUsers" class="hidden space-y-6">
-                    <!-- Create User Form Card -->
-                    <div class="bg-white rounded-xl border border-slate-200/80 shadow-sm p-5 space-y-4">
-                        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                            <div>
-                                <h2 class="text-sm font-bold text-slate-800 uppercase tracking-wider">Add New User Account</h2>
-                                <p class="text-xs text-slate-500">Provision credentials and assign access levels</p>
-                            </div>
+                    
+                    <!-- Clean Directory Top Header Bar -->
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm">
+                        <div>
+                            <h2 class="text-base font-bold text-slate-800">User Directory & Permissions</h2>
+                            <p class="text-xs text-slate-500">Manage employee accounts, titles, and system RBAC access levels</p>
+                        </div>
+                        <button onclick="toggleCollapse('newUserFormCard', 'newUserIcon')" class="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition shadow-sm">
+                            <span>+ Add New Employee</span>
+                            <span id="newUserIcon" class="text-xs">▼</span>
+                        </button>
+                    </div>
+
+                    <!-- Collapsible Create User Drawer -->
+                    <div id="newUserFormCard" class="hidden bg-white rounded-xl border border-slate-200/80 shadow-sm p-5 space-y-4">
+                        <div class="border-b border-slate-100 pb-2">
+                            <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Provision New Account</h3>
                         </div>
 
                         <form id="createUserForm" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
                             <input type="text" id="uEmpId" placeholder="Emp ID (e.g. 3286)" required class="border border-slate-200 rounded-lg p-2 text-xs">
                             <input type="text" id="uName" placeholder="Full Name" required class="border border-slate-200 rounded-lg p-2 text-xs">
-                            <input type="text" id="uDept" placeholder="Department" value="IT Operations" required class="border border-slate-200 rounded-lg p-2 text-xs">
+                            <select id="uDept" class="border border-slate-200 rounded-lg p-2 text-xs">
+                                <option value="Executive">Executive</option>
+                                <option value="IT Operations" selected>IT Operations</option>
+                                <option value="Operations">Operations</option>
+                                <option value="Admin">Admin</option>
+                                <option value="Sales">Sales</option>
+                            </select>
                             <input type="text" id="uPos" placeholder="Position" value="IT Specialist" required class="border border-slate-200 rounded-lg p-2 text-xs">
                             <select id="uRole" class="border border-slate-200 rounded-lg p-2 text-xs">
                                 <option value="employee">Employee</option>
@@ -506,17 +586,14 @@ def admin_dashboard_ui():
                                 <option value="super_admin">Super Admin</option>
                             </select>
                             <input type="password" id="uPass" placeholder="Password" value="password123" required class="border border-slate-200 rounded-lg p-2 text-xs">
-                            <button type="submit" class="sm:col-span-2 lg:col-span-6 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg text-xs transition shadow-sm">
+                            <button type="submit" class="sm:col-span-2 lg:col-span-6 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg text-xs transition shadow-sm">
                                 Create Account
                             </button>
                         </form>
                     </div>
 
                     <!-- Department-Segmented Directory Accordions -->
-                    <div class="space-y-4">
-                        <h2 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Directory Grouped By Department</h2>
-                        <div id="departmentDirectoryContainer" class="space-y-3"></div>
-                    </div>
+                    <div id="departmentDirectoryContainer" class="space-y-4"></div>
                 </div>
 
             </main>
@@ -524,8 +601,8 @@ def admin_dashboard_ui():
 
         <script>
             const API_BASE = "/api";
+            let globalUsersCache = [];
 
-            // Default datetime field setup
             const now = new Date();
             now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
             document.getElementById('addTime').value = now.toISOString().slice(0, 16);
@@ -554,10 +631,10 @@ def admin_dashboard_ui():
                 const icon = document.getElementById(iconId);
                 if (el.classList.contains("hidden")) {
                     el.classList.remove("hidden");
-                    icon.innerText = "▲";
+                    if (icon) icon.innerText = "▲";
                 } else {
                     el.classList.add("hidden");
-                    icon.innerText = "▼";
+                    if (icon) icon.innerText = "▼";
                 }
             }
 
@@ -623,6 +700,7 @@ def admin_dashboard_ui():
             async function loadSegmentedUsers() {
                 const res = await fetch(`${API_BASE}/admin/users`);
                 const users = await res.json();
+                globalUsersCache = users;
                 const container = document.getElementById("departmentDirectoryContainer");
                 container.innerHTML = "";
 
@@ -641,15 +719,16 @@ def admin_dashboard_ui():
                     deptUsers.forEach(u => {
                         rowsHtml += `
                             <tr class="hover:bg-slate-50 transition">
-                                <td class="p-3 font-bold text-slate-800">${u.employee_id}</td>
-                                <td class="p-3 font-semibold text-slate-700">${u.name}</td>
-                                <td class="p-3 text-slate-500">${u.position}</td>
-                                <td class="p-3">
-                                    <span class="px-2 py-0.5 text-xs font-bold rounded ${u.role === 'super_admin' ? 'bg-purple-50 text-purple-700 border border-purple-200' : u.role === 'manager' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-slate-100 text-slate-700'}">
+                                <td class="p-3.5 font-bold font-mono text-slate-800">${u.employee_id}</td>
+                                <td class="p-3.5 font-semibold text-slate-800">${u.name}</td>
+                                <td class="p-3.5 text-slate-600">${u.position}</td>
+                                <td class="p-3.5">
+                                    <span class="px-2.5 py-0.5 text-xs font-bold rounded-full ${u.role === 'super_admin' ? 'bg-purple-50 text-purple-700 border border-purple-200' : u.role === 'manager' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-slate-100 text-slate-700'}">
                                         ${u.role}
                                     </span>
                                 </td>
-                                <td class="p-3 text-right">
+                                <td class="p-3.5 text-right space-x-3">
+                                    <button onclick="openEditModal('${u.employee_id}')" class="text-xs text-blue-600 hover:underline font-semibold">Edit</button>
                                     <button onclick="deleteUser('${u.employee_id}')" class="text-xs text-rose-600 hover:underline font-semibold">Delete</button>
                                 </td>
                             </tr>
@@ -669,11 +748,11 @@ def admin_dashboard_ui():
                                 <table class="w-full text-left text-xs">
                                     <thead>
                                         <tr class="bg-slate-50/50 text-slate-500 font-bold border-b">
-                                            <th class="p-3">ID</th>
-                                            <th class="p-3">Name</th>
-                                            <th class="p-3">Position</th>
-                                            <th class="p-3">Role</th>
-                                            <th class="p-3 text-right">Actions</th>
+                                            <th class="p-3.5">Employee ID</th>
+                                            <th class="p-3.5">Name</th>
+                                            <th class="p-3.5">Position</th>
+                                            <th class="p-3.5">Role</th>
+                                            <th class="p-3.5 text-right">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-slate-100">${rowsHtml}</tbody>
@@ -683,6 +762,59 @@ def admin_dashboard_ui():
                     `;
                 });
             }
+
+            function openEditModal(empId) {
+                const user = globalUsersCache.find(u => u.employee_id === empId);
+                if (!user) return;
+
+                document.getElementById("editOriginalEmpId").value = user.employee_id;
+                document.getElementById("editEmpId").value = user.employee_id;
+                document.getElementById("editName").value = user.name;
+                document.getElementById("editDept").value = user.department;
+                document.getElementById("editPos").value = user.position;
+                document.getElementById("editRole").value = user.role;
+                document.getElementById("editPass").value = "";
+
+                document.getElementById("editUserModal").classList.remove("hidden");
+            }
+
+            function closeEditModal() {
+                document.getElementById("editUserModal").classList.add("hidden");
+            }
+
+            document.getElementById("editUserForm").addEventListener("submit", async (e) => {
+                e.preventDefault();
+                const origId = document.getElementById("editOriginalEmpId").value;
+                const newId = document.getElementById("editEmpId").value;
+                const name = document.getElementById("editName").value;
+                const dept = document.getElementById("editDept").value;
+                const pos = document.getElementById("editPos").value;
+                const role = document.getElementById("editRole").value;
+                const pass = document.getElementById("editPass").value;
+
+                const payload = {
+                    new_employee_id: newId,
+                    name: name,
+                    department: dept,
+                    position: pos,
+                    role: role,
+                };
+                if (pass) payload.password = pass;
+
+                const res = await fetch(`${API_BASE}/admin/users/${origId}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    closeEditModal();
+                    loadSegmentedUsers();
+                    loadDepartments();
+                } else {
+                    alert("Failed to update user profile");
+                }
+            });
 
             async function loadPunches() {
                 const res = await fetch(`${API_BASE}/admin/dtr`);
@@ -725,7 +857,9 @@ def admin_dashboard_ui():
                         password: document.getElementById("uPass").value
                     })
                 });
+                toggleCollapse('newUserFormCard', 'newUserIcon');
                 loadSegmentedUsers();
+                loadDepartments();
             });
 
             document.getElementById("addForm").addEventListener("submit", async (e) => {
@@ -747,6 +881,7 @@ def admin_dashboard_ui():
                 if (confirm(`Remove user ${empId}?`)) {
                     await fetch(`${API_BASE}/admin/users/${empId}`, { method: "DELETE" });
                     loadSegmentedUsers();
+                    loadDepartments();
                 }
             }
 
