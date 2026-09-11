@@ -20,7 +20,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="HRIS Enterprise API", version="3.9.0")
+app = FastAPI(title="HRIS Enterprise API", version="4.0.0")
 
 MAX_SHIFT_SECONDS = 20 * 3600
 
@@ -63,6 +63,12 @@ class PunchRequest(BaseModel):
     accuracy: float
     address: Optional[str] = None
 
+class ShiftEditSubmitRequest(BaseModel):
+    employee_id: str
+    requested_punch_type: str
+    requested_timestamp: str
+    reason: str
+
 class CreatePunchAdminRequest(BaseModel):
     employee_id: str
     punch_type: str
@@ -75,9 +81,8 @@ class CreatePunchAdminRequest(BaseModel):
 @app.get("/health")
 @app.get("/api/health")
 def health_check():
-    return {"status": "online", "service": "HRIS FastAPI Backend", "version": "3.9.0"}
+    return {"status": "online", "service": "HRIS FastAPI Backend", "version": "4.0.0"}
 
-# --- Dynamic Departments ---
 @app.get("/api/departments")
 def get_departments(db: Session = Depends(get_db)):
     db_depts = db.query(models.User.department).distinct().all()
@@ -88,11 +93,9 @@ def get_departments(db: Session = Depends(get_db)):
             dept_list.append(d)
     return sorted(dept_list)
 
-# --- Authentication ---
 @app.post("/api/login")
 def login(req: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.employee_id == req.employee_id).first()
-    
     if not user and req.employee_id.upper() in ["ADMIN", "SUPERADMIN", "SA-001"]:
         user = models.User(
             employee_id=req.employee_id.upper(),
@@ -175,27 +178,6 @@ def delete_user(employee_id: str, db: Session = Depends(get_db)):
     db.commit()
     return {"status": "deleted", "employee_id": employee_id}
 
-# --- Departments Summary ---
-@app.get("/api/admin/departments")
-def list_departments(db: Session = Depends(get_db)):
-    users = db.query(models.User).all()
-    dept_map = defaultdict(lambda: {"total_users": 0, "active_clocked_in": 0})
-
-    for u in users:
-        dept_map[u.department]["total_users"] += 1
-
-    punches = db.query(models.TimePunch).order_by(desc(models.TimePunch.timestamp)).all()
-    seen_users = set()
-    for p in punches:
-        if p.employee_id not in seen_users:
-            seen_users.add(p.employee_id)
-            if p.punch_type == "CLOCK_IN":
-                u = db.query(models.User).filter(models.User.employee_id == p.employee_id).first()
-                if u:
-                    dept_map[u.department]["active_clocked_in"] += 1
-
-    return [{"department": k, **v} for k, v in dept_map.items()]
-
 # --- Punch Endpoints ---
 @app.get("/api/punch/active/{employee_id}")
 def get_active_punch(employee_id: str, db: Session = Depends(get_db)):
@@ -209,21 +191,6 @@ def get_active_punch(employee_id: str, db: Session = Depends(get_db)):
 
     now_manila = get_now_manila().replace(tzinfo=None)
     elapsed_seconds = int((now_manila - last_punch.timestamp).total_seconds())
-
-    if elapsed_seconds >= MAX_SHIFT_SECONDS:
-        auto_out = models.TimePunch(
-            employee_id=employee_id,
-            punch_type="CLOCK_OUT",
-            latitude=last_punch.latitude,
-            longitude=last_punch.longitude,
-            accuracy=0.0,
-            address="AUTO CLOCK-OUT (20hr Limit Exceeded)",
-            timestamp=get_now_manila().replace(tzinfo=None)
-        )
-        db.add(auto_out)
-        db.commit()
-        db.refresh(auto_out)
-        return {"is_clocked_in": False, "last_punch": auto_out, "auto_clocked_out": True}
 
     return {
         "is_clocked_in": True,
@@ -240,13 +207,80 @@ def record_punch(req: PunchRequest, db: Session = Depends(get_db)):
         latitude=req.latitude,
         longitude=req.longitude,
         accuracy=req.accuracy,
-        address=req.address or "Captured GPS Coordinates",
+        address=req.address or "Captured Location",
         timestamp=get_now_manila().replace(tzinfo=None)
     )
     db.add(punch)
     db.commit()
     db.refresh(punch)
     return {"status": "success", "punch_id": punch.id, "timestamp": punch.timestamp.isoformat()}
+
+# --- Shift Edit Requests API (Approval Workflow) ---
+@app.post("/api/shift-request")
+def submit_shift_request(req: ShiftEditSubmitRequest, db: Session = Depends(get_db)):
+    try:
+        ts = datetime.fromisoformat(req.requested_timestamp).replace(tzinfo=None)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid ISO timestamp format")
+
+    edit_req = models.ShiftEditRequest(
+        employee_id=req.employee_id,
+        requested_punch_type=req.requested_punch_type,
+        requested_timestamp=ts,
+        reason=req.reason,
+        status="PENDING"
+    )
+    db.add(edit_req)
+    db.commit()
+    return {"status": "submitted", "request_id": edit_req.id}
+
+@app.get("/api/admin/shift-requests")
+def list_shift_requests(db: Session = Depends(get_db)):
+    reqs = db.query(models.ShiftEditRequest).order_by(desc(models.ShiftEditRequest.created_at)).all()
+    result = []
+    for r in reqs:
+        u = db.query(models.User).filter(models.User.employee_id == r.employee_id).first()
+        result.append({
+            "id": r.id,
+            "employee_id": r.employee_id,
+            "employee_name": u.name if u else f"Emp #{r.employee_id}",
+            "department": u.department if u else "General",
+            "requested_punch_type": r.requested_punch_type,
+            "requested_timestamp": r.requested_timestamp.strftime("%Y-%m-%d %I:%M %p"),
+            "reason": r.reason,
+            "status": r.status
+        })
+    return result
+
+@app.post("/api/admin/shift-requests/{request_id}/approve")
+def approve_shift_request(request_id: int, db: Session = Depends(get_db)):
+    req = db.query(models.ShiftEditRequest).filter(models.ShiftEditRequest.id == request_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    req.status = "APPROVED"
+    # Insert official punch record
+    punch = models.TimePunch(
+        employee_id=req.employee_id,
+        punch_type=req.requested_punch_type,
+        timestamp=req.requested_timestamp,
+        latitude=14.5764,
+        longitude=121.0851,
+        address=f"Approved Shift Edit: {req.reason}"
+    )
+    db.add(punch)
+    db.commit()
+    return {"status": "approved", "request_id": request_id}
+
+@app.post("/api/admin/shift-requests/{request_id}/reject")
+def reject_shift_request(request_id: int, db: Session = Depends(get_db)):
+    req = db.query(models.ShiftEditRequest).filter(models.ShiftEditRequest.id == request_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    req.status = "REJECTED"
+    db.commit()
+    return {"status": "rejected", "request_id": request_id}
 
 @app.get("/api/timesheet/{employee_id}")
 def get_employee_timesheet(employee_id: str, db: Session = Depends(get_db)):
@@ -377,7 +411,7 @@ def export_dtr_csv(employee_id: Optional[str] = None, db: Session = Depends(get_
     response.headers["Content-Disposition"] = f"attachment; filename={filename}"
     return response
 
-# --- WEB EMPLOYEE PORTAL UI ---
+# --- WEB EMPLOYEE PORTAL UI (WITH REVIEW MODAL & SHIFT EDIT) ---
 @app.get("/", response_class=HTMLResponse)
 @app.get("/portal", response_class=HTMLResponse)
 def employee_portal_ui():
@@ -390,7 +424,9 @@ def employee_portal_ui():
         <title>HRIS Employee Portal</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-        <style> body { font-family: 'Inter', sans-serif; } </style>
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <style> body { font-family: 'Inter', sans-serif; } #reviewMap { height: 180px; width: 100%; border-radius: 0.5rem; } </style>
     </head>
     <body class="bg-slate-50 text-slate-900 min-h-screen antialiased flex flex-col justify-between">
 
@@ -421,6 +457,58 @@ def employee_portal_ui():
             </div>
         </div>
 
+        <!-- DTR PUNCH REVIEW MODAL -->
+        <div id="punchReviewModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-xl border border-slate-100 max-w-sm w-full p-5 space-y-4">
+                <div class="flex justify-between items-center border-b pb-2">
+                    <h3 class="font-bold text-slate-800 text-sm">Review DTR Punch Location</h3>
+                    <button onclick="closeReviewModal()" class="text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
+                </div>
+
+                <div id="reviewMap"></div>
+
+                <div class="space-y-1.5 text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    <p><b>Action:</b> <span id="revActionText" class="font-bold"></span></p>
+                    <p><b>Address:</b> <span id="revAddressText"></span></p>
+                    <p><b>Coordinates:</b> <span id="revCoordsText" class="font-mono"></span></p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 pt-2">
+                    <button onclick="openShiftEditModal()" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition">
+                        Edit Shift
+                    </button>
+                    <button onclick="confirmPunchAction()" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md transition">
+                        Confirm Punch
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SHIFT EDIT APPROVAL MODAL -->
+        <div id="shiftEditModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-xl border border-slate-100 max-w-sm w-full p-5 space-y-4">
+                <div class="flex justify-between items-center border-b pb-2">
+                    <h3 class="font-bold text-slate-800 text-sm">Submit Shift Edit Request</h3>
+                    <button onclick="closeShiftEditModal()" class="text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
+                </div>
+
+                <form id="shiftEditForm" class="space-y-3 text-xs">
+                    <div>
+                        <label class="block font-semibold text-slate-600 mb-1">Requested Time</label>
+                        <input type="datetime-local" id="reqTime" required class="w-full border p-2 rounded-lg">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-600 mb-1">Reason for Manager Approval</label>
+                        <textarea id="reqReason" rows="3" placeholder="Forgot to punch, field work, etc." required class="w-full border p-2 rounded-lg"></textarea>
+                    </div>
+                    <div class="flex justify-end gap-2 pt-2">
+                        <button type="button" onclick="closeShiftEditModal()" class="px-3 py-2 bg-slate-100 rounded-lg font-semibold">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg">Send Request</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <div id="employeeWorkspace" class="hidden min-h-screen flex flex-col">
             <header class="bg-white border-b border-slate-200 sticky top-0 z-30">
                 <div class="max-w-md mx-auto px-4 h-16 flex items-center justify-between">
@@ -436,7 +524,6 @@ def employee_portal_ui():
             </header>
 
             <main class="flex-1 max-w-md w-full mx-auto px-4 py-6 space-y-6">
-
                 <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 text-center space-y-5">
                     <div>
                         <span id="statusBadge" class="inline-block px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600">OFF DUTY</span>
@@ -444,7 +531,7 @@ def employee_portal_ui():
                         <p id="shiftSubText" class="text-xs text-slate-500 mt-1">Ready to start shift</p>
                     </div>
 
-                    <button id="punchActionBtn" onclick="triggerPunch()" class="w-full py-4 rounded-xl font-bold text-base text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/25 transition">
+                    <button id="punchActionBtn" onclick="initiatePunchReview()" class="w-full py-4 rounded-xl font-bold text-base text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/25 transition">
                         CLOCK IN NOW
                     </button>
 
@@ -455,7 +542,6 @@ def employee_portal_ui():
                     <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Today's Activity Log</h3>
                     <div id="timesheetLogContainer" class="space-y-2 text-xs divide-y divide-slate-100"></div>
                 </div>
-
             </main>
         </div>
 
@@ -468,6 +554,7 @@ def employee_portal_ui():
             let elapsedShiftSeconds = 0;
             let currentLat = 14.5764;
             let currentLng = 121.0851;
+            let reviewMapInstance = null;
 
             async function requestHardwareGPS() {
                 if ("geolocation" in navigator) {
@@ -478,7 +565,7 @@ def employee_portal_ui():
                             document.getElementById("geoStatusText").innerText = `High-Accuracy GPS: ${currentLat.toFixed(5)}, ${currentLng.toFixed(5)} (±${Math.round(pos.coords.accuracy)}m)`;
                         },
                         (err) => {
-                            document.getElementById("geoStatusText").innerText = "HTTP Unsecure Context: Browser using coarse network location";
+                            document.getElementById("geoStatusText").innerText = "HTTP Unsecure Context: Coarse Location";
                         },
                         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
                     );
@@ -542,6 +629,95 @@ def employee_portal_ui():
                 document.getElementById("employeeLoginCard").classList.remove("hidden");
             }
 
+            async function initiatePunchReview() {
+                await requestHardwareGPS();
+                const punchType = currentIsClockedIn ? "CLOCK_OUT" : "CLOCK_IN";
+                
+                document.getElementById("revActionText").innerText = punchType;
+                document.getElementById("revActionText").className = punchType === 'CLOCK_IN' ? 'font-bold text-emerald-600' : 'font-bold text-rose-600';
+                document.getElementById("revAddressText").innerText = "Pasig, Metro Manila";
+                document.getElementById("revCoordsText").innerText = `${currentLat.toFixed(5)}, ${currentLng.toFixed(5)}`;
+
+                document.getElementById("punchReviewModal").classList.remove("hidden");
+
+                setTimeout(() => {
+                    if (!reviewMapInstance) {
+                        reviewMapInstance = L.map('reviewMap').setView([currentLat, currentLng], 14);
+                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(reviewMapInstance);
+                    } else {
+                        reviewMapInstance.setView([currentLat, currentLng], 14);
+                    }
+                    L.marker([currentLat, currentLng]).addTo(reviewMapInstance);
+                    reviewMapInstance.invalidateSize();
+                }, 200);
+            }
+
+            function closeReviewModal() {
+                document.getElementById("punchReviewModal").classList.add("hidden");
+            }
+
+            async function confirmPunchAction() {
+                closeReviewModal();
+                const punchType = currentIsClockedIn ? "CLOCK_OUT" : "CLOCK_IN";
+
+                const res = await fetch(`${API_BASE}/punch`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        employee_id: currentUser.employee_id,
+                        punch_type: punchType,
+                        latitude: currentLat,
+                        longitude: currentLng,
+                        accuracy: 10.0,
+                        address: "Pasig, Metro Manila"
+                    })
+                });
+
+                if (res.ok) {
+                    await loadActiveStatus();
+                    await loadTimesheet();
+                } else {
+                    alert("Failed to submit punch");
+                }
+            }
+
+            function openShiftEditModal() {
+                closeReviewModal();
+                const now = new Date();
+                now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+                document.getElementById('reqTime').value = now.toISOString().slice(0, 16);
+                document.getElementById("shiftEditModal").classList.remove("hidden");
+            }
+
+            function closeShiftEditModal() {
+                document.getElementById("shiftEditModal").classList.add("hidden");
+            }
+
+            document.getElementById("shiftEditForm").addEventListener("submit", async (e) => {
+                e.preventDefault();
+                const punchType = currentIsClockedIn ? "CLOCK_OUT" : "CLOCK_IN";
+                const reqTime = document.getElementById("reqTime").value + ":00";
+                const reason = document.getElementById("reqReason").value;
+
+                const res = await fetch(`${API_BASE}/shift-request`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        employee_id: currentUser.employee_id,
+                        requested_punch_type: punchType,
+                        requested_timestamp: reqTime,
+                        reason: reason
+                    })
+                });
+
+                if (res.ok) {
+                    closeShiftEditModal();
+                    alert("Shift edit request sent for Manager approval!");
+                } else {
+                    alert("Failed to submit shift edit request");
+                }
+            });
+
             async function loadActiveStatus() {
                 if (!currentUser) return;
                 try {
@@ -594,32 +770,6 @@ def employee_portal_ui():
                 document.getElementById("liveTimerText").innerText = `${h}:${m}:${s}`;
             }
 
-            async function triggerPunch() {
-                if (!currentUser) return;
-                await requestHardwareGPS();
-                const punchType = currentIsClockedIn ? "CLOCK_OUT" : "CLOCK_IN";
-
-                const res = await fetch(`${API_BASE}/punch`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        employee_id: currentUser.employee_id,
-                        punch_type: punchType,
-                        latitude: currentLat,
-                        longitude: currentLng,
-                        accuracy: 10.0,
-                        address: `GPS Pin: ${currentLat.toFixed(4)}, ${currentLng.toFixed(4)}`
-                    })
-                });
-
-                if (res.ok) {
-                    await loadActiveStatus();
-                    await loadTimesheet();
-                } else {
-                    alert("Failed to submit punch");
-                }
-            }
-
             async function loadTimesheet() {
                 if (!currentUser) return;
                 try {
@@ -655,7 +805,7 @@ def employee_portal_ui():
     """
     return HTMLResponse(content=html_content)
 
-# --- WEB ADMIN PORTAL UI ---
+# --- WEB ADMIN PORTAL UI (WITH MANAGER SHIFT APPROVAL TAB) ---
 @app.get("/admin", response_class=HTMLResponse)
 def admin_dashboard_ui():
     html_content = """
@@ -696,54 +846,6 @@ def admin_dashboard_ui():
             </div>
         </div>
 
-        <div id="editUserModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div class="bg-white rounded-xl shadow-xl border border-slate-200 max-w-lg w-full p-6 space-y-4">
-                <div class="flex justify-between items-center border-b pb-3">
-                    <h3 class="font-bold text-slate-800 text-base">Edit Profile & Permissions</h3>
-                    <button onclick="closeEditModal()" class="text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
-                </div>
-                <form id="editUserForm" class="space-y-3">
-                    <input type="hidden" id="editOriginalEmpId">
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-500 mb-1">Employee ID</label>
-                            <input type="text" id="editEmpId" required class="w-full border p-2 rounded-lg text-xs font-mono">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-500 mb-1">Full Name</label>
-                            <input type="text" id="editName" required class="w-full border p-2 rounded-lg text-xs">
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-500 mb-1">Department</label>
-                            <select id="editDept" class="deptDropdownSelect w-full border p-2 rounded-lg text-xs"></select>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-500 mb-1">Position</label>
-                            <input type="text" id="editPos" required class="w-full border p-2 rounded-lg text-xs">
-                        </div>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-500 mb-1">Role (RBAC Privilege)</label>
-                        <select id="editRole" class="w-full border p-2 rounded-lg text-xs">
-                            <option value="employee">Employee</option>
-                            <option value="manager">Manager</option>
-                            <option value="super_admin">Super Admin</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-500 mb-1">New Password (Optional)</label>
-                        <input type="password" id="editPass" placeholder="••••••••" class="w-full border p-2 rounded-lg text-xs">
-                    </div>
-                    <div class="flex justify-end gap-2 pt-2 border-t">
-                        <button type="button" onclick="closeEditModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg text-xs transition">Cancel</button>
-                        <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-xs transition">Save Changes</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
         <div id="adminWorkspace" class="hidden min-h-screen flex flex-col">
             <header class="bg-white border-b border-slate-200 sticky top-0 z-30">
                 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -758,8 +860,8 @@ def admin_dashboard_ui():
 
                         <nav class="hidden md:flex gap-1 bg-slate-100 p-1 rounded-lg text-xs font-semibold">
                             <button id="tabBtnClocks" onclick="switchTab('clocks')" class="px-3 py-1.5 rounded-md bg-white text-blue-600 shadow-sm transition">Time Clocks & Map</button>
+                            <button id="tabBtnRequests" onclick="switchTab('requests')" class="px-3 py-1.5 rounded-md text-slate-600 hover:text-slate-900 transition">Shift Edit Requests</button>
                             <button id="tabBtnUsers" onclick="switchTab('users')" class="px-3 py-1.5 rounded-md text-slate-600 hover:text-slate-900 transition">User Directory & RBAC</button>
-                            <button id="tabBtnGroups" onclick="switchTab('groups')" class="px-3 py-1.5 rounded-md text-slate-600 hover:text-slate-900 transition">Smart Groups</button>
                         </nav>
                     </div>
                     
@@ -815,38 +917,10 @@ def admin_dashboard_ui():
                     </div>
 
                     <div class="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
-                        <button onclick="toggleCollapse('overrideBody', 'overrideIcon')" class="w-full p-4 sm:p-5 flex items-center justify-between bg-slate-50/50 hover:bg-slate-50 text-left transition border-b border-slate-100">
-                            <div>
-                                <h2 class="text-sm font-bold text-slate-800 uppercase tracking-wider">Manual DTR Entry Override</h2>
-                                <p class="text-xs text-slate-500">Insert custom clock-in/out records for an employee</p>
-                            </div>
-                            <span id="overrideIcon" class="text-slate-400 font-bold text-sm transform transition-transform">▲</span>
-                        </button>
-                        <div id="overrideBody" class="p-5 border-t border-slate-100 space-y-4">
-                            <form id="addForm" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                                <input type="text" id="addEmpId" placeholder="Employee ID" required class="border border-slate-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                                <select id="addType" class="border border-slate-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                                    <option value="CLOCK_IN">CLOCK_IN</option>
-                                    <option value="CLOCK_OUT">CLOCK_OUT</option>
-                                </select>
-                                <input type="datetime-local" id="addTime" required class="border border-slate-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg text-sm transition shadow-sm">
-                                    Insert Punch
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-
-                    <div class="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
                         <div class="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
-                            <div class="flex items-center gap-3">
-                                <button onclick="toggleCollapse('auditTableBody', 'auditIcon')" class="text-slate-400 hover:text-slate-600 text-xs font-bold">
-                                    <span id="auditIcon">▲</span>
-                                </button>
-                                <div>
-                                    <h2 class="text-sm font-bold text-slate-800 uppercase tracking-wider">DTR Audit Logs</h2>
-                                    <p class="text-xs text-slate-500">Raw timestamp records from PostgreSQL</p>
-                                </div>
+                            <div>
+                                <h2 class="text-sm font-bold text-slate-800 uppercase tracking-wider">DTR Audit Logs</h2>
+                                <p class="text-xs text-slate-500">Raw timestamp records from PostgreSQL</p>
                             </div>
                             <button onclick="loadPunches()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-3 py-1.5 rounded-lg transition">Refresh</button>
                         </div>
@@ -869,95 +943,45 @@ def admin_dashboard_ui():
                     </div>
                 </div>
 
+                <!-- TAB 2: Shift Requests Manager Approvals -->
+                <div id="tabContentRequests" class="hidden space-y-6">
+                    <div class="bg-white rounded-xl border border-slate-200/80 shadow-sm p-5 space-y-4">
+                        <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                            <div>
+                                <h2 class="text-base font-bold text-slate-800">Pending Shift Edit Requests</h2>
+                                <p class="text-xs text-slate-500">Approve or reject employee shift adjustments and manual DTR corrections</p>
+                            </div>
+                            <button onclick="loadShiftRequests()" class="text-xs bg-slate-100 hover:bg-slate-200 font-semibold px-3 py-1.5 rounded-lg">Refresh Requests</button>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs">
+                                <thead>
+                                    <tr class="bg-slate-50 text-slate-500 font-bold border-b">
+                                        <th class="p-3.5">ID</th>
+                                        <th class="p-3.5">Employee</th>
+                                        <th class="p-3.5">Type</th>
+                                        <th class="p-3.5">Requested Time</th>
+                                        <th class="p-3.5">Reason</th>
+                                        <th class="p-3.5">Status</th>
+                                        <th class="p-3.5 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="requestsTableBody" class="divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: User Directory -->
                 <div id="tabContentUsers" class="hidden space-y-6">
                     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm">
                         <div>
                             <h2 class="text-base font-bold text-slate-800">User Directory & Permissions</h2>
                             <p class="text-xs text-slate-500">Manage employee accounts, titles, and system RBAC access levels</p>
                         </div>
-                        <button onclick="toggleCollapse('newUserFormCard', 'newUserIcon')" class="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition shadow-sm">
-                            <span>+ Add New Employee</span>
-                            <span id="newUserIcon" class="text-xs">▼</span>
-                        </button>
                     </div>
-
-                    <div id="newUserFormCard" class="hidden bg-white rounded-xl border border-slate-200/80 shadow-sm p-5 space-y-4">
-                        <div class="border-b border-slate-100 pb-2">
-                            <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Provision New Account</h3>
-                        </div>
-
-                        <form id="createUserForm" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
-                            <input type="text" id="uEmpId" placeholder="Emp ID (e.g. 3286)" required class="border border-slate-200 rounded-lg p-2 text-xs">
-                            <input type="text" id="uName" placeholder="Full Name" required class="border border-slate-200 rounded-lg p-2 text-xs">
-                            <select id="uDept" class="deptDropdownSelect border border-slate-200 rounded-lg p-2 text-xs"></select>
-                            <input type="text" id="uPos" placeholder="Position" value="IT Specialist" required class="border border-slate-200 rounded-lg p-2 text-xs">
-                            <select id="uRole" class="border border-slate-200 rounded-lg p-2 text-xs">
-                                <option value="employee">Employee</option>
-                                <option value="manager">Manager</option>
-                                <option value="super_admin">Super Admin</option>
-                            </select>
-                            <input type="password" id="uPass" placeholder="Password" value="password123" required class="border border-slate-200 rounded-lg p-2 text-xs">
-                            <button type="submit" class="sm:col-span-2 lg:col-span-6 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg text-xs transition shadow-sm">
-                                Create Account
-                            </button>
-                        </form>
-                    </div>
-
                     <div id="departmentDirectoryContainer" class="space-y-4"></div>
-                </div>
-
-                <div id="tabContentGroups" class="hidden space-y-6">
-                    <div class="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm">
-                        <div>
-                            <h2 class="text-base font-bold text-slate-800">Smart Groups</h2>
-                            <p class="text-xs text-slate-500">Segment users by operational assignment, feature access, and automated rules</p>
-                        </div>
-                        <button class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition shadow-sm">
-                            + Add Segment
-                        </button>
-                    </div>
-
-                    <div class="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
-                        <div class="p-4 bg-slate-50/50 border-b border-slate-100 flex justify-between items-center text-xs font-bold text-slate-500 uppercase">
-                            <span>Segment Name</span>
-                            <span>Connected Services</span>
-                        </div>
-
-                        <div class="border-b border-slate-100">
-                            <div class="p-3.5 bg-slate-50/30 flex items-center justify-between font-bold text-xs text-slate-800">
-                                <span class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-blue-600"></span> Head Office</span>
-                                <span class="text-slate-500">10 Groups</span>
-                            </div>
-                            <div class="divide-y divide-slate-100 text-xs">
-                                <div class="p-3.5 pl-8 flex justify-between items-center hover:bg-slate-50">
-                                    <span class="font-semibold text-slate-800">Head Office - Management</span>
-                                    <span class="bg-blue-50 text-blue-700 font-bold px-2 py-0.5 rounded-full">14 / 14 Connected</span>
-                                </div>
-                                <div class="p-3.5 pl-8 flex justify-between items-center hover:bg-slate-50">
-                                    <span class="font-semibold text-slate-800">Head Office - Finance & HR</span>
-                                    <span class="bg-blue-50 text-blue-700 font-bold px-2 py-0.5 rounded-full">8 / 8 Connected</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div>
-                            <div class="p-3.5 bg-slate-50/30 flex items-center justify-between font-bold text-xs text-slate-800">
-                                <span class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-emerald-600"></span> Operations</span>
-                                <span class="text-slate-500">5 Groups</span>
-                            </div>
-                            <div class="divide-y divide-slate-100 text-xs">
-                                <div class="p-3.5 pl-8 flex justify-between items-center hover:bg-slate-50">
-                                    <span class="font-semibold text-slate-800">Operations - TSG</span>
-                                    <span class="bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full">8 / 8 Selected</span>
-                                </div>
-                                <div class="p-3.5 pl-8 flex justify-between items-center hover:bg-slate-50">
-                                    <span class="font-semibold text-slate-800">Operations - Technical Support</span>
-                                    <span class="bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full">10 / 10 Selected</span>
-                                </div>
-                            </div>
-                        </div>
-
-                    </div>
                 </div>
 
             </main>
@@ -965,81 +989,33 @@ def admin_dashboard_ui():
 
         <script>
             const API_BASE = "/api";
-            let globalUsersCache = [];
-            let globalDeptsCache = [];
             let leafletMap = null;
             let mapMarkers = [];
             let adminSyncPoller = null;
 
-            const now = new Date();
-            now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-            document.getElementById('addTime').value = now.toISOString().slice(0, 16);
-
             function initLeafletMap() {
                 if (leafletMap) return;
                 leafletMap = L.map('map').setView([14.5764, 121.0851], 12);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    maxZoom: 19,
-                    attribution: '© OpenStreetMap contributors'
-                }).addTo(leafletMap);
-            }
-
-            async function fetchDynamicDepartments() {
-                try {
-                    const res = await fetch(`${API_BASE}/departments`);
-                    globalDeptsCache = await res.json();
-                    
-                    const dropdowns = document.querySelectorAll('.deptDropdownSelect');
-                    dropdowns.forEach(sel => {
-                        sel.innerHTML = "";
-                        globalDeptsCache.forEach(d => {
-                            sel.innerHTML += `<option value="${d}">${d}</option>`;
-                        });
-                    });
-                } catch (e) {
-                    console.log('Error fetching dynamic depts:', e);
-                }
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(leafletMap);
             }
 
             function switchTab(tabName) {
                 const clockTab = document.getElementById("tabContentClocks");
+                const reqTab = document.getElementById("tabContentRequests");
                 const userTab = document.getElementById("tabContentUsers");
-                const groupTab = document.getElementById("tabContentGroups");
-
-                const btnClocks = document.getElementById("tabBtnClocks");
-                const btnUsers = document.getElementById("tabBtnUsers");
-                const btnGroups = document.getElementById("tabBtnGroups");
 
                 clockTab.classList.add("hidden");
+                reqTab.classList.add("hidden");
                 userTab.classList.add("hidden");
-                groupTab.classList.add("hidden");
-
-                btnClocks.className = "px-3 py-1.5 rounded-md text-slate-600 hover:text-slate-900 transition";
-                btnUsers.className = "px-3 py-1.5 rounded-md text-slate-600 hover:text-slate-900 transition";
-                btnGroups.className = "px-3 py-1.5 rounded-md text-slate-600 hover:text-slate-900 transition";
 
                 if (tabName === 'clocks') {
                     clockTab.classList.remove("hidden");
-                    btnClocks.className = "px-3 py-1.5 rounded-md bg-white text-blue-600 shadow-sm transition";
                     if (leafletMap) leafletMap.invalidateSize();
+                } else if (tabName === 'requests') {
+                    reqTab.classList.remove("hidden");
+                    loadShiftRequests();
                 } else if (tabName === 'users') {
                     userTab.classList.remove("hidden");
-                    btnUsers.className = "px-3 py-1.5 rounded-md bg-white text-blue-600 shadow-sm transition";
-                } else if (tabName === 'groups') {
-                    groupTab.classList.remove("hidden");
-                    btnGroups.className = "px-3 py-1.5 rounded-md bg-white text-blue-600 shadow-sm transition";
-                }
-            }
-
-            function toggleCollapse(bodyId, iconId) {
-                const el = document.getElementById(bodyId);
-                const icon = document.getElementById(iconId);
-                if (el.classList.contains("hidden")) {
-                    el.classList.remove("hidden");
-                    if (icon) icon.innerText = "▲";
-                } else {
-                    el.classList.add("hidden");
-                    if (icon) icon.innerText = "▼";
                 }
             }
 
@@ -1048,31 +1024,23 @@ def admin_dashboard_ui():
                 const empId = document.getElementById("adminIdInput").value;
                 const pass = document.getElementById("adminPassInput").value;
 
-                try {
-                    const res = await fetch(`${API_BASE}/login`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ employee_id: empId, password: pass })
-                    });
+                const res = await fetch(`${API_BASE}/login`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ employee_id: empId, password: pass })
+                });
 
-                    if (res.ok) {
-                        const data = await res.json();
-                        if (data.role === "super_admin") {
-                            document.getElementById("loginOverlay").classList.add("hidden");
-                            document.getElementById("adminWorkspace").classList.remove("hidden");
-                            initLeafletMap();
-                            await loadDashboard();
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.role === "super_admin") {
+                        document.getElementById("loginOverlay").classList.add("hidden");
+                        document.getElementById("adminWorkspace").classList.remove("hidden");
+                        initLeafletMap();
+                        await loadDashboard();
 
-                            clearInterval(adminSyncPoller);
-                            adminSyncPoller = setInterval(loadPunches, 3000);
-                        } else {
-                            alert("Access Denied: Account lacks Super Admin permissions.");
-                        }
-                    } else {
-                        alert("Invalid Employee ID or Password");
+                        clearInterval(adminSyncPoller);
+                        adminSyncPoller = setInterval(loadPunches, 3000);
                     }
-                } catch (err) {
-                    alert("Unable to reach authentication backend");
                 }
             });
 
@@ -1083,88 +1051,8 @@ def admin_dashboard_ui():
             }
 
             async function loadDashboard() {
-                await fetchDynamicDepartments();
-                await loadSegmentedUsers();
                 await loadPunches();
-            }
-
-            async function loadSegmentedUsers() {
-                const res = await fetch(`${API_BASE}/admin/users`);
-                const users = await res.json();
-                globalUsersCache = users;
-                document.getElementById("statTotalUsersCount").innerText = users.length;
-
-                const container = document.getElementById("departmentDirectoryContainer");
-                container.innerHTML = "";
-
-                const grouped = {};
-                users.forEach(u => {
-                    if (!grouped[u.department]) grouped[u.department] = [];
-                    grouped[u.department].push(u);
-                });
-
-                Object.keys(grouped).forEach((dept, index) => {
-                    const deptUsers = grouped[dept];
-                    const cardId = `deptGroup_${index}`;
-                    const iconId = `deptIcon_${index}`;
-
-                    let rowsHtml = "";
-                    deptUsers.forEach(u => {
-                        rowsHtml += `
-                            <tr class="hover:bg-slate-50 transition">
-                                <td class="p-3.5 font-bold font-mono text-slate-800">${u.employee_id}</td>
-                                <td class="p-3.5 font-semibold text-slate-800">${u.name}</td>
-                                <td class="p-3.5 text-slate-600">${u.position}</td>
-                                <td class="p-3.5">
-                                    <span class="px-2.5 py-0.5 text-xs font-bold rounded-full ${u.role === 'super_admin' ? 'bg-purple-50 text-purple-700 border border-purple-200' : u.role === 'manager' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-slate-100 text-slate-700'}">
-                                        ${u.role}
-                                    </span>
-                                </td>
-                                <td class="p-3.5 text-right space-x-3">
-                                    <button onclick="openEditModal('${u.employee_id}')" class="text-xs text-blue-600 hover:underline font-semibold">Edit</button>
-                                    <button onclick="deleteUser('${u.employee_id}')" class="text-xs text-rose-600 hover:underline font-semibold">Delete</button>
-                                </td>
-                            </tr>
-                        `;
-                    });
-
-                    container.innerHTML += `
-                        <div class="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
-                            <button onclick="toggleCollapse('${cardId}', '${iconId}')" class="w-full p-4 flex items-center justify-between bg-slate-50/50 hover:bg-slate-50 text-left transition border-b border-slate-100">
-                                <div class="flex items-center gap-2">
-                                    <h3 class="text-sm font-bold text-slate-800">${dept}</h3>
-                                    <span class="text-xs bg-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded-full">${deptUsers.length}</span>
-                                </div>
-                                <span id="${iconId}" class="text-slate-400 font-bold text-xs">▲</span>
-                            </button>
-                            <div id="${cardId}" class="overflow-x-auto">
-                                <table class="w-full text-left text-xs">
-                                    <thead>
-                                        <tr class="bg-slate-50/50 text-slate-500 font-bold border-b">
-                                            <th class="p-3.5">Employee ID</th>
-                                            <th class="p-3.5">Name</th>
-                                            <th class="p-3.5">Position</th>
-                                            <th class="p-3.5">Role</th>
-                                            <th class="p-3.5 text-right">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-slate-100">${rowsHtml}</tbody>
-                                </table>
-                            </div>
-                        </div>
-                    `;
-                });
-            }
-
-            function focusMapLocation(lat, lng, name) {
-                if (leafletMap) {
-                    leafletMap.setView([lat, lng], 15);
-                    mapMarkers.forEach(m => {
-                        if (m.getLatLng().lat === lat && m.getLatLng().lng === lng) {
-                            m.openPopup();
-                        }
-                    });
-                }
+                await loadShiftRequests();
             }
 
             async function loadPunches() {
@@ -1185,7 +1073,6 @@ def admin_dashboard_ui():
 
                     data.forEach(p => {
                         const isClockIn = p.punch_type === 'CLOCK_IN';
-
                         if (!seenUsers.has(p.employee_id)) {
                             seenUsers.add(p.employee_id);
                             if (isClockIn) activeClockedInCount++;
@@ -1196,7 +1083,7 @@ def admin_dashboard_ui():
                                 <td class="p-3.5 pl-5 font-mono text-xs text-slate-400">#${p.id}</td>
                                 <td class="p-3.5 font-bold text-slate-800">${p.employee_name} (${p.employee_id})</td>
                                 <td class="p-3.5">
-                                    <span class="px-2.5 py-0.5 rounded-full text-xs font-bold ${isClockIn ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}">
+                                    <span class="px-2.5 py-0.5 rounded-full text-xs font-bold ${isClockIn ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}">
                                         ${p.punch_type}
                                     </span>
                                 </td>
@@ -1211,28 +1098,8 @@ def admin_dashboard_ui():
                         const lat = parseFloat(p.latitude) || 14.5764;
                         const lng = parseFloat(p.longitude) || 121.0851;
 
-                        mapUserList.innerHTML += `
-                            <div onclick="focusMapLocation(${lat}, ${lng}, '${p.employee_name}')" class="bg-white p-2.5 rounded-lg border border-slate-200 cursor-pointer hover:border-blue-500 transition shadow-sm space-y-1">
-                                <div class="flex justify-between items-center">
-                                    <span class="font-bold text-xs text-slate-800">${p.employee_name}</span>
-                                    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${isClockIn ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">${p.punch_type}</span>
-                                </div>
-                                <p class="text-[11px] text-slate-500 truncate">${p.address}</p>
-                                <p class="text-[10px] font-mono text-slate-400">${p.formatted_time}</p>
-                            </div>
-                        `;
-
                         if (leafletMap) {
                             const marker = L.marker([lat, lng]).addTo(leafletMap);
-                            marker.bindPopup(`
-                                <div class="p-1 space-y-1 font-sans">
-                                    <h4 class="font-bold text-sm text-slate-800">${p.employee_name}</h4>
-                                    <p class="text-xs text-slate-600"><b>ID:</b> ${p.employee_id} | <b>Dept:</b> ${p.department}</p>
-                                    <p class="text-xs text-slate-600"><b>Action:</b> <span class="font-bold ${isClockIn ? 'text-emerald-600' : 'text-rose-600'}">${p.punch_type}</span></p>
-                                    <p class="text-xs text-slate-500">${p.address}</p>
-                                    <p class="text-[10px] text-slate-400">${p.formatted_time}</p>
-                                </div>
-                            `);
                             mapMarkers.push(marker);
                         }
                     });
@@ -1241,97 +1108,49 @@ def admin_dashboard_ui():
                 } catch(e) {}
             }
 
-            function openEditModal(empId) {
-                const user = globalUsersCache.find(u => u.employee_id === empId);
-                if (!user) return;
+            async function loadShiftRequests() {
+                try {
+                    const res = await fetch(`${API_BASE}/admin/shift-requests`);
+                    const requests = await res.json();
+                    const tbody = document.getElementById("requestsTableBody");
+                    tbody.innerHTML = "";
 
-                document.getElementById("editOriginalEmpId").value = user.employee_id;
-                document.getElementById("editEmpId").value = user.employee_id;
-                document.getElementById("editName").value = user.name;
-                document.getElementById("editDept").value = user.department;
-                document.getElementById("editPos").value = user.position;
-                document.getElementById("editRole").value = user.role;
-                document.getElementById("editPass").value = "";
-
-                document.getElementById("editUserModal").classList.remove("hidden");
+                    requests.forEach(r => {
+                        const isPending = r.status === 'PENDING';
+                        tbody.innerHTML += `
+                            <tr class="hover:bg-slate-50 transition">
+                                <td class="p-3.5 font-mono text-slate-400">#${r.id}</td>
+                                <td class="p-3.5 font-bold text-slate-800">${r.employee_name} (${r.employee_id})</td>
+                                <td class="p-3.5 font-bold">${r.requested_punch_type}</td>
+                                <td class="p-3.5 font-mono">${r.requested_timestamp}</td>
+                                <td class="p-3.5 text-slate-600">${r.reason}</td>
+                                <td class="p-3.5">
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold ${r.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' : r.status === 'REJECTED' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'}">${r.status}</span>
+                                </td>
+                                <td class="p-3.5 text-right space-x-2">
+                                    ${isPending ? `
+                                        <button onclick="approveRequest(${r.id})" class="px-2.5 py-1 bg-emerald-600 text-white rounded font-semibold text-xs hover:bg-emerald-700">Approve</button>
+                                        <button onclick="rejectRequest(${r.id})" class="px-2.5 py-1 bg-rose-600 text-white rounded font-semibold text-xs hover:bg-rose-700">Reject</button>
+                                    ` : '<span class="text-slate-400">Processed</span>'}
+                                </td>
+                            </tr>
+                        `;
+                    });
+                } catch(e) {}
             }
 
-            function closeEditModal() {
-                document.getElementById("editUserModal").classList.add("hidden");
-            }
-
-            document.getElementById("editUserForm").addEventListener("submit", async (e) => {
-                e.preventDefault();
-                const origId = document.getElementById("editOriginalEmpId").value;
-                const newId = document.getElementById("editEmpId").value;
-                const name = document.getElementById("editName").value;
-                const dept = document.getElementById("editDept").value;
-                const pos = document.getElementById("editPos").value;
-                const role = document.getElementById("editRole").value;
-                const pass = document.getElementById("editPass").value;
-
-                const payload = {
-                    new_employee_id: newId,
-                    name: name,
-                    department: dept,
-                    position: pos,
-                    role: role,
-                };
-                if (pass) payload.password = pass;
-
-                const res = await fetch(`${API_BASE}/admin/users/${origId}`, {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload)
-                });
-
-                if (res.ok) {
-                    closeEditModal();
-                    loadSegmentedUsers();
-                } else {
-                    alert("Failed to update user profile");
+            async function approveRequest(id) {
+                if (confirm(`Approve shift edit request #${id}?`)) {
+                    await fetch(`${API_BASE}/admin/shift-requests/${id}/approve`, { method: "POST" });
+                    loadShiftRequests();
+                    loadPunches();
                 }
-            });
+            }
 
-            document.getElementById("createUserForm").addEventListener("submit", async (e) => {
-                e.preventDefault();
-                await fetch(`${API_BASE}/admin/users`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        employee_id: document.getElementById("uEmpId").value,
-                        name: document.getElementById("uName").value,
-                        department: document.getElementById("uDept").value,
-                        position: document.getElementById("uPos").value,
-                        role: document.getElementById("uRole").value,
-                        password: document.getElementById("uPass").value
-                    })
-                });
-                toggleCollapse('newUserFormCard', 'newUserIcon');
-                loadSegmentedUsers();
-            });
-
-            document.getElementById("addForm").addEventListener("submit", async (e) => {
-                e.preventDefault();
-                await fetch(`${API_BASE}/admin/dtr`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        employee_id: document.getElementById("addEmpId").value,
-                        punch_type: document.getElementById("addType").value,
-                        timestamp: document.getElementById("addTime").value + ":00",
-                        latitude: 14.5764,
-                        longitude: 121.0851,
-                        address: "Pasig, Metro Manila"
-                    })
-                });
-                loadPunches();
-            });
-
-            async function deleteUser(empId) {
-                if (confirm(`Remove user ${empId}?`)) {
-                    await fetch(`${API_BASE}/admin/users/${empId}`, { method: "DELETE" });
-                    loadSegmentedUsers();
+            async function rejectRequest(id) {
+                if (confirm(`Reject shift edit request #${id}?`)) {
+                    await fetch(`${API_BASE}/admin/shift-requests/${id}/reject`, { method: "POST" });
+                    loadShiftRequests();
                 }
             }
 
