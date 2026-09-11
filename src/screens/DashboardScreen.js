@@ -7,23 +7,70 @@ import { AuthContext } from '../context/AuthContext';
 export default function DashboardScreen({ navigation }) {
   const { user, logout, API_BASE_URL } = useContext(AuthContext);
   const [loading, setLoading] = useState(false);
+  const [initialSync, setInitialSync] = useState(true);
   const [lastPunch, setLastPunch] = useState(null);
   
   // Timer State
   const [isClockedIn, setIsClockedIn] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
+  // Fetch active punch state on component mount / re-login
+  useEffect(() => {
+    fetchActivePunchState();
+  }, []);
+
+  // Timer Ticker
   useEffect(() => {
     let interval = null;
     if (isClockedIn) {
       interval = setInterval(() => {
-        setElapsedSeconds((prev) => prev + 1);
+        setElapsedSeconds((prev) => {
+          if (prev >= 20 * 3600) {
+            Alert.alert("Auto Clock-Out", "Your shift exceeded 20 hours and was automatically ended.");
+            setIsClockedIn(false);
+            return 0;
+          }
+          return prev + 1;
+        });
       }, 1000);
     } else {
       clearInterval(interval);
     }
     return () => clearInterval(interval);
   }, [isClockedIn]);
+
+  const fetchActivePunchState = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/punch/active/${user.employee_id}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.is_clocked_in) {
+          setIsClockedIn(true);
+          setElapsedSeconds(data.elapsed_seconds);
+          setLastPunch({
+            type: 'CLOCK_IN',
+            timestamp: new Date(data.clock_in_time).toLocaleTimeString(),
+            lat: data.last_punch.latitude,
+            lng: data.last_punch.longitude,
+            address: data.last_punch.address || 'Recorded Location',
+          });
+        } else if (data.last_punch) {
+          setIsClockedIn(false);
+          setLastPunch({
+            type: data.last_punch.punch_type,
+            timestamp: new Date(data.last_punch.timestamp).toLocaleTimeString(),
+            lat: data.last_punch.latitude,
+            lng: data.last_punch.longitude,
+            address: data.last_punch.address || 'Recorded Location',
+          });
+        }
+      }
+    } catch (error) {
+      console.log('Error fetching active punch status:', error);
+    } finally {
+      setInitialSync(false);
+    }
+  };
 
   const formatTimer = (totalSeconds) => {
     const hrs = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
@@ -45,7 +92,6 @@ export default function DashboardScreen({ navigation }) {
         accuracy: Location.Accuracy.High,
       });
 
-      // Reverse Geocoding to get Street Name and City
       let addressStr = 'Unknown Location';
       try {
         let geocode = await Location.reverseGeocodeAsync({
@@ -104,6 +150,7 @@ export default function DashboardScreen({ navigation }) {
         setElapsedSeconds(0);
       } else {
         setIsClockedIn(false);
+        setElapsedSeconds(0);
       }
     } catch (error) {
       Alert.alert('Sync Error', error.message);
@@ -145,6 +192,15 @@ export default function DashboardScreen({ navigation }) {
     </html>
   `;
 
+  if (initialSync) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#2563eb" />
+        <Text style={{ marginTop: 10, color: '#475569' }}>Syncing Shift Status...</Text>
+      </View>
+    );
+  }
+
   return (
     <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
       <View style={styles.profileCard}>
@@ -154,7 +210,7 @@ export default function DashboardScreen({ navigation }) {
         <Text style={styles.profileText}>Role: <Text style={styles.boldText}>{user.role.toUpperCase()}</Text></Text>
       </View>
 
-      {/* Live Timer Widget */}
+      {/* Live Persistent Shift Timer */}
       <View style={[styles.timerCard, isClockedIn ? styles.timerActive : styles.timerInactive]}>
         <Text style={styles.timerLabel}>{isClockedIn ? 'ON DUTY - SHIFT TIMER' : 'OFF DUTY'}</Text>
         <Text style={styles.timerValue}>{formatTimer(elapsedSeconds)}</Text>
