@@ -1,6 +1,6 @@
 import React, { useState, useContext } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Linking, ScrollView } from 'react-native';
-import MapView, { Marker, UrlTile } from 'react-native-maps';
+import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
 import { AuthContext } from '../context/AuthContext';
 
@@ -63,6 +63,10 @@ export default function DashboardScreen({ navigation }) {
     Linking.openURL(url);
   };
 
+  const googleMapsWebUrl = lastPunch
+    ? `https://maps.google.com/maps?q=${lastPunch.lat},${lastPunch.lng}&z=16&output=embed`
+    : '';
+
   return (
     <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
       <Text style={styles.welcome}>Welcome, {user.name}</Text>
@@ -95,27 +99,17 @@ export default function DashboardScreen({ navigation }) {
           <Text style={styles.punchTitle}>Last Punch: {lastPunch.type} ({lastPunch.timestamp})</Text>
 
           <View style={styles.mapFrame}>
-            <MapView
+            <WebView
+              originWhitelist={['*']}
+              source={{ uri: googleMapsWebUrl }}
               style={styles.map}
-              region={{
-                latitude: lastPunch.lat,
-                longitude: lastPunch.lng,
-                latitudeDelta: 0.005,
-                longitudeDelta: 0.005,
-              }}
-              mapType="none"
-            >
-              <UrlTile
-                urlTemplate="https://a.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                maximumZ={19}
-                flipY={false}
-              />
-              <Marker
-                coordinate={{ latitude: lastPunch.lat, longitude: lastPunch.lng }}
-                title={lastPunch.type}
-                description={`Time: ${lastPunch.timestamp}`}
-              />
-            </MapView>
+              javaScriptEnabled={true}
+              domStorageEnabled={true}
+              startInLoadingState={true}
+              renderLoading={() => (
+                <ActivityIndicator size="small" color="#007AFF" style={StyleSheet.absoluteFillObject} />
+              )}
+            />
           </View>
 
           <TouchableOpacity style={styles.extMapBtn} onPress={openGoogleMaps}>
