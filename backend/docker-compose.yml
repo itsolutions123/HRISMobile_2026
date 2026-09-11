@@ -1,0 +1,36 @@
+
+services:
+  hris-db:
+    image: postgres:15-alpine
+    container_name: hris-postgres-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hrisuser
+      POSTGRES_PASSWORD: hrispassword
+      POSTGRES_DB: hrisdb
+    volumes:
+      - hris_pgdata:/var/lib/postgresql/data
+    networks:
+      - hris-network
+
+  hris-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hris-fastapi-backend
+    restart: unless-stopped
+    ports:
+      - "8089:8000"
+    environment:
+      - DATABASE_URL=postgresql://hrisuser:hrispassword@hris-db:5432/hrisdb
+    depends_on:
+      - hris-db
+    networks:
+      - hris-network
+
+networks:
+  hris-network:
+    driver: bridge
+
+volumes:
+  hris_pgdata:

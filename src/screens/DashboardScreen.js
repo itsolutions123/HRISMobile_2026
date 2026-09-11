@@ -5,7 +5,7 @@ import * as Location from 'expo-location';
 import { AuthContext } from '../context/AuthContext';
 
 export default function DashboardScreen({ navigation }) {
-  const { user, logout } = useContext(AuthContext);
+  const { user, logout, API_BASE_URL } = useContext(AuthContext);
   const [loading, setLoading] = useState(false);
   const [lastPunch, setLastPunch] = useState(null);
 
@@ -30,30 +30,43 @@ export default function DashboardScreen({ navigation }) {
     }
   };
 
-  const handleClockIn = async () => {
-    const coords = await requestAndGetLocation();
-    if (coords) {
+  const submitPunchToBackend = async (punchType, coords) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/punch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employee_id: user.employee_id,
+          punch_type: punchType,
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          accuracy: coords.accuracy || 0,
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to persist punch to server');
+
+      const data = await response.json();
       setLastPunch({
-        type: 'CLOCK_IN',
-        timestamp: new Date().toLocaleTimeString(),
+        type: punchType,
+        timestamp: new Date(data.timestamp).toLocaleTimeString(),
         lat: coords.latitude,
         lng: coords.longitude,
         accuracy: coords.accuracy,
       });
+    } catch (error) {
+      Alert.alert('Sync Error', error.message);
     }
+  };
+
+  const handleClockIn = async () => {
+    const coords = await requestAndGetLocation();
+    if (coords) await submitPunchToBackend('CLOCK_IN', coords);
   };
 
   const handleClockOut = async () => {
     const coords = await requestAndGetLocation();
-    if (coords) {
-      setLastPunch({
-        type: 'CLOCK_OUT',
-        timestamp: new Date().toLocaleTimeString(),
-        lat: coords.latitude,
-        lng: coords.longitude,
-        accuracy: coords.accuracy,
-      });
-    }
+    if (coords) await submitPunchToBackend('CLOCK_OUT', coords);
   };
 
   const openGoogleMaps = () => {

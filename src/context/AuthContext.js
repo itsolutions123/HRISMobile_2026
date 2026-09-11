@@ -1,12 +1,31 @@
 import React, { createContext, useState } from 'react';
+import { Alert } from 'react-native';
 
 export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null); // null = logged out, object = logged in
+  const [user, setUser] = useState(null);
+  const API_BASE_URL = 'http://10.0.10.37:8089';
 
-  const login = (userData) => {
-    setUser(userData);
+  const login = async (employeeId, role, password = 'password123') => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employee_id: employeeId, password }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Invalid Employee Credentials');
+      }
+
+      const userData = await response.json();
+      setUser(userData);
+      return true;
+    } catch (error) {
+      Alert.alert('Authentication Error', error.message || 'Unable to connect to HRIS Backend');
+      return false;
+    }
   };
 
   const logout = () => {
@@ -14,7 +33,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, login, logout, API_BASE_URL }}>
       {children}
     </AuthContext.Provider>
   );
