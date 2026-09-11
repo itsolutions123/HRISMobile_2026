@@ -20,7 +20,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="HRIS Core API & Admin Suite (GMT+8)", version="2.1.0")
+app = FastAPI(title="HRIS Core API & Admin Suite", version="2.2.0")
 
 MAX_SHIFT_SECONDS = 20 * 3600
 
@@ -98,7 +98,7 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
         "token": f"fake-jwt-token-{user.employee_id}"
     }
 
-# --- Punch Endpoints ---
+# --- Mobile Punch Endpoints ---
 @app.get("/api/punch/active/{employee_id}")
 def get_active_punch(employee_id: str, db: Session = Depends(get_db)):
     last_punch = db.query(models.TimePunch)\
@@ -212,7 +212,21 @@ def list_all_dtr(employee_id: Optional[str] = None, db: Session = Depends(get_db
     if employee_id:
         query = query.filter(models.TimePunch.employee_id == employee_id)
     punches = query.order_by(desc(models.TimePunch.timestamp)).all()
-    return punches
+    
+    # Clean formatted response
+    result = []
+    for p in punches:
+        result.append({
+            "id": p.id,
+            "employee_id": p.employee_id,
+            "punch_type": p.punch_type,
+            "raw_timestamp": p.timestamp.isoformat(),
+            "formatted_time": p.timestamp.strftime("%Y-%m-%d %I:%M:%S %p"),
+            "address": p.address or " Pasig, Metro Manila",
+            "latitude": p.latitude,
+            "longitude": p.longitude
+        })
+    return result
 
 @app.post("/api/admin/dtr")
 def create_dtr_entry(req: CreatePunchAdminRequest, db: Session = Depends(get_db)):
@@ -232,27 +246,7 @@ def create_dtr_entry(req: CreatePunchAdminRequest, db: Session = Depends(get_db)
     db.add(punch)
     db.commit()
     db.refresh(punch)
-    return {"status": "created", "punch": punch}
-
-@app.put("/api/admin/dtr/{punch_id}")
-def update_dtr_entry(punch_id: int, req: EditPunchRequest, db: Session = Depends(get_db)):
-    punch = db.query(models.TimePunch).filter(models.TimePunch.id == punch_id).first()
-    if not punch:
-        raise HTTPException(status_code=404, detail="Punch record not found")
-
-    try:
-        ts = datetime.fromisoformat(req.timestamp).replace(tzinfo=None)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid ISO timestamp format")
-
-    punch.punch_type = req.punch_type
-    punch.timestamp = ts
-    if req.address:
-        punch.address = req.address
-
-    db.commit()
-    db.refresh(punch)
-    return {"status": "updated", "punch": punch}
+    return {"status": "created", "punch_id": punch.id}
 
 @app.delete("/api/admin/dtr/{punch_id}")
 def delete_dtr_entry(punch_id: int, db: Session = Depends(get_db)):
@@ -264,7 +258,6 @@ def delete_dtr_entry(punch_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"status": "deleted", "punch_id": punch_id}
 
-# --- CSV Export Endpoint ---
 @app.get("/api/admin/export/csv")
 def export_dtr_csv(employee_id: Optional[str] = None, db: Session = Depends(get_db)):
     query = db.query(models.TimePunch)
@@ -274,10 +267,10 @@ def export_dtr_csv(employee_id: Optional[str] = None, db: Session = Depends(get_
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["Punch ID", "Employee ID", "Punch Type", "Timestamp (GMT+8)", "Address", "Latitude", "Longitude"])
+    writer.writerow(["Punch ID", "Employee ID", "Punch Type", "Timestamp", "Address", "Latitude", "Longitude"])
 
     for p in punches:
-        formatted_ts = p.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+        formatted_ts = p.timestamp.strftime("%Y-%m-%d %I:%M:%S %p")
         writer.writerow([p.id, p.employee_id, p.punch_type, formatted_ts, p.address, p.latitude, p.longitude])
 
     response = Response(content=output.getvalue(), media_type="text/csv")
@@ -285,7 +278,7 @@ def export_dtr_csv(employee_id: Optional[str] = None, db: Session = Depends(get_
     response.headers["Content-Disposition"] = f"attachment; filename={filename}"
     return response
 
-# --- Mobile & Desktop Responsive Web Admin Portal (GMT+8 Manila Time) ---
+# --- Modernized & Responsive Super Admin Web Portal ---
 @app.get("/admin", response_class=HTMLResponse)
 def admin_dashboard_ui():
     html_content = """
@@ -294,79 +287,214 @@ def admin_dashboard_ui():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>HRIS Super Admin Web Portal (GMT+8)</title>
+        <title>HRIS Administration Portal</title>
         <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <style>
+            body { font-family: 'Inter', sans-serif; }
+        </style>
     </head>
-    <body class="bg-slate-100 text-slate-800 antialiased min-h-screen">
-        <nav class="bg-blue-600 text-white p-4 shadow-md flex justify-between items-center">
-            <div>
-                <h1 class="text-xl font-bold">HRIS Super Admin Portal</h1>
-                <p class="text-xs text-blue-100">Timezone: Asia/Manila (GMT+8 / PHT)</p>
-            </div>
-            <a href="/api/admin/export/csv" class="bg-green-500 hover:bg-green-600 px-3 py-2 rounded text-sm font-semibold transition">Export CSV</a>
-        </nav>
+    <body class="bg-slate-50 text-slate-900 min-h-screen antialiased">
 
-        <main class="max-w-6xl mx-auto p-4 md:p-6 space-y-6">
-            <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
-                <h2 class="text-lg font-bold mb-4 text-slate-700">Add Manual DTR Entry (GMT+8)</h2>
-                <form id="addForm" class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <input type="text" id="addEmpId" placeholder="Employee ID (e.g., 3286)" required class="border p-2 rounded text-sm">
-                    <select id="addType" class="border p-2 rounded text-sm">
-                        <option value="CLOCK_IN">CLOCK_IN</option>
-                        <option value="CLOCK_OUT">CLOCK_OUT</option>
-                    </select>
-                    <input type="datetime-local" id="addTime" required class="border p-2 rounded text-sm">
-                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded text-sm transition">Create Entry</button>
+        <!-- Login Overlay Guard -->
+        <div id="loginOverlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-xl border border-slate-100 max-w-sm w-full p-6 space-y-5">
+                <div class="text-center space-y-1">
+                    <div class="w-12 h-12 bg-blue-600 text-white rounded-xl mx-auto flex items-center justify-center font-bold text-xl shadow-lg shadow-blue-500/30">H</div>
+                    <h2 class="text-xl font-bold text-slate-800">Admin Sign In</h2>
+                    <p class="text-xs text-slate-500">Enter Super Admin ID to unlock portal</p>
+                </div>
+                <form id="adminLoginForm" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Admin ID</label>
+                        <input type="text" id="adminIdInput" value="ADMIN" placeholder="e.g. ADMIN" required class="w-full border border-slate-200 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Password</label>
+                        <input type="password" id="adminPassInput" value="password123" required class="w-full border border-slate-200 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg text-sm transition shadow-sm">Authenticate</button>
                 </form>
             </div>
+        </div>
 
-            <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200 overflow-x-auto">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-lg font-bold text-slate-700">DTR Audit Records</h2>
-                    <button onclick="loadPunches()" class="text-sm bg-slate-200 hover:bg-slate-300 px-3 py-1 rounded">Refresh</button>
+        <!-- Main Workspace (Hidden until Auth) -->
+        <div id="adminWorkspace" class="hidden min-h-screen flex flex-col">
+            <!-- Navigation Header -->
+            <header class="bg-white border-b border-slate-200 sticky top-0 z-30">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-9 h-9 bg-blue-600 text-white rounded-lg flex items-center justify-center font-bold text-lg shadow-sm">H</div>
+                        <div>
+                            <h1 class="text-base font-bold text-slate-800 leading-tight">HRIS Portal</h1>
+                            <p class="text-xs text-slate-500">Super Admin Workspace</p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center gap-3">
+                        <a href="/api/admin/export/csv" class="inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition shadow-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d=" "></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                            Export CSV
+                        </a>
+                        <button onclick="logoutAdmin()" class="text-slate-400 hover:text-slate-600 p-2 rounded-lg transition">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                        </button>
+                    </div>
                 </div>
-                <table class="w-full text-left text-sm border-collapse">
-                    <thead>
-                        <tr class="bg-slate-50 border-b">
-                            <th class="p-3">ID</th>
-                            <th class="p-3">Employee</th>
-                            <th class="p-3">Type</th>
-                            <th class="p-3">Timestamp (GMT+8)</th>
-                            <th class="p-3">Location</th>
-                            <th class="p-3">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="dtrTableBody">
-                        <tr><td colspan="6" class="p-4 text-center text-slate-400">Loading records...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </main>
+            </header>
+
+            <!-- Dashboard Content -->
+            <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+                <!-- Manual Insertion Card -->
+                <div class="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <h2 class="text-sm font-bold text-slate-800 uppercase tracking-wider">Manual DTR Entry</h2>
+                        <span class="text-xs bg-blue-50 text-blue-700 font-semibold px-2.5 py-1 rounded-full">RBAC Override</span>
+                    </div>
+                    
+                    <form id="addForm" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 mb-1">Employee ID</label>
+                            <input type="text" id="addEmpId" placeholder="e.g. 3286" required class="w-full border border-slate-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 mb-1">Punch Type</label>
+                            <select id="addType" class="w-full border border-slate-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                <option value="CLOCK_IN">CLOCK_IN</option>
+                                <option value="CLOCK_OUT">CLOCK_OUT</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 mb-1">Date & Time</label>
+                            <input type="datetime-local" id="addTime" required class="w-full border border-slate-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        </div>
+
+                        <div class="flex items-end">
+                            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg text-sm transition shadow-sm">
+                                Create Entry
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Audit Log Table Card -->
+                <div class="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
+                    <div class="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
+                        <div>
+                            <h2 class="text-sm font-bold text-slate-800 uppercase tracking-wider">DTR Audit Records</h2>
+                            <p class="text-xs text-slate-500">Live attendance database logs</p>
+                        </div>
+                        <button onclick="loadPunches()" class="inline-flex items-center gap-1 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                            Refresh
+                        </button>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs font-bold uppercase tracking-wider">
+                                    <th class="p-3.5 pl-5">ID</th>
+                                    <th class="p-3.5">Employee</th>
+                                    <th class="p-3.5">Type</th>
+                                    <th class="p-3.5">Timestamp</th>
+                                    <th class="p-3.5">Location</th>
+                                    <th class="p-3.5 pr-5 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dtrTableBody" class="divide-y divide-slate-100">
+                                <tr><td colspan="6" class="p-6 text-center text-slate-400 text-xs">Loading audit records...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </main>
+        </div>
 
         <script>
-            const API_BASE = "/api/admin";
+            const API_BASE = "/api";
+
+            // Initialize Form Date Default
+            const now = new Date();
+            now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+            document.getElementById('addTime').value = now.toISOString().slice(0, 16);
+
+            document.getElementById("adminLoginForm").addEventListener("submit", async (e) => {
+                e.preventDefault();
+                const empId = document.getElementById("adminIdInput").value;
+                const pass = document.getElementById("adminPassInput").value;
+
+                try {
+                    const res = await fetch(`${API_BASE}/login`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ employee_id: empId, password: pass })
+                    });
+
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.role === "super_admin") {
+                            document.getElementById("loginOverlay").classList.add("hidden");
+                            document.getElementById("adminWorkspace").classList.remove("hidden");
+                            loadPunches();
+                        } else {
+                            alert("Access Denied: Super Admin permissions required.");
+                        }
+                    } else {
+                        alert("Invalid Administrator Credentials");
+                    }
+                } catch (err) {
+                    alert("Unable to connect to HRIS Backend Server.");
+                }
+            });
+
+            function logoutAdmin() {
+                document.getElementById("adminWorkspace").classList.add("hidden");
+                document.getElementById("loginOverlay").classList.remove("hidden");
+            }
 
             async function loadPunches() {
-                const res = await fetch(`${API_BASE}/dtr`);
-                const data = await res.json();
-                const tbody = document.getElementById("dtrTableBody");
-                tbody.innerHTML = "";
+                try {
+                    const res = await fetch(`${API_BASE}/admin/dtr`);
+                    const data = await res.json();
+                    const tbody = document.getElementById("dtrTableBody");
+                    tbody.innerHTML = "";
 
-                data.forEach(p => {
-                    const row = document.createElement("tr");
-                    row.className = "border-b hover:bg-slate-50";
-                    row.innerHTML = `
-                        <td class="p-3 font-mono text-xs">${p.id}</td>
-                        <td class="p-3 font-bold">${p.employee_id}</td>
-                        <td class="p-3"><span class="px-2 py-1 text-xs rounded font-bold ${p.punch_type === 'CLOCK_IN' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${p.punch_type}</span></td>
-                        <td class="p-3 text-xs font-mono">${p.timestamp.replace('T', ' ')}</td>
-                        <td class="p-3 text-xs text-slate-500">${p.address || 'N/A'}</td>
-                        <td class="p-3 space-x-2">
-                            <button onclick="deletePunch(${p.id})" class="text-xs bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded">Delete</button>
-                        </td>
-                    `;
-                    tbody.appendChild(row);
-                });
+                    if (data.length === 0) {
+                        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400 text-xs">No attendance records found.</td></tr>`;
+                        return;
+                    }
+
+                    data.forEach(p => {
+                        const row = document.createElement("tr");
+                        row.className = "hover:bg-slate-50/80 transition";
+                        const isClockIn = p.punch_type === 'CLOCK_IN';
+
+                        row.innerHTML = `
+                            <td class="p-3.5 pl-5 font-mono text-xs text-slate-400">#${p.id}</td>
+                            <td class="p-3.5 font-bold text-slate-800">${p.employee_id}</td>
+                            <td class="p-3.5">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${isClockIn ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}">
+                                    ${p.punch_type}
+                                </span>
+                            </td>
+                            <td class="p-3.5 text-xs font-semibold text-slate-700 font-mono">${p.formatted_time}</td>
+                            <td class="p-3.5 text-xs text-slate-500">${p.address}</td>
+                            <td class="p-3.5 pr-5 text-right">
+                                <button onclick="deletePunch(${p.id})" class="text-xs font-semibold bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-2.5 py-1 rounded-md transition">
+                                    Delete
+                                </button>
+                            </td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                } catch (err) {
+                    console.log("Error loading punches:", err);
+                }
             }
 
             document.getElementById("addForm").addEventListener("submit", async (e) => {
@@ -375,14 +503,14 @@ def admin_dashboard_ui():
                 const type = document.getElementById("addType").value;
                 const timeVal = document.getElementById("addTime").value;
 
-                await fetch(`${API_BASE}/dtr`, {
+                await fetch(`${API_BASE}/admin/dtr`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         employee_id: empId,
                         punch_type: type,
                         timestamp: timeVal + ":00",
-                        address: "Manual Web Admin Entry"
+                        address: "Manual Admin Entry"
                     })
                 });
                 loadPunches();
@@ -390,12 +518,10 @@ def admin_dashboard_ui():
 
             async function deletePunch(id) {
                 if (confirm(`Delete DTR Entry #${id}?`)) {
-                    await fetch(`${API_BASE}/dtr/${id}`, { method: "DELETE" });
+                    await fetch(`${API_BASE}/admin/dtr/${id}`, { method: "DELETE" });
                     loadPunches();
                 }
             }
-
-            loadPunches();
         </script>
     </body>
     </html>
