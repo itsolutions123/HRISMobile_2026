@@ -1,299 +1,324 @@
-import React, { useState, useEffect, useContext } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Linking, ScrollView, Platform } from 'react-native';
+import React, { useState, useEffect, useContext, useCallback, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Modal, ScrollView } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
+import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../context/AuthContext';
 
-export default function DashboardScreen({ navigation }) {
+const JOB_LIST = ['IT Assistant', 'System Administrator', 'IT Head', 'Technical Support Specialist'];
+
+export default function DashboardScreen() {
   const { user, logout, API_BASE_URL } = useContext(AuthContext);
-  const [loading, setLoading] = useState(false);
-  const [initialSync, setInitialSync] = useState(true);
-  const [lastPunch, setLastPunch] = useState(null);
-  
-  // Shift Timer State
   const [isClockedIn, setIsClockedIn] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [gpsLoading, setGpsLoading] = useState(false);
+  
+  const [location, setLocation] = useState({
+    latitude: 14.5764,
+    longitude: 121.0851,
+  });
+  const [showJobModal, setShowJobModal] = useState(false);
+  const [selectedJob, setSelectedJob] = useState('System Administrator');
+  
+  const timerRef = useRef(null);
 
-  useEffect(() => {
-    fetchActivePunchState();
-  }, []);
+  const requestGpsLocation = async () => {
+    setGpsLoading(true);
+    try {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setGpsLoading(false);
+        return;
+      }
 
-  useEffect(() => {
-    let interval = null;
-    if (isClockedIn) {
-      interval = setInterval(() => {
-        setElapsedSeconds((prev) => prev + 1);
-      }, 1000);
-    } else {
-      clearInterval(interval);
+      // 1. Fast fallback: grab last known position immediately
+      let lastLoc = await Location.getLastKnownPositionAsync({});
+      if (lastLoc && lastLoc.coords) {
+        setLocation({
+          latitude: lastLoc.coords.latitude,
+          longitude: lastLoc.coords.longitude,
+        });
+      }
+
+      // 2. Fetch fresh high-accuracy position with 4-second timeout
+      const locPromise = Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('GPS Timeout')), 4000));
+
+      const freshLoc = await Promise.race([locPromise, timeoutPromise]);
+      if (freshLoc && freshLoc.coords) {
+        setLocation({
+          latitude: freshLoc.coords.latitude,
+          longitude: freshLoc.coords.longitude,
+        });
+      }
+    } catch (e) {
+      // Keep last known or fallback location
     }
-    return () => clearInterval(interval);
+    setGpsLoading(false);
+  };
+
+  const fetchStatus = useCallback(async () => {
+    if (!user || !user.employee_id) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/punch/active/${user.employee_id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setIsClockedIn(data.is_clocked_in);
+        setElapsedSeconds(data.is_clocked_in ? (data.elapsed_seconds || 0) : 0);
+      }
+    } catch (e) {}
+  }, [user, API_BASE_URL]);
+
+  useFocusEffect(useCallback(() => {
+    requestGpsLocation();
+    fetchStatus();
+    const poller = setInterval(fetchStatus, 4000);
+    return () => clearInterval(poller);
+  }, [fetchStatus]));
+
+  useEffect(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (isClockedIn) timerRef.current = setInterval(() => setElapsedSeconds(p => p + 1), 1000);
+    return () => clearInterval(timerRef.current);
   }, [isClockedIn]);
 
-  const fetchActivePunchState = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/punch/active/${user.employee_id}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.is_clocked_in) {
-          setIsClockedIn(true);
-          setElapsedSeconds(data.elapsed_seconds);
-          setLastPunch({
-            type: 'CLOCK_IN',
-            timestamp: new Date(data.clock_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            address: data.last_punch.address || 'Recorded Location',
-            lat: data.last_punch.latitude,
-            lng: data.last_punch.longitude,
-          });
-        } else if (data.last_punch) {
-          setIsClockedIn(false);
-          setLastPunch({
-            type: data.last_punch.punch_type,
-            timestamp: new Date(data.last_punch.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            address: data.last_punch.address || 'Recorded Location',
-            lat: data.last_punch.latitude,
-            lng: data.last_punch.longitude,
-          });
-        }
-      }
-    } catch (error) {
-      console.log('Error syncing shift state:', error);
-    } finally {
-      setInitialSync(false);
-    }
-  };
-
-  const formatTimer = (totalSeconds) => {
-    const hrs = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
-    const mins = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
-    const secs = (totalSeconds % 60).toString().padStart(2, '0');
-    return `${hrs}:${mins}:${secs}`;
-  };
-
-  const requestAndGetLocation = async () => {
-    let { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'Location permission is required.');
-      return null;
-    }
-
+  const submitPunch = async (jobName = selectedJob) => {
     setLoading(true);
+    setShowJobModal(false);
     try {
-      let location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      let addressStr = 'Location Captured';
-      try {
-        let geocode = await Location.reverseGeocodeAsync({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        });
-        if (geocode && geocode.length > 0) {
-          const item = geocode[0];
-          addressStr = [item.street, item.city || item.subregion].filter(Boolean).join(', ');
-        }
-      } catch (e) {
-        addressStr = `${location.coords.latitude.toFixed(4)}, ${location.coords.longitude.toFixed(4)}`;
-      }
-      setLoading(false);
-      return { ...location.coords, address: addressStr };
-    } catch (error) {
-      setLoading(false);
-      Alert.alert('Error', 'Unable to fetch location.');
-      return null;
-    }
-  };
-
-  const submitPunchToBackend = async (punchType, coordsData) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/punch`, {
+      const res = await fetch(`${API_BASE_URL}/api/punch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           employee_id: user.employee_id,
-          punch_type: punchType,
-          latitude: coordsData.latitude,
-          longitude: coordsData.longitude,
-          accuracy: coordsData.accuracy || 0,
-          address: coordsData.address,
+          punch_type: isClockedIn ? 'CLOCK_OUT' : 'CLOCK_IN',
+          latitude: location ? location.latitude : 14.5764,
+          longitude: location ? location.longitude : 121.0851,
+          accuracy: 10,
+          address: isClockedIn ? 'Shift Ended' : `Job: ${jobName}`,
         }),
       });
-
-      if (!response.ok) throw new Error('Failed to record punch');
-
-      const data = await response.json();
-      const punchTime = new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-      setLastPunch({
-        type: punchType,
-        timestamp: punchTime,
-        address: coordsData.address,
-        lat: coordsData.latitude,
-        lng: coordsData.longitude,
-      });
-
-      if (punchType === 'CLOCK_IN') {
-        setIsClockedIn(true);
-        setElapsedSeconds(0);
-      } else {
-        setIsClockedIn(false);
-        setElapsedSeconds(0);
-      }
-    } catch (error) {
-      Alert.alert('Sync Error', error.message);
+      if (res.ok) await fetchStatus();
+    } catch (e) {
+      Alert.alert('Error', 'Failed to connect to backend server.');
     }
+    setLoading(false);
   };
 
-  const handleActionToggle = async () => {
-    const coordsData = await requestAndGetLocation();
-    if (coordsData) {
-      await submitPunchToBackend(isClockedIn ? 'CLOCK_OUT' : 'CLOCK_IN', coordsData);
-    }
+  const formatTime = (ts) => {
+    const h = String(Math.floor(ts / 3600)).padStart(2, '0');
+    const m = String(Math.floor((ts % 3600) / 60)).padStart(2, '0');
+    const s = String(ts % 60).padStart(2, '0');
+    return `${h}:${m}:${s}`;
   };
 
-  if (initialSync) {
+  const leafletHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+      <style>
+        body, html, #map { height: 100%; width: 100%; margin: 0; padding: 0; background-color: #e2e8f0; }
+      </style>
+    </head>
+    <body>
+      <div id="map"></div>
+      <script>
+        var map = L.map('map', { zoomControl: false, attributionControl: false }).setView([${location.latitude}, ${location.longitude}], 16);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+        L.marker([${location.latitude}, ${location.longitude}]).addTo(map);
+      </script>
+    </body>
+    </html>
+  `;
+
+  if (isClockedIn) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#2563eb" />
+      <View style={styles.activeShiftContainer}>
+        <View style={styles.topBar}>
+          <TouchableOpacity onPress={logout}><Ionicons name="arrow-back" size={24} color="#000" /></TouchableOpacity>
+          <Text style={styles.topBarTitle}>Head Office</Text>
+          <Ionicons name="calendar-outline" size={24} color="#eab308" />
+        </View>
+
+        <View style={styles.activeCard}>
+          <View style={styles.jobPill}>
+            <Text style={styles.jobPillText}>HO IT - {selectedJob}</Text>
+          </View>
+          <Text style={styles.activeTimer}>{formatTime(elapsedSeconds)}</Text>
+          <View style={styles.locRow}>
+            <Ionicons name="location" size={14} color="#fff" />
+            <Text style={styles.locText}>Clocked in at: GPS Pin {location?.latitude.toFixed(4)}</Text>
+          </View>
+          <View style={styles.cardFooter}>
+            <Text style={styles.footerText}>Total work hours today</Text>
+            <Text style={styles.footerText}>{formatTime(elapsedSeconds)}</Text>
+          </View>
+        </View>
+
+        <View style={styles.tabRow}>
+          <Text style={styles.activeTab}>Attachments</Text>
+          <Text style={styles.inactiveTab}>My day log</Text>
+        </View>
+
+        <ScrollView style={styles.detailsList}>
+          <Text style={styles.detailsTitle}>Details to Add (3)</Text>
+          {['Time In', 'OB Form', 'Add a note'].map((item, i) => (
+            <View key={i} style={styles.detailItem}>
+              <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
+                <Ionicons name="create-outline" size={18} color="#64748b" />
+                <Text style={styles.detailText}>{item}</Text>
+              </View>
+              <TouchableOpacity style={styles.uploadBtn}><Text style={styles.uploadText}>{item === 'OB Form' ? 'Add a file' : 'Upload'}</Text></TouchableOpacity>
+            </View>
+          ))}
+        </ScrollView>
+
+        <View style={styles.bottomActions}>
+          <TouchableOpacity style={styles.switchJobBtn}><Text style={styles.switchJobText}>Switch Job</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.endShiftBtn} onPress={() => submitPunch()} disabled={loading}>
+            {loading ? <ActivityIndicator color="#fff"/> : <Text style={styles.endShiftText}>End Shift</Text>}
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Header Profile Greeting */}
-      <View style={styles.headerRow}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{user.name ? user.name.charAt(0) : 'E'}</Text>
+    <View style={styles.container}>
+      <View style={styles.headerAbsolute}>
+        <View style={styles.headerInfo}>
+          <View style={styles.avatar}><Text style={{color:'#fff'}}>{user?.name?.charAt(0) || 'U'}</Text></View>
+          <View>
+            <Text style={styles.greeting}>Good day, {user?.name}</Text>
+            <Text style={styles.subGreeting}>{user?.position} • {user?.department}</Text>
+          </View>
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.greetingText}>Good day, {user.name || 'Employee'}</Text>
-          <Text style={styles.subGreeting}>{user.position || 'Staff'} · {user.department}</Text>
-        </View>
-        <TouchableOpacity style={styles.logoutIconButton} onPress={logout}>
-          <Ionicons name="log-out-outline" size={22} color="#64748b" />
+        <TouchableOpacity onPress={requestGpsLocation} style={styles.recenterBtn}>
+          {gpsLoading ? <ActivityIndicator size="small" color="#2563eb" /> : <Ionicons name="locate" size={22} color="#2563eb" />}
         </TouchableOpacity>
       </View>
 
-      {/* Connecteams Style Quick Action Modules */}
-      <View style={styles.quickGrid}>
-        <TouchableOpacity style={[styles.gridCard, { backgroundColor: '#eff6ff' }]} onPress={() => navigation.navigate('Timesheet')}>
-          <View style={[styles.gridIconCircle, { backgroundColor: '#dbeafe' }]}>
-            <Ionicons name="time" size={20} color="#2563eb" />
-          </View>
-          <Text style={styles.gridLabel}>Time Clock</Text>
-        </TouchableOpacity>
+      <WebView
+        key={`${location.latitude}-${location.longitude}`}
+        style={styles.mapFullscreen}
+        originWhitelist={['*']}
+        source={{ html: leafletHtml }}
+        scrollEnabled={false}
+      />
 
-        <TouchableOpacity style={[styles.gridCard, { backgroundColor: '#f0fdf4' }]} onPress={() => navigation.navigate('Timesheet')}>
-          <View style={[styles.gridIconCircle, { backgroundColor: '#dcfce7' }]}>
-            <Ionicons name="calendar" size={20} color="#166534" />
-          </View>
-          <Text style={styles.gridLabel}>Timesheet</Text>
-        </TouchableOpacity>
-
-        {user.role === 'manager' && (
-          <TouchableOpacity style={[styles.gridCard, { backgroundColor: '#fef2f2' }]} onPress={() => navigation.navigate('Manager')}>
-            <View style={[styles.gridIconCircle, { backgroundColor: '#fecaca' }]}>
-              <Ionicons name="people" size={20} color="#991b1b" />
-            </View>
-            <Text style={styles.gridLabel}>Oversight</Text>
+      <View style={styles.bottomDrawer}>
+        <View style={styles.clockBtnWrapper}>
+          <TouchableOpacity style={styles.bigClockBtn} onPress={() => setShowJobModal(true)}>
+            <Ionicons name="stopwatch-outline" size={36} color="#ffffff" />
+            <Text style={styles.bigClockText}>Clock in</Text>
           </TouchableOpacity>
-        )}
+        </View>
+        
+        <View style={styles.drawerActions}>
+          <TouchableOpacity style={styles.drawerActionBtn}>
+            <Ionicons name="checkmark-circle-outline" size={24} color="#f59e0b" />
+            <Text style={styles.actionText}>My requests</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.drawerActionBtn}>
+            <Ionicons name="calendar-outline" size={24} color="#3b82f6" />
+            <Text style={styles.actionText}>Timesheet</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Connecteams Minimal Active Shift Widget */}
-      <View style={[styles.shiftCard, isClockedIn ? styles.shiftActiveCard : styles.shiftInactiveCard]}>
-        <Text style={[styles.timerDisplay, isClockedIn ? styles.timerActiveText : styles.timerInactiveText]}>
-          {formatTimer(elapsedSeconds)}
-        </Text>
-        
-        <Text style={styles.shiftDetails}>
-          {user.department} · {user.position || 'Staff'} {lastPunch ? `· Started at ${lastPunch.timestamp}` : ''}
-        </Text>
+      {/* JOB SELECTION MODAL */}
+      <Modal visible={showJobModal} transparent animationType="slide">
+        <View style={styles.modalBg}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setShowJobModal(false)}><Ionicons name="arrow-back" size={24} color="#000" /></TouchableOpacity>
+              <Text style={styles.modalTitle}>HO IT</Text>
+              <View style={{width: 24}}/>
+            </View>
+            
+            <View style={styles.searchBar}>
+              <Text style={{color:'#94a3b8'}}>Search</Text>
+              <Ionicons name="search" size={18} color="#94a3b8" />
+            </View>
 
-        {lastPunch && (
-          <View style={styles.locationPill}>
-            <Ionicons name="location-sharp" size={13} color="#64748b" />
-            <Text style={styles.locationPillText} numberOfLines={1}>{lastPunch.address}</Text>
+            <ScrollView style={{width: '100%'}}>
+              {JOB_LIST.map((job, idx) => (
+                <TouchableOpacity key={idx} style={styles.jobRow} onPress={() => { setSelectedJob(job); submitPunch(job); }}>
+                  <View style={styles.jobDot}/>
+                  <Text style={styles.jobText}>{job}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            
+            <TouchableOpacity style={styles.cancelModalBtn} onPress={() => setShowJobModal(false)}>
+              <Text style={styles.cancelModalText}>Cancel</Text>
+            </TouchableOpacity>
           </View>
-        )}
-
-        <TouchableOpacity
-          style={[styles.actionButton, isClockedIn ? styles.actionOutButton : styles.actionInButton]}
-          onPress={handleActionToggle}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color={isClockedIn ? "#991b1b" : "#ffffff"} />
-          ) : (
-            <Text style={[styles.actionButtonText, isClockedIn ? styles.actionOutText : styles.actionInText]}>
-              {isClockedIn ? 'CLOCK OUT' : 'CLOCK IN'}
-            </Text>
-          )}
-        </TouchableOpacity>
-      </View>
-
-      {/* Connecteams Style Weekly Summary Chart Widget */}
-      <View style={styles.sectionCard}>
-        <Text style={styles.sectionTitle}>Weekly Hours</Text>
-        
-        <View style={styles.chartRow}>
-          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, idx) => {
-            const isFilled = idx < 5;
-            return (
-              <View key={day} style={styles.barColumn}>
-                <View style={styles.barTrack}>
-                  <View style={[styles.barFill, { height: isFilled ? '80%' : '0%' }]} />
-                </View>
-                <Text style={styles.barLabel}>{day}</Text>
-              </View>
-            );
-          })}
         </View>
+      </Modal>
 
-        <View style={styles.chartFooter}>
-          <Text style={styles.chartFooterLabel}>Total hours this week</Text>
-          <Text style={styles.chartFooterValue}>32:15</Text>
-        </View>
-      </View>
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc', padding: 16 },
-  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' },
-  headerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 12 },
-  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#2563eb', justifyContent: 'center', alignItems: 'center' },
-  avatarText: { color: '#ffffff', fontWeight: 'bold', fontSize: 18 },
-  greetingText: { fontSize: 18, fontWeight: '700', color: '#0f172a' },
-  subGreeting: { fontSize: 12, color: '#64748b' },
-  logoutIconButton: { padding: 8 },
-  quickGrid: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  gridCard: { flex: 1, padding: 12, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#f1f5f9' },
-  gridIconCircle: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginBottom: 6 },
-  gridLabel: { fontSize: 11, fontWeight: '600', color: '#334155' },
-  shiftCard: { borderRadius: 16, padding: 20, alignItems: 'center', marginBottom: 16, borderWidth: 1, borderColor: '#e2e8f0' },
-  shiftActiveCard: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' },
-  shiftInactiveCard: { backgroundColor: '#ffffff' },
-  timerDisplay: { fontSize: 38, fontWeight: '800', marginBottom: 4, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' },
-  timerActiveText: { color: '#2563eb' },
-  timerInactiveText: { color: '#475569' },
-  shiftDetails: { fontSize: 12, color: '#64748b', marginBottom: 8, textAlign: 'center' },
-  locationPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#ffffff', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginBottom: 16, borderWidth: 1, borderColor: '#e2e8f0' },
-  locationPillText: { fontSize: 12, color: '#475569' },
-  actionButton: { width: '100%', paddingVertical: 14, borderRadius: 10, alignItems: 'center' },
-  actionInButton: { backgroundColor: '#2563eb' },
-  actionOutButton: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#fecaca' },
-  actionButtonText: { fontWeight: '700', fontSize: 15 },
-  actionInText: { color: '#ffffff' },
-  actionOutText: { color: '#dc2626' },
-  sectionCard: { backgroundColor: '#ffffff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#f1f5f9', marginBottom: 24 },
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#0f172a', marginBottom: 16 },
-  chartRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', height: 100, marginBottom: 16, paddingHorizontal: 8 },
-  barColumn: { alignItems: 'center', gap: 6 },
-  barTrack: { width: 24, height: 80, backgroundColor: '#f1f5f9', borderRadius: 6, justifyContent: 'flex-end', overflow: 'hidden' },
-  barFill: { width: '100%', backgroundColor: '#3b82f6', borderRadius: 6 },
-  barLabel: { fontSize: 11, color: '#94a3b8', fontWeight: '500' },
-  chartFooter: { flexDirection: 'row', justifyContent: 'space-between', paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9' },
-  chartFooterLabel: { fontSize: 13, color: '#64748b', fontWeight: '500' },
-  chartFooterValue: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
+  container: { flex: 1, backgroundColor: '#f1f5f9' },
+  headerAbsolute: { position: 'absolute', top: 40, left: 20, right: 20, zIndex: 10, flexDirection: 'row', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.95)', padding: 12, borderRadius: 16, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 6, elevation: 5 },
+  headerInfo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#1e3a8a', alignItems: 'center', justifyContent: 'center' },
+  greeting: { fontWeight: '700', fontSize: 15, color: '#0f172a' },
+  subGreeting: { fontSize: 11, color: '#64748b' },
+  recenterBtn: { padding: 6, borderRadius: 12, backgroundColor: '#eff6ff' },
+  mapFullscreen: { flex: 1, width: '100%' },
+  bottomDrawer: { position: 'absolute', bottom: 0, width: '100%', backgroundColor: '#ffffff', borderTopLeftRadius: 30, borderTopRightRadius: 30, paddingBottom: 30, paddingTop: 60, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, elevation: 10 },
+  clockBtnWrapper: { position: 'absolute', top: -70, alignSelf: 'center', backgroundColor: '#f1f5f9', borderRadius: 80, padding: 10 },
+  bigClockBtn: { width: 140, height: 140, borderRadius: 70, backgroundColor: '#3b82f6', alignItems: 'center', justifyContent: 'center', shadowColor: '#3b82f6', shadowOpacity: 0.4, shadowRadius: 10, elevation: 8 },
+  bigClockText: { color: '#ffffff', fontWeight: '700', fontSize: 18, marginTop: 4 },
+  drawerActions: { flexDirection: 'row', width: '100%', justifyContent: 'space-around', marginTop: 20 },
+  drawerActionBtn: { alignItems: 'center', gap: 6 },
+  actionText: { fontSize: 12, color: '#334155' },
+  
+  // Shift Active View
+  activeShiftContainer: { flex: 1, backgroundColor: '#ffffff', paddingTop: 50 },
+  topBar: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 20, alignItems: 'center' },
+  topBarTitle: { fontSize: 16, fontWeight: '700' },
+  activeCard: { backgroundColor: '#0ea5e9', marginHorizontal: 20, borderRadius: 20, padding: 20, alignItems: 'center' },
+  jobPill: { backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 16, paddingVertical: 4, borderRadius: 20, marginBottom: 12 },
+  jobPillText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  activeTimer: { fontSize: 48, fontWeight: '800', color: '#fff', marginBottom: 12 },
+  locRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 20 },
+  locText: { color: '#e0f2fe', fontSize: 12 },
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', borderTopWidth: 1, borderColor: 'rgba(255,255,255,0.2)', paddingTop: 12 },
+  footerText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  tabRow: { flexDirection: 'row', paddingHorizontal: 20, marginTop: 20, borderBottomWidth: 1, borderColor: '#e2e8f0' },
+  activeTab: { fontWeight: '700', borderBottomWidth: 2, borderColor: '#0ea5e9', paddingBottom: 10, marginRight: 20 },
+  inactiveTab: { color: '#64748b', paddingBottom: 10 },
+  detailsList: { flex: 1, padding: 20 },
+  detailsTitle: { fontSize: 16, fontWeight: '700', marginBottom: 16 },
+  detailItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderColor: '#f1f5f9' },
+  detailText: { fontSize: 14, color: '#334155' },
+  uploadBtn: { borderWidth: 1, borderColor: '#cbd5e1', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
+  uploadText: { fontSize: 12, color: '#64748b' },
+  bottomActions: { flexDirection: 'row', padding: 20, gap: 12, borderTopWidth: 1, borderColor: '#f1f5f9' },
+  switchJobBtn: { flex: 1, backgroundColor: '#f1f5f9', height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  switchJobText: { color: '#3b82f6', fontWeight: '700' },
+  endShiftBtn: { flex: 1.5, backgroundColor: '#ef4444', height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  endShiftText: { color: '#fff', fontWeight: '700' },
+
+  // Modal
+  modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalSheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, height: '70%', alignItems: 'center' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 20 },
+  modalTitle: { fontSize: 16, fontWeight: '700' },
+  searchBar: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: '#f1f5f9', width: '100%', padding: 12, borderRadius: 12, marginBottom: 20 },
+  jobRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 16, borderBottomWidth: 1, borderColor: '#f1f5f9', width: '100%' },
+  jobDot: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#3b82f6' },
+  jobText: { fontSize: 15, color: '#334155' },
+  cancelModalBtn: { marginTop: 20, borderWidth: 1, borderColor: '#cbd5e1', paddingVertical: 12, width: '100%', borderRadius: 12, alignItems: 'center' },
+  cancelModalText: { color: '#64748b', fontWeight: '700' }
 });
