@@ -1,5 +1,4 @@
 import React, { createContext, useState } from 'react';
-import { Alert } from 'react-native';
 
 export const AuthContext = createContext();
 
@@ -9,7 +8,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (employeeId, password, department) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/login`, {
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ employee_id: employeeId, password }),
@@ -19,9 +18,12 @@ export const AuthProvider = ({ children }) => {
         throw new Error('Invalid Employee ID or Password');
       }
 
-      const userData = await response.json();
-      setUser(userData);
-      return true;
+      const data = await response.json();
+      if (data.status === 'success' && data.user) {
+        setUser(data.user);
+        return true;
+      }
+      return false;
     } catch (error) {
       console.log('Login Error:', error.message);
       return false;
