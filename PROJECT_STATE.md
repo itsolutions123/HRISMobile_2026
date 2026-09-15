@@ -37,7 +37,11 @@ Last updated: September 15, 2026
 - [x] GPS Clock In/Out Core Backend (`POST /api/punch`, `GET /api/punch/active/{employee_id}`, duplicate rejection validation, mock location detection flags, PST timestamping)
 - [x] Manager & Scheduling Backend (`/api/manager/team`, `/api/manager/schedules`, `/api/manager/revisions`)
 - [x] DTR Engine & Computation API (`app/dtr_engine.py`, `GET /api/dtr/summary/{employee_id}`, `GET /api/dtr/export`)
-- [x] Schema alteration (`ALTER TABLE schedules ADD COLUMN IF NOT EXISTS group_id...`)
+- [x] Mobile User Registration with separate First Name, Last Name, Suffix, Email, Password, Department, and Mobile Phone.
+- [x] Mobile "Remember password on this device" credentials caching via `AsyncStorage`.
+- [x] Web Admin Users & Directory enhancements: Live Search, Department/Role/Status filters, Date Added column, Editable Employee ID, Offcanvas Profile Drawer Editor, Archive User Retention, and Bootstrap Toast feedback.
+- [x] Mobile DTR Shift Review modal on Clock Out with "Edit Shift" revision requests sent to the user's manager for approval.
+- [x] Mobile Timesheet Screen calendar date filtering, 12-hour AM/PM time formatting, and direct shift edit request action.
 
 ## In Progress / Ready for Next Steps
-- [ ] DTR Timesheet verification with mock punch data & mobile frontend timesheet integration (`TimesheetScreen.js`)
+- [ ] Manager Approval Dashboard view for reviewing team DTR shift revision requests on mobile/web.
