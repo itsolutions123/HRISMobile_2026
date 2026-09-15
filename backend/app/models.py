@@ -20,6 +20,9 @@ class Employee(Base):
     gender = Column(String, nullable=True)
     civil_status = Column(String, nullable=True)
     agency = Column(String, nullable=True)
+    kiosk_code = Column(String, nullable=True)
+    role = Column(String, default="Employee", nullable=False)  # 'Employee', 'Manager', 'Admin'
+    manager_id = Column(String, ForeignKey("employees.employee_id"), nullable=True)
 
 class JobCategory(Base):
     __tablename__ = "job_categories"
@@ -46,9 +49,31 @@ class PunchLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     employee_id = Column(String, index=True, nullable=False)
-    punch_type = Column(String, nullable=False)
+    punch_type = Column(String, nullable=False)  # CLOCK_IN, CLOCK_OUT, BREAK_IN, BREAK_OUT
     timestamp = Column(DateTime, default=datetime.utcnow)
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
     accuracy = Column(Float, nullable=True)
     address = Column(String, nullable=True)
+    job_sub_item_id = Column(Integer, ForeignKey("job_sub_items.id"), nullable=True)
+
+class Schedule(Base):
+    __tablename__ = "schedules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(String, ForeignKey("employees.employee_id"), nullable=False)
+    day_of_week = Column(Integer, nullable=False)  # 0=Monday, 6=Sunday
+    shift_start = Column(String, nullable=False)   # HH:MM format
+    shift_end = Column(String, nullable=False)     # HH:MM format
+    break_duration_mins = Column(Integer, default=60)
+
+class LeaveRequest(Base):
+    __tablename__ = "leave_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(String, ForeignKey("employees.employee_id"), nullable=False)
+    leave_type = Column(String, nullable=False)    # Sick, Vacation, etc.
+    start_date = Column(DateTime, nullable=False)
+    end_date = Column(DateTime, nullable=False)
+    status = Column(String, default="PENDING", nullable=False)  # PENDING, APPROVED, REJECTED
+    approved_by = Column(String, ForeignKey("employees.employee_id"), nullable=True)
