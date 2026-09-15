@@ -1,1167 +1,652 @@
-import os
-import csv
-import io
-from datetime import datetime
-from zoneinfo import ZoneInfo
-from fastapi import FastAPI, Depends, HTTPException, Query, Response
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
-from sqlalchemy import create_engine, desc
-from sqlalchemy.orm import sessionmaker, Session
-from pydantic import BaseModel
-from typing import Optional, List
-from collections import defaultdict
-from . import models
+from .database import engine, Base, SessionLocal
+from .models import JobCategory, JobSubItem, Employee, PunchLog
+from .routers import auth, punch, jobs
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://hrisuser:hrispassword@hris-db:5432/hrisdb")
-MANILA_TZ = ZoneInfo("Asia/Manila")
+Base.metadata.create_all(bind=engine)
 
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+app = FastAPI(title="HRIS DTR Backend API")
 
-models.Base.metadata.create_all(bind=engine)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-app = FastAPI(title="HRIS Enterprise API", version="4.0.0")
+app.include_router(auth.router)
+app.include_router(punch.router)
+app.include_router(jobs.router)
 
-MAX_SHIFT_SECONDS = 20 * 3600
-
-def get_db():
+@app.on_event("startup")
+def seed_initial_data():
     db = SessionLocal()
     try:
-        yield db
+        existing_user = db.query(Employee).filter(Employee.employee_id == "3286").first()
+        if not existing_user:
+            test_user = Employee(
+                employee_id="3286",
+                name="Jaypee Balonzo",
+                first_name="Jaypee",
+                last_name="Balonzo",
+                position="IT System Administrator",
+                department="Admin",
+                password_hash="bigtime@123",
+                mobile_phone="+63 998 940 0957",
+                email="itsupport.associate@bigtimeempire.com"
+            )
+            db.add(test_user)
+            db.commit()
+
+        if db.query(JobCategory).count() == 0:
+            default_cat = JobCategory(name="HO IT", code="HO-IT", description="Head Office IT Department")
+            db.add(default_cat)
+            db.commit()
+            db.refresh(default_cat)
+
+            roles = ['IT Assistant', 'System Administrator', 'IT Head', 'Technical Support Specialist']
+            for role in roles:
+                db.add(JobSubItem(category_id=default_cat.id, name=role))
+            db.commit()
+    except Exception as e:
+        print(f"Startup Seeding Exception: {e}")
     finally:
         db.close()
 
-def get_now_manila():
-    return datetime.now(MANILA_TZ)
-
-# --- Schemas ---
-class LoginRequest(BaseModel):
-    employee_id: str
-    password: str
-
-class UserCreateRequest(BaseModel):
-    employee_id: str
-    name: str
-    department: str
-    position: str
-    role: str
-    password: str
-
-class UserUpdateRequest(BaseModel):
-    new_employee_id: Optional[str] = None
-    name: str
-    department: str
-    position: str
-    role: str
-    password: Optional[str] = None
-
-class PunchRequest(BaseModel):
-    employee_id: str
-    punch_type: str
-    latitude: float
-    longitude: float
-    accuracy: float
-    address: Optional[str] = None
-
-class ShiftEditSubmitRequest(BaseModel):
-    employee_id: str
-    requested_punch_type: str
-    requested_timestamp: str
-    reason: str
-
-class CreatePunchAdminRequest(BaseModel):
-    employee_id: str
-    punch_type: str
-    timestamp: str
-    latitude: float = 14.5764
-    longitude: float = 121.0851
-    address: Optional[str] = "Pasig, Metro Manila"
-
-# --- Health Check ---
-@app.get("/health")
-@app.get("/api/health")
+@app.get("/")
 def health_check():
-    return {"status": "online", "service": "HRIS FastAPI Backend", "version": "4.0.0"}
+    return {"status": "online", "service": "HRIS Backend", "admin_panel": "/admin"}
 
-@app.get("/api/departments")
-def get_departments(db: Session = Depends(get_db)):
-    db_depts = db.query(models.User.department).distinct().all()
-    dept_list = [d[0] for d in db_depts if d[0]]
-    defaults = ["Admin", "IT Operations", "Executive", "Operations", "Sales"]
-    for d in defaults:
-        if d not in dept_list:
-            dept_list.append(d)
-    return sorted(dept_list)
-
-@app.post("/api/login")
-def login(req: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.employee_id == req.employee_id).first()
-    if not user and req.employee_id.upper() in ["ADMIN", "SUPERADMIN", "SA-001"]:
-        user = models.User(
-            employee_id=req.employee_id.upper(),
-            name="System Administrator",
-            department="Executive",
-            position="Super Admin",
-            role="super_admin",
-            hashed_password="password123"
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-
-    if not user or user.hashed_password != req.password:
-        raise HTTPException(status_code=401, detail="Invalid Employee ID or Password")
-
-    return {
-        "employee_id": user.employee_id,
-        "name": user.name,
-        "department": user.department,
-        "position": user.position,
-        "role": user.role,
-        "token": f"hris-session-{user.employee_id}"
-    }
-
-# --- User Management API ---
-@app.get("/api/admin/users")
-def list_users(db: Session = Depends(get_db)):
-    return db.query(models.User).order_by(models.User.department.asc(), models.User.name.asc()).all()
-
-@app.post("/api/admin/users")
-def create_user(req: UserCreateRequest, db: Session = Depends(get_db)):
-    existing = db.query(models.User).filter(models.User.employee_id == req.employee_id).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Employee ID already exists")
-
-    user = models.User(
-        employee_id=req.employee_id,
-        name=req.name,
-        department=req.department,
-        position=req.position,
-        role=req.role,
-        hashed_password=req.password
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return {"status": "created", "user": user}
-
-@app.put("/api/admin/users/{employee_id}")
-def update_user(employee_id: str, req: UserUpdateRequest, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.employee_id == employee_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    if req.new_employee_id and req.new_employee_id != employee_id:
-        existing = db.query(models.User).filter(models.User.employee_id == req.new_employee_id).first()
-        if existing:
-            raise HTTPException(status_code=400, detail="New Employee ID already exists")
-        user.employee_id = req.new_employee_id
-
-    user.name = req.name
-    user.department = req.department
-    user.position = req.position
-    user.role = req.role
-    if req.password:
-        user.hashed_password = req.password
-
-    db.commit()
-    db.refresh(user)
-    return {"status": "updated", "user": user}
-
-@app.delete("/api/admin/users/{employee_id}")
-def delete_user(employee_id: str, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.employee_id == employee_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    db.delete(user)
-    db.commit()
-    return {"status": "deleted", "employee_id": employee_id}
-
-# --- Punch Endpoints ---
-@app.get("/api/punch/active/{employee_id}")
-def get_active_punch(employee_id: str, db: Session = Depends(get_db)):
-    last_punch = db.query(models.TimePunch)\
-        .filter(models.TimePunch.employee_id == employee_id)\
-        .order_by(desc(models.TimePunch.timestamp))\
-        .first()
-
-    if not last_punch or last_punch.punch_type == "CLOCK_OUT":
-        return {"is_clocked_in": False, "last_punch": last_punch}
-
-    now_manila = get_now_manila().replace(tzinfo=None)
-    elapsed_seconds = int((now_manila - last_punch.timestamp).total_seconds())
-
-    return {
-        "is_clocked_in": True,
-        "elapsed_seconds": elapsed_seconds,
-        "clock_in_time": last_punch.timestamp.isoformat(),
-        "last_punch": last_punch
-    }
-
-@app.post("/api/punch")
-def record_punch(req: PunchRequest, db: Session = Depends(get_db)):
-    punch = models.TimePunch(
-        employee_id=req.employee_id,
-        punch_type=req.punch_type,
-        latitude=req.latitude,
-        longitude=req.longitude,
-        accuracy=req.accuracy,
-        address=req.address or "Captured Location",
-        timestamp=get_now_manila().replace(tzinfo=None)
-    )
-    db.add(punch)
-    db.commit()
-    db.refresh(punch)
-    return {"status": "success", "punch_id": punch.id, "timestamp": punch.timestamp.isoformat()}
-
-# --- Shift Edit Requests API (Approval Workflow) ---
-@app.post("/api/shift-request")
-def submit_shift_request(req: ShiftEditSubmitRequest, db: Session = Depends(get_db)):
-    try:
-        ts = datetime.fromisoformat(req.requested_timestamp).replace(tzinfo=None)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid ISO timestamp format")
-
-    edit_req = models.ShiftEditRequest(
-        employee_id=req.employee_id,
-        requested_punch_type=req.requested_punch_type,
-        requested_timestamp=ts,
-        reason=req.reason,
-        status="PENDING"
-    )
-    db.add(edit_req)
-    db.commit()
-    return {"status": "submitted", "request_id": edit_req.id}
-
-@app.get("/api/admin/shift-requests")
-def list_shift_requests(db: Session = Depends(get_db)):
-    reqs = db.query(models.ShiftEditRequest).order_by(desc(models.ShiftEditRequest.created_at)).all()
-    result = []
-    for r in reqs:
-        u = db.query(models.User).filter(models.User.employee_id == r.employee_id).first()
-        result.append({
-            "id": r.id,
-            "employee_id": r.employee_id,
-            "employee_name": u.name if u else f"Emp #{r.employee_id}",
-            "department": u.department if u else "General",
-            "requested_punch_type": r.requested_punch_type,
-            "requested_timestamp": r.requested_timestamp.strftime("%Y-%m-%d %I:%M %p"),
-            "reason": r.reason,
-            "status": r.status
-        })
-    return result
-
-@app.post("/api/admin/shift-requests/{request_id}/approve")
-def approve_shift_request(request_id: int, db: Session = Depends(get_db)):
-    req = db.query(models.ShiftEditRequest).filter(models.ShiftEditRequest.id == request_id).first()
-    if not req:
-        raise HTTPException(status_code=404, detail="Request not found")
-
-    req.status = "APPROVED"
-    # Insert official punch record
-    punch = models.TimePunch(
-        employee_id=req.employee_id,
-        punch_type=req.requested_punch_type,
-        timestamp=req.requested_timestamp,
-        latitude=14.5764,
-        longitude=121.0851,
-        address=f"Approved Shift Edit: {req.reason}"
-    )
-    db.add(punch)
-    db.commit()
-    return {"status": "approved", "request_id": request_id}
-
-@app.post("/api/admin/shift-requests/{request_id}/reject")
-def reject_shift_request(request_id: int, db: Session = Depends(get_db)):
-    req = db.query(models.ShiftEditRequest).filter(models.ShiftEditRequest.id == request_id).first()
-    if not req:
-        raise HTTPException(status_code=404, detail="Request not found")
-
-    req.status = "REJECTED"
-    db.commit()
-    return {"status": "rejected", "request_id": request_id}
-
-@app.get("/api/timesheet/{employee_id}")
-def get_employee_timesheet(employee_id: str, db: Session = Depends(get_db)):
-    punches = db.query(models.TimePunch)\
-        .filter(models.TimePunch.employee_id == employee_id)\
-        .order_by(desc(models.TimePunch.timestamp))\
-        .all()
-
-    timesheet_by_date = defaultdict(list)
-    raw_list = []
-
-    for p in punches:
-        date_str = p.timestamp.strftime("%Y-%m-%d")
-        punch_obj = {
-            "id": p.id,
-            "punch_type": p.punch_type,
-            "time": p.timestamp.strftime("%I:%M:%S %p"),
-            "timestamp": p.timestamp.isoformat(),
-            "date": date_str,
-            "address": p.address or "Location Captured",
-            "lat": p.latitude,
-            "lng": p.longitude
-        }
-        timesheet_by_date[date_str].append(punch_obj)
-        raw_list.append(punch_obj)
-
-    formatted_history = []
-    for date_key, day_punches in timesheet_by_date.items():
-        total_seconds = 0
-        in_time = None
-        chronological = sorted(day_punches, key=lambda x: x["timestamp"])
-
-        for p in chronological:
-            dt = datetime.fromisoformat(p["timestamp"])
-            if p["punch_type"] == "CLOCK_IN":
-                in_time = dt
-            elif p["punch_type"] == "CLOCK_OUT" and in_time:
-                total_seconds += (dt - in_time).total_seconds()
-                in_time = None
-
-        hrs = int(total_seconds // 3600)
-        mins = int((total_seconds % 3600) // 60)
-
-        formatted_history.append({
-            "date": date_key,
-            "display_date": datetime.strptime(date_key, "%Y-%m-%d").strftime("%A, %b %d, %Y"),
-            "total_duration": f"{hrs}h {mins}m",
-            "punches": day_punches
-        })
-
-    return {
-        "employee_id": employee_id,
-        "timesheet": formatted_history,
-        "all_punches": raw_list
-    }
-
-# --- DTR Audit & Export ---
-@app.get("/api/admin/dtr")
-def list_all_dtr(employee_id: Optional[str] = None, db: Session = Depends(get_db)):
-    query = db.query(models.TimePunch)
-    if employee_id:
-        query = query.filter(models.TimePunch.employee_id == employee_id)
-    punches = query.order_by(desc(models.TimePunch.timestamp)).all()
-    
-    result = []
-    for p in punches:
-        user = db.query(models.User).filter(models.User.employee_id == p.employee_id).first()
-        result.append({
-            "id": p.id,
-            "employee_id": p.employee_id,
-            "employee_name": user.name if user else f"Emp #{p.employee_id}",
-            "department": user.department if user else "General",
-            "position": user.position if user else "Staff",
-            "punch_type": p.punch_type,
-            "formatted_time": p.timestamp.strftime("%Y-%m-%d %I:%M:%S %p"),
-            "address": p.address or f"Lat: {p.latitude:.4f}, Lng: {p.longitude:.4f}",
-            "latitude": p.latitude or 14.5764,
-            "longitude": p.longitude or 121.0851
-        })
-    return result
-
-@app.post("/api/admin/dtr")
-def create_dtr_entry(req: CreatePunchAdminRequest, db: Session = Depends(get_db)):
-    try:
-        ts = datetime.fromisoformat(req.timestamp).replace(tzinfo=None)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid ISO timestamp format")
-
-    punch = models.TimePunch(
-        employee_id=req.employee_id,
-        punch_type=req.punch_type,
-        timestamp=ts,
-        latitude=req.latitude,
-        longitude=req.longitude,
-        address=req.address
-    )
-    db.add(punch)
-    db.commit()
-    return {"status": "created", "punch_id": punch.id}
-
-@app.delete("/api/admin/dtr/{punch_id}")
-def delete_dtr_entry(punch_id: int, db: Session = Depends(get_db)):
-    punch = db.query(models.TimePunch).filter(models.TimePunch.id == punch_id).first()
-    if not punch:
-        raise HTTPException(status_code=404, detail="Punch record not found")
-
-    db.delete(punch)
-    db.commit()
-    return {"status": "deleted", "punch_id": punch_id}
-
-@app.get("/api/admin/export/csv")
-def export_dtr_csv(employee_id: Optional[str] = None, db: Session = Depends(get_db)):
-    query = db.query(models.TimePunch)
-    if employee_id:
-        query = query.filter(models.TimePunch.employee_id == employee_id)
-    punches = query.order_by(models.TimePunch.employee_id.asc(), models.TimePunch.timestamp.asc()).all()
-
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(["Punch ID", "Employee ID", "Punch Type", "Timestamp", "Address", "Latitude", "Longitude"])
-
-    for p in punches:
-        formatted_ts = p.timestamp.strftime("%Y-%m-%d %I:%M:%S %p")
-        writer.writerow([p.id, p.employee_id, p.punch_type, formatted_ts, p.address, p.latitude, p.longitude])
-
-    response = Response(content=output.getvalue(), media_type="text/csv")
-    filename = f"DTR_Export_{employee_id or 'ALL'}_{get_now_manila().strftime('%Y%m%d_%H%M%S')}.csv"
-    response.headers["Content-Disposition"] = f"attachment; filename={filename}"
-    return response
-
-# --- WEB EMPLOYEE PORTAL UI (WITH REVIEW MODAL & SHIFT EDIT) ---
-@app.get("/", response_class=HTMLResponse)
-@app.get("/portal", response_class=HTMLResponse)
-def employee_portal_ui():
-    html_content = """
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>HRIS Employee Portal</title>
-        <script src="https://cdn.tailwindcss.com"></script>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-        <style> body { font-family: 'Inter', sans-serif; } #reviewMap { height: 180px; width: 100%; border-radius: 0.5rem; } </style>
-    </head>
-    <body class="bg-slate-50 text-slate-900 min-h-screen antialiased flex flex-col justify-between">
-
-        <div id="employeeLoginCard" class="min-h-screen flex items-center justify-center p-4">
-            <div class="bg-white rounded-2xl shadow-xl border border-slate-100 max-w-sm w-full p-6 space-y-5">
-                <div class="text-center space-y-1">
-                    <div class="w-12 h-12 bg-blue-600 text-white rounded-xl mx-auto flex items-center justify-center font-bold text-xl shadow-lg shadow-blue-500/30">H</div>
-                    <h2 class="text-xl font-bold text-slate-800">HRIS Employee Portal</h2>
-                    <p class="text-xs text-slate-500">Sign in to record your attendance</p>
-                </div>
-                <form id="empLoginForm" class="space-y-4">
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 mb-1">Employee ID</label>
-                        <input type="text" id="loginEmpId" placeholder="e.g. 3286" required class="w-full border border-slate-200 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 mb-1">Department</label>
-                        <select id="loginDept" class="deptDropdownSelect w-full border border-slate-200 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"></select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 mb-1">Password</label>
-                        <input type="password" id="loginPass" placeholder="••••••••" required class="w-full border border-slate-200 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                    </div>
-                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg text-sm transition shadow-sm">
-                        Sign In
-                    </button>
-                </form>
-            </div>
-        </div>
-
-        <!-- DTR PUNCH REVIEW MODAL -->
-        <div id="punchReviewModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div class="bg-white rounded-2xl shadow-xl border border-slate-100 max-w-sm w-full p-5 space-y-4">
-                <div class="flex justify-between items-center border-b pb-2">
-                    <h3 class="font-bold text-slate-800 text-sm">Review DTR Punch Location</h3>
-                    <button onclick="closeReviewModal()" class="text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
-                </div>
-
-                <div id="reviewMap"></div>
-
-                <div class="space-y-1.5 text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                    <p><b>Action:</b> <span id="revActionText" class="font-bold"></span></p>
-                    <p><b>Address:</b> <span id="revAddressText"></span></p>
-                    <p><b>Coordinates:</b> <span id="revCoordsText" class="font-mono"></span></p>
-                </div>
-
-                <div class="grid grid-cols-2 gap-2 pt-2">
-                    <button onclick="openShiftEditModal()" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition">
-                        Edit Shift
-                    </button>
-                    <button onclick="confirmPunchAction()" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md transition">
-                        Confirm Punch
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- SHIFT EDIT APPROVAL MODAL -->
-        <div id="shiftEditModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div class="bg-white rounded-2xl shadow-xl border border-slate-100 max-w-sm w-full p-5 space-y-4">
-                <div class="flex justify-between items-center border-b pb-2">
-                    <h3 class="font-bold text-slate-800 text-sm">Submit Shift Edit Request</h3>
-                    <button onclick="closeShiftEditModal()" class="text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
-                </div>
-
-                <form id="shiftEditForm" class="space-y-3 text-xs">
-                    <div>
-                        <label class="block font-semibold text-slate-600 mb-1">Requested Time</label>
-                        <input type="datetime-local" id="reqTime" required class="w-full border p-2 rounded-lg">
-                    </div>
-                    <div>
-                        <label class="block font-semibold text-slate-600 mb-1">Reason for Manager Approval</label>
-                        <textarea id="reqReason" rows="3" placeholder="Forgot to punch, field work, etc." required class="w-full border p-2 rounded-lg"></textarea>
-                    </div>
-                    <div class="flex justify-end gap-2 pt-2">
-                        <button type="button" onclick="closeShiftEditModal()" class="px-3 py-2 bg-slate-100 rounded-lg font-semibold">Cancel</button>
-                        <button type="submit" class="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg">Send Request</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        <div id="employeeWorkspace" class="hidden min-h-screen flex flex-col">
-            <header class="bg-white border-b border-slate-200 sticky top-0 z-30">
-                <div class="max-w-md mx-auto px-4 h-16 flex items-center justify-between">
-                    <div class="flex items-center gap-3">
-                        <div class="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center font-bold text-base shadow-sm">H</div>
-                        <div>
-                            <h1 id="userDisplayName" class="text-sm font-bold text-slate-800 leading-tight">Employee Workspace</h1>
-                            <p id="userDeptTitle" class="text-[11px] text-slate-500">Active Session</p>
-                        </div>
-                    </div>
-                    <button onclick="logoutEmployee()" class="text-xs text-slate-400 hover:text-slate-600 font-semibold transition">Sign Out</button>
-                </div>
-            </header>
-
-            <main class="flex-1 max-w-md w-full mx-auto px-4 py-6 space-y-6">
-                <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 text-center space-y-5">
-                    <div>
-                        <span id="statusBadge" class="inline-block px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600">OFF DUTY</span>
-                        <h2 id="liveTimerText" class="text-3xl font-extrabold text-slate-800 font-mono mt-3">00:00:00</h2>
-                        <p id="shiftSubText" class="text-xs text-slate-500 mt-1">Ready to start shift</p>
-                    </div>
-
-                    <button id="punchActionBtn" onclick="initiatePunchReview()" class="w-full py-4 rounded-xl font-bold text-base text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/25 transition">
-                        CLOCK IN NOW
-                    </button>
-
-                    <p id="geoStatusText" class="text-[11px] text-slate-400">GPS location verification enabled</p>
-                </div>
-
-                <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 space-y-3">
-                    <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Today's Activity Log</h3>
-                    <div id="timesheetLogContainer" class="space-y-2 text-xs divide-y divide-slate-100"></div>
-                </div>
-            </main>
-        </div>
-
-        <script>
-            const API_BASE = "/api";
-            let currentUser = null;
-            let activeTimerInterval = null;
-            let autoSyncPoller = null;
-            let currentIsClockedIn = false;
-            let elapsedShiftSeconds = 0;
-            let currentLat = 14.5764;
-            let currentLng = 121.0851;
-            let reviewMapInstance = null;
-
-            async function requestHardwareGPS() {
-                if ("geolocation" in navigator) {
-                    navigator.geolocation.getCurrentPosition(
-                        (pos) => {
-                            currentLat = pos.coords.latitude;
-                            currentLng = pos.coords.longitude;
-                            document.getElementById("geoStatusText").innerText = `High-Accuracy GPS: ${currentLat.toFixed(5)}, ${currentLng.toFixed(5)} (±${Math.round(pos.coords.accuracy)}m)`;
-                        },
-                        (err) => {
-                            document.getElementById("geoStatusText").innerText = "HTTP Unsecure Context: Coarse Location";
-                        },
-                        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-                    );
-                }
-            }
-
-            async function initPortal() {
-                try {
-                    const res = await fetch(`${API_BASE}/departments`);
-                    const depts = await res.json();
-                    const sel = document.getElementById("loginDept");
-                    sel.innerHTML = "";
-                    depts.forEach(d => {
-                        sel.innerHTML += `<option value="${d}">${d}</option>`;
-                    });
-                } catch(e) {}
-
-                const savedEmpId = localStorage.getItem("hris_emp_id");
-                if (savedEmpId) document.getElementById("loginEmpId").value = savedEmpId;
-                requestHardwareGPS();
-            }
-
-            document.getElementById("empLoginForm").addEventListener("submit", async (e) => {
-                e.preventDefault();
-                const empId = document.getElementById("loginEmpId").value;
-                const pass = document.getElementById("loginPass").value;
-
-                try {
-                    const res = await fetch(`${API_BASE}/login`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ employee_id: empId, password: pass })
-                    });
-
-                    if (res.ok) {
-                        currentUser = await res.json();
-                        localStorage.setItem("hris_emp_id", currentUser.employee_id);
-                        document.getElementById("employeeLoginCard").classList.add("hidden");
-                        document.getElementById("employeeWorkspace").classList.remove("hidden");
-                        document.getElementById("userDisplayName").innerText = currentUser.name;
-                        document.getElementById("userDeptTitle").innerText = `${currentUser.department} • ${currentUser.position}`;
-                        
-                        await loadActiveStatus();
-                        await loadTimesheet();
-
-                        clearInterval(autoSyncPoller);
-                        autoSyncPoller = setInterval(loadActiveStatus, 3000);
-                    } else {
-                        alert("Invalid Employee ID or Password");
-                    }
-                } catch (err) {
-                    alert("Unable to reach HRIS server");
-                }
-            });
-
-            function logoutEmployee() {
-                clearInterval(activeTimerInterval);
-                clearInterval(autoSyncPoller);
-                currentUser = null;
-                document.getElementById("employeeWorkspace").classList.add("hidden");
-                document.getElementById("employeeLoginCard").classList.remove("hidden");
-            }
-
-            async function initiatePunchReview() {
-                await requestHardwareGPS();
-                const punchType = currentIsClockedIn ? "CLOCK_OUT" : "CLOCK_IN";
-                
-                document.getElementById("revActionText").innerText = punchType;
-                document.getElementById("revActionText").className = punchType === 'CLOCK_IN' ? 'font-bold text-emerald-600' : 'font-bold text-rose-600';
-                document.getElementById("revAddressText").innerText = "Pasig, Metro Manila";
-                document.getElementById("revCoordsText").innerText = `${currentLat.toFixed(5)}, ${currentLng.toFixed(5)}`;
-
-                document.getElementById("punchReviewModal").classList.remove("hidden");
-
-                setTimeout(() => {
-                    if (!reviewMapInstance) {
-                        reviewMapInstance = L.map('reviewMap').setView([currentLat, currentLng], 14);
-                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(reviewMapInstance);
-                    } else {
-                        reviewMapInstance.setView([currentLat, currentLng], 14);
-                    }
-                    L.marker([currentLat, currentLng]).addTo(reviewMapInstance);
-                    reviewMapInstance.invalidateSize();
-                }, 200);
-            }
-
-            function closeReviewModal() {
-                document.getElementById("punchReviewModal").classList.add("hidden");
-            }
-
-            async function confirmPunchAction() {
-                closeReviewModal();
-                const punchType = currentIsClockedIn ? "CLOCK_OUT" : "CLOCK_IN";
-
-                const res = await fetch(`${API_BASE}/punch`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        employee_id: currentUser.employee_id,
-                        punch_type: punchType,
-                        latitude: currentLat,
-                        longitude: currentLng,
-                        accuracy: 10.0,
-                        address: "Pasig, Metro Manila"
-                    })
-                });
-
-                if (res.ok) {
-                    await loadActiveStatus();
-                    await loadTimesheet();
-                } else {
-                    alert("Failed to submit punch");
-                }
-            }
-
-            function openShiftEditModal() {
-                closeReviewModal();
-                const now = new Date();
-                now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-                document.getElementById('reqTime').value = now.toISOString().slice(0, 16);
-                document.getElementById("shiftEditModal").classList.remove("hidden");
-            }
-
-            function closeShiftEditModal() {
-                document.getElementById("shiftEditModal").classList.add("hidden");
-            }
-
-            document.getElementById("shiftEditForm").addEventListener("submit", async (e) => {
-                e.preventDefault();
-                const punchType = currentIsClockedIn ? "CLOCK_OUT" : "CLOCK_IN";
-                const reqTime = document.getElementById("reqTime").value + ":00";
-                const reason = document.getElementById("reqReason").value;
-
-                const res = await fetch(`${API_BASE}/shift-request`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        employee_id: currentUser.employee_id,
-                        requested_punch_type: punchType,
-                        requested_timestamp: reqTime,
-                        reason: reason
-                    })
-                });
-
-                if (res.ok) {
-                    closeShiftEditModal();
-                    alert("Shift edit request sent for Manager approval!");
-                } else {
-                    alert("Failed to submit shift edit request");
-                }
-            });
-
-            async function loadActiveStatus() {
-                if (!currentUser) return;
-                try {
-                    const res = await fetch(`${API_BASE}/punch/active/${currentUser.employee_id}`);
-                    const data = await res.json();
-                    
-                    const badge = document.getElementById("statusBadge");
-                    const btn = document.getElementById("punchActionBtn");
-                    const subText = document.getElementById("shiftSubText");
-
-                    if (data.is_clocked_in) {
-                        if (!currentIsClockedIn) {
-                            currentIsClockedIn = true;
-                            loadTimesheet();
-                        }
-                        badge.innerText = "ON DUTY";
-                        badge.className = "inline-block px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800";
-                        btn.innerText = "CLOCK OUT NOW";
-                        btn.className = "w-full py-4 rounded-xl font-bold text-base text-white bg-rose-600 hover:bg-rose-700 shadow-lg shadow-rose-500/25 transition";
-                        subText.innerText = "Active shift running";
-                        
-                        elapsedShiftSeconds = data.elapsed_seconds || 0;
-                        if (!activeTimerInterval) {
-                            activeTimerInterval = setInterval(() => {
-                                elapsedShiftSeconds++;
-                                updateTimerDisplay(elapsedShiftSeconds);
-                            }, 1000);
-                        }
-                    } else {
-                        if (currentIsClockedIn) {
-                            currentIsClockedIn = false;
-                            loadTimesheet();
-                        }
-                        badge.innerText = "OFF DUTY";
-                        badge.className = "inline-block px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600";
-                        btn.innerText = "CLOCK IN NOW";
-                        btn.className = "w-full py-4 rounded-xl font-bold text-base text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/25 transition";
-                        document.getElementById("liveTimerText").innerText = "00:00:00";
-                        subText.innerText = "Ready to start shift";
-                        clearInterval(activeTimerInterval);
-                        activeTimerInterval = null;
-                    }
-                } catch(e) {}
-            }
-
-            function updateTimerDisplay(seconds) {
-                const h = String(Math.floor(seconds / 3600)).padStart(2, '0');
-                const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
-                const s = String(seconds % 60).padStart(2, '0');
-                document.getElementById("liveTimerText").innerText = `${h}:${m}:${s}`;
-            }
-
-            async function loadTimesheet() {
-                if (!currentUser) return;
-                try {
-                    const res = await fetch(`${API_BASE}/timesheet/${currentUser.employee_id}`);
-                    const data = await res.json();
-                    const container = document.getElementById("timesheetLogContainer");
-                    container.innerHTML = "";
-
-                    if (!data.all_punches || data.all_punches.length === 0) {
-                        container.innerHTML = `<p class="text-slate-400 text-center py-2">No punches recorded today</p>`;
-                        return;
-                    }
-
-                    data.all_punches.slice(0, 5).forEach(p => {
-                        const isIn = p.punch_type === 'CLOCK_IN';
-                        container.innerHTML += `
-                            <div class="pt-2 flex justify-between items-center">
-                                <div>
-                                    <span class="font-bold ${isIn ? 'text-emerald-700' : 'text-rose-700'}">${p.punch_type}</span>
-                                    <p class="text-[10px] text-slate-400">${p.address}</p>
-                                </div>
-                                <span class="font-mono text-slate-600 font-bold">${p.time}</span>
-                            </div>
-                        `;
-                    });
-                } catch(e) {}
-            }
-
-            initPortal();
-        </script>
-    </body>
-    </html>
-    """
-    return HTMLResponse(content=html_content)
-
-# --- WEB ADMIN PORTAL UI (WITH MANAGER SHIFT APPROVAL TAB) ---
 @app.get("/admin", response_class=HTMLResponse)
-def admin_dashboard_ui():
-    html_content = """
+def render_admin_dashboard():
+    return """
     <!DOCTYPE html>
     <html lang="en">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>HRIS Administration Portal</title>
-        <script src="https://cdn.tailwindcss.com"></script>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-        
+        <title>Bigtime Empire - Operations & DTR Management</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <style>
+            :root {
+                --ct-sidebar-bg: #ffffff;
+                --ct-primary: #2563eb;
+                --ct-border: #e2e8f0;
+                --ct-text-dark: #0f172a;
+                --ct-text-muted: #64748b;
+            }
+            body { background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: var(--ct-text-dark); }
+            
+            .top-navbar { background-color: #ffffff; border-bottom: 1px solid var(--ct-border); height: 60px; padding: 0 24px; position: sticky; top: 0; z-index: 1000; }
+            .search-input { background-color: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 20px; padding: 6px 16px 6px 36px; font-size: 13px; width: 280px; }
+            .search-wrapper { position: relative; }
+            .search-wrapper i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--ct-text-muted); font-size: 14px; }
 
-        <style> body { font-family: 'Inter', sans-serif; } #map { height: 420px; width: 100%; border-radius: 0.75rem; z-index: 10; } </style>
+            .app-sidebar { width: 240px; background-color: #ffffff; border-right: 1px solid var(--ct-border); min-height: calc(100vh - 60px); padding: 16px 12px; }
+            .nav-section-title { font-size: 11px; font-weight: 700; color: var(--ct-text-muted); text-transform: uppercase; letter-spacing: 0.5px; padding: 12px 12px 4px 12px; }
+            .ct-nav-link { display: flex; align-items: center; gap: 10px; padding: 8px 12px; color: #334155; border-radius: 8px; font-size: 13px; font-weight: 500; text-decoration: none; margin-bottom: 2px; }
+            .ct-nav-link:hover { background-color: #f1f5f9; color: var(--ct-primary); }
+            .ct-nav-link.active { background-color: #eff6ff; color: var(--ct-primary); font-weight: 600; }
+            .ct-nav-link i { font-size: 16px; width: 20px; text-align: center; }
+
+            .main-workspace { flex: 1; padding: 24px; overflow-y: auto; }
+            .page-title { font-size: 20px; font-weight: 700; color: var(--ct-text-dark); margin-bottom: 0; }
+            .ct-card { background-color: #ffffff; border: 1px solid var(--ct-border); border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); margin-bottom: 20px; }
+
+            .table-ct { margin-bottom: 0; }
+            .table-ct th { background-color: #f8fafc; color: var(--ct-text-muted); font-size: 12px; font-weight: 600; text-transform: uppercase; padding: 12px 16px; border-bottom: 1px solid var(--ct-border); }
+            .table-ct td { padding: 12px 16px; font-size: 13px; color: #334155; vertical-align: middle; border-bottom: 1px solid #f1f5f9; }
+            .table-ct tbody tr:hover { background-color: #f8fafc; cursor: pointer; }
+
+            .ts-pill { background-color: #10b981; color: #ffffff; font-weight: 600; font-size: 11px; padding: 4px 8px; border-radius: 6px; text-align: center; display: inline-block; width: 60px; }
+            .ts-pill-off { color: #94a3b8; font-weight: 600; font-size: 12px; }
+            
+            .offcanvas-ct { width: 440px !important; border-left: 1px solid var(--ct-border); }
+            .jobtitle-pill { background-color: #eff6ff; color: var(--ct-primary); border: 1px solid #bfdbfe; font-size: 12px; padding: 2px 10px; border-radius: 12px; font-weight: 600; text-decoration: none; }
+            
+            #map-container { height: 360px; width: 100%; border-radius: 8px; border: 1px solid var(--ct-border); }
+
+            /* User Detail Panel Layout */
+            .profile-left-panel { width: 320px; border-right: 1px solid var(--ct-border); padding-right: 20px; }
+            .profile-right-panel { flex: 1; padding-left: 20px; }
+            .form-label-sm { font-size: 11px; font-weight: 700; color: var(--ct-text-muted); margin-bottom: 4px; }
+            .form-control-sm-ct { font-size: 13px; border-radius: 6px; border: 1px solid #cbd5e1; }
+            
+            .activity-timeline-item { position: relative; padding-left: 28px; padding-bottom: 16px; border-left: 2px solid #e2e8f0; margin-left: 10px; }
+            .activity-timeline-dot { position: absolute; left: -7px; top: 0; width: 12px; height: 12px; border-radius: 6px; background-color: var(--ct-primary); }
+        </style>
     </head>
-    <body class="bg-slate-50 text-slate-900 min-h-screen antialiased">
-
-        <div id="loginOverlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div class="bg-white rounded-2xl shadow-xl border border-slate-100 max-w-sm w-full p-6 space-y-5">
-                <div class="text-center space-y-1">
-                    <div class="w-12 h-12 bg-blue-600 text-white rounded-xl mx-auto flex items-center justify-center font-bold text-xl shadow-lg shadow-blue-500/30">H</div>
-                    <h2 class="text-xl font-bold text-slate-800">Admin Sign In</h2>
-                    <p class="text-xs text-slate-500">Super Admin credentials required</p>
+    <body>
+        <div class="top-navbar d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-3">
+                <span class="fw-bold fs-5 text-primary"><i class="bi bi-box-fill me-2"></i>BIGTIME EMPIRE</span>
+                <div class="search-wrapper">
+                    <i class="bi bi-search"></i>
+                    <input type="text" id="globalSearchInput" class="search-input" placeholder="Search anything..." onkeyup="filterLogs()">
                 </div>
-                <form id="adminLoginForm" class="space-y-4">
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 mb-1">Employee / Admin ID</label>
-                        <input type="text" id="adminIdInput" value="ADMIN" required class="w-full border border-slate-200 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 mb-1">Password</label>
-                        <input type="password" id="adminPassInput" value="password123" required class="w-full border border-slate-200 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                    </div>
-                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg text-sm transition shadow-sm">Authenticate</button>
-                </form>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-2 rounded-pill"><i class="bi bi-person-check-fill me-1"></i> Admin Workspace</span>
+                
+                <div class="dropdown">
+                    <button class="btn btn-link p-0 text-decoration-none d-flex align-items-center gap-2" type="button" data-bs-toggle="dropdown">
+                        <div class="bg-primary text-white rounded-circle fw-bold d-flex align-items-center justify-content-center" style="width: 36px; height: 36px;">JB</div>
+                        <div class="text-start">
+                            <div class="fw-bold text-dark d-flex align-items-center" style="font-size: 13px;">Jaypee Balonzo <i class="bi bi-chevron-down ms-1 text-muted" style="font-size: 10px;"></i></div>
+                            <div class="text-muted" style="font-size: 11px;">Owner / IT Administrator</div>
+                        </div>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end shadow-sm border-light" style="width: 220px; border-radius: 12px;">
+                        <li class="px-3 py-2 bg-light rounded-top">
+                            <div class="fw-bold small">Jaypee Balonzo</div>
+                            <div class="text-muted extra-small" style="font-size: 11px;">Owner</div>
+                        </li>
+                        <li><hr class="dropdown-divider my-1"></li>
+                        <li><a class="dropdown-item small" href="#"><i class="bi bi-person me-2"></i>Switch to user's view</a></li>
+                        <li><a class="dropdown-item small" href="#"><i class="bi bi-gear me-2"></i>Settings</a></li>
+                        <li><a class="dropdown-item small" href="#"><i class="bi bi-bell me-2"></i>Notifications</a></li>
+                        <li><a class="dropdown-item small text-danger" href="#" onclick="alert('Logging out of Admin Session...'); window.location.href='/admin';"><i class="bi bi-box-arrow-right me-2"></i>Sign out</a></li>
+                    </ul>
+                </div>
             </div>
         </div>
 
-        <div id="adminWorkspace" class="hidden min-h-screen flex flex-col">
-            <header class="bg-white border-b border-slate-200 sticky top-0 z-30">
-                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-                    <div class="flex items-center gap-6">
-                        <div class="flex items-center gap-3">
-                            <div class="w-9 h-9 bg-blue-600 text-white rounded-lg flex items-center justify-center font-bold text-lg shadow-sm">H</div>
+        <div class="d-flex">
+            <div class="app-sidebar">
+                <a href="#" class="ct-nav-link" onclick="switchTab('overview')"><i class="bi bi-grid-1x2"></i> Overview</a>
+                <a href="#" class="ct-nav-link" onclick="switchTab('activity')"><i class="bi bi-activity"></i> Activity</a>
+                <a href="#" class="ct-nav-link" id="nav-users" onclick="switchTab('users')"><i class="bi bi-people"></i> Users</a>
+                <a href="#" class="ct-nav-link" onclick="switchTab('groups')"><i class="bi bi-diagram-3"></i> Smart groups</a>
+                <a href="#" class="ct-nav-link active" id="nav-jobs" onclick="switchTab('jobs')"><i class="bi bi-briefcase"></i> Job list</a>
+
+                <div class="nav-section-title">Operations</div>
+                <a href="#" class="ct-nav-link" id="nav-dtr" onclick="switchTab('dtr')"><i class="bi bi-clock-history text-primary"></i> Time Clock <span class="badge bg-danger rounded-pill ms-auto">LIVE</span></a>
+                <a href="#" class="ct-nav-link" onclick="switchTab('scheduling')"><i class="bi bi-calendar-event"></i> Job Scheduling</a>
+                <a href="#" class="ct-nav-link" onclick="switchTab('timeoff')"><i class="bi bi-calendar2-minus"></i> Time Off</a>
+                <a href="#" class="ct-nav-link" onclick="switchTab('tasks')"><i class="bi bi-check2-square"></i> Quick Tasks</a>
+            </div>
+
+            <div class="main-workspace">
+                
+                <!-- 1. USERS DIRECTORY VIEW -->
+                <div id="tab-users" style="display: none;">
+                    <div id="users-list-view">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
                             <div>
-                                <h1 class="text-base font-bold text-slate-800 leading-tight">HRIS Portal</h1>
-                                <p class="text-xs text-slate-500">Super Admin Workspace</p>
+                                <h4 class="page-title"><i class="bi bi-people me-2"></i>Users</h4>
+                                <p class="text-muted small mb-0">Directory of registered employees, kiosk access codes, and department assignments</p>
+                            </div>
+                            <button class="btn btn-primary rounded-pill px-4" onclick="alert('User Creation Drawer')">
+                                <i class="bi bi-plus-lg me-1"></i> Add users
+                            </button>
+                        </div>
+
+                        <div class="ct-card">
+                            <div class="table-responsive">
+                                <table class="table table-ct">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 40px;"><input type="checkbox" class="form-check-input"></th>
+                                            <th>Full Name</th>
+                                            <th>Employee ID</th>
+                                            <th>Position</th>
+                                            <th>Department</th>
+                                            <th>Kiosk Code</th>
+                                            <th>Last Login</th>
+                                            <th>Date Added</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="usersTableBody">
+                                        <tr><td colspan="8" class="text-center py-4 text-muted">Loading employee directory...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Connecteam User Profile Editor View (image_525de1.png) -->
+                    <div id="user-profile-editor-view" style="display: none;">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div class="d-flex align-items-center gap-2">
+                                <button class="btn btn-sm btn-light border rounded-circle" onclick="hideUserProfile()"><i class="bi bi-arrow-left"></i></button>
+                                <div class="bg-danger text-white rounded-circle fw-bold d-flex align-items-center justify-content-center" style="width: 36px; height: 36px;" id="profileAvatar">JB</div>
+                                <h4 class="fw-bold mb-0" id="profileHeaderName">Jaypee Balonzo</h4>
+                                <span class="badge bg-light text-dark border" id="profileHeaderDept">Admin</span>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-outline-secondary btn-sm rounded-pill"><i class="bi bi-gift me-1"></i> Send reward</button>
+                                <button class="btn btn-outline-secondary btn-sm rounded-pill">Options <i class="bi bi-chevron-down ms-1"></i></button>
+                                <button class="btn btn-outline-primary btn-sm rounded-pill"><i class="bi bi-chat-text me-1"></i> Text Message</button>
                             </div>
                         </div>
 
-                        <nav class="hidden md:flex gap-1 bg-slate-100 p-1 rounded-lg text-xs font-semibold">
-                            <button id="tabBtnClocks" onclick="switchTab('clocks')" class="px-3 py-1.5 rounded-md bg-white text-blue-600 shadow-sm transition">Time Clocks & Map</button>
-                            <button id="tabBtnRequests" onclick="switchTab('requests')" class="px-3 py-1.5 rounded-md text-slate-600 hover:text-slate-900 transition">Shift Edit Requests</button>
-                            <button id="tabBtnUsers" onclick="switchTab('users')" class="px-3 py-1.5 rounded-md text-slate-600 hover:text-slate-900 transition">User Directory & RBAC</button>
-                        </nav>
-                    </div>
-                    
-                    <div class="flex items-center gap-3">
-                        <a href="/api/admin/export/csv" class="inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition shadow-sm">
-                            Export CSV
-                        </a>
-                        <button onclick="logoutAdmin()" class="text-slate-400 hover:text-slate-600 p-2 rounded-lg text-xs font-semibold transition">Sign Out</button>
+                        <div class="ct-card p-4">
+                            <div class="d-flex">
+                                <!-- Left Panel: Editable Personal Details -->
+                                <div class="profile-left-panel">
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <h6 class="fw-bold mb-0">Personal Details</h6>
+                                        <button class="btn btn-sm btn-primary py-0" onclick="saveUserProfile()"><i class="bi bi-check-lg"></i> Save Changes</button>
+                                    </div>
+                                    
+                                    <div class="mb-2">
+                                        <label class="form-label-sm">First name *</label>
+                                        <input type="text" id="editFirstName" class="form-control form-control-sm form-control-sm-ct">
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="form-label-sm">Last name *</label>
+                                        <input type="text" id="editLastName" class="form-control form-control-sm form-control-sm-ct">
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="form-label-sm">Mobile phone *</label>
+                                        <input type="text" id="editMobilePhone" class="form-control form-control-sm form-control-sm-ct">
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="form-label-sm">Email *</label>
+                                        <input type="email" id="editEmail" class="form-control form-control-sm form-control-sm-ct">
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="form-label-sm">Employee ID *</label>
+                                        <input type="text" id="editEmployeeId" class="form-control form-control-sm form-control-sm-ct" readonly>
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="form-label-sm">Birthday</label>
+                                        <input type="date" id="editBirthday" class="form-control form-control-sm form-control-sm-ct">
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="form-label-sm">Gender</label>
+                                        <select id="editGender" class="form-select form-select-sm form-control-sm-ct">
+                                            <option value="Male">Male</option>
+                                            <option value="Female">Female</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="form-label-sm">Civil Status</label>
+                                        <input type="text" id="editCivilStatus" class="form-control form-control-sm form-control-sm-ct">
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="form-label-sm">Agency</label>
+                                        <input type="text" id="editAgency" class="form-control form-control-sm form-control-sm-ct">
+                                    </div>
+                                </div>
+
+                                <!-- Right Panel: Navigation Tabs & Activity Timeline -->
+                                <div class="profile-right-panel">
+                                    <ul class="nav nav-tabs mb-3">
+                                        <li class="nav-item"><a class="nav-link" href="#">Employment</a></li>
+                                        <li class="nav-item"><a class="nav-link active" href="#">Activity</a></li>
+                                        <li class="nav-item"><a class="nav-link" href="#">Time off</a></li>
+                                        <li class="nav-item"><a class="nav-link" href="#">Notes</a></li>
+                                        <li class="nav-item"><a class="nav-link" href="#">Forms</a></li>
+                                        <li class="nav-item"><a class="nav-link" href="#">Documents</a></li>
+                                    </ul>
+
+                                    <div class="activity-timeline mt-4">
+                                        <h6 class="fw-bold mb-3">Recent Activity Logs</h6>
+                                        <div class="activity-timeline-item">
+                                            <div class="activity-timeline-dot"></div>
+                                            <div class="fw-bold small" id="activityUserName">Jaypee Balonzo</div>
+                                            <div class="text-muted extra-small" style="font-size:12px;">Clocked in today via Mobile DTR</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </header>
 
-            <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-
-                <div id="tabContentClocks" class="space-y-6">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div class="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between">
-                            <div>
-                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Clocked In Now</p>
-                                <h3 id="statClockedInCount" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
-                            </div>
-                            <div class="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center font-bold">✓</div>
-                        </div>
-
-                        <div class="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between">
-                            <div>
-                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Active Users</p>
-                                <h3 id="statTotalUsersCount" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
-                            </div>
-                            <div class="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center font-bold">👥</div>
-                        </div>
-                    </div>
-
-                    <div class="bg-white rounded-xl border border-slate-200/80 shadow-sm p-5 space-y-4">
-                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-3">
-                            <div>
-                                <h2 class="text-sm font-bold text-slate-800 uppercase tracking-wider">Live Geo-Location GPS Tracker</h2>
-                                <p class="text-xs text-slate-500">Real-time GPS punch locations mapped across Metro Manila</p>
-                            </div>
-                            <button onclick="loadDashboard()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-3 py-1.5 rounded-lg transition">Refresh Map Pins</button>
-                        </div>
-
-                        <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
-                            <div class="lg:col-span-1 bg-slate-50 p-3 rounded-xl border border-slate-200/60 max-h-[420px] overflow-y-auto space-y-2">
-                                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Active Punch Locations</h3>
-                                <div id="mapUserList" class="space-y-1.5"></div>
-                            </div>
-
-                            <div class="lg:col-span-3">
-                                <div id="map"></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
-                        <div class="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
-                            <div>
-                                <h2 class="text-sm font-bold text-slate-800 uppercase tracking-wider">DTR Audit Logs</h2>
-                                <p class="text-xs text-slate-500">Raw timestamp records from PostgreSQL</p>
-                            </div>
-                            <button onclick="loadPunches()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-3 py-1.5 rounded-lg transition">Refresh</button>
-                        </div>
-
-                        <div id="auditTableBody" class="overflow-x-auto">
-                            <table class="w-full text-left text-sm">
-                                <thead>
-                                    <tr class="bg-slate-50 border-b text-slate-500 text-xs font-bold uppercase tracking-wider">
-                                        <th class="p-3.5 pl-5">ID</th>
-                                        <th class="p-3.5">Employee</th>
-                                        <th class="p-3.5">Type</th>
-                                        <th class="p-3.5">Timestamp</th>
-                                        <th class="p-3.5">Location</th>
-                                        <th class="p-3.5 pr-5 text-right">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="dtrTableBody" class="divide-y divide-slate-100"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- TAB 2: Shift Requests Manager Approvals -->
-                <div id="tabContentRequests" class="hidden space-y-6">
-                    <div class="bg-white rounded-xl border border-slate-200/80 shadow-sm p-5 space-y-4">
-                        <div class="flex justify-between items-center border-b border-slate-100 pb-3">
-                            <div>
-                                <h2 class="text-base font-bold text-slate-800">Pending Shift Edit Requests</h2>
-                                <p class="text-xs text-slate-500">Approve or reject employee shift adjustments and manual DTR corrections</p>
-                            </div>
-                            <button onclick="loadShiftRequests()" class="text-xs bg-slate-100 hover:bg-slate-200 font-semibold px-3 py-1.5 rounded-lg">Refresh Requests</button>
-                        </div>
-
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left text-xs">
-                                <thead>
-                                    <tr class="bg-slate-50 text-slate-500 font-bold border-b">
-                                        <th class="p-3.5">ID</th>
-                                        <th class="p-3.5">Employee</th>
-                                        <th class="p-3.5">Type</th>
-                                        <th class="p-3.5">Requested Time</th>
-                                        <th class="p-3.5">Reason</th>
-                                        <th class="p-3.5">Status</th>
-                                        <th class="p-3.5 text-right">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="requestsTableBody" class="divide-y divide-slate-100"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- TAB 3: User Directory -->
-                <div id="tabContentUsers" class="hidden space-y-6">
-                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm">
+                <!-- 2. JOB LIST MODULE -->
+                <div id="tab-jobs">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
                         <div>
-                            <h2 class="text-base font-bold text-slate-800">User Directory & Permissions</h2>
-                            <p class="text-xs text-slate-500">Manage employee accounts, titles, and system RBAC access levels</p>
+                            <h4 class="page-title"><i class="bi bi-briefcase me-2"></i>Job list</h4>
+                            <p class="text-muted small mb-0">Manage duty categories, departments, and active Job Titles</p>
+                        </div>
+                        <button class="btn btn-primary rounded-pill px-4" data-bs-toggle="offcanvas" data-bs-target="#addJobDrawer">
+                            <i class="bi bi-plus-lg me-1"></i> Add new Job
+                        </button>
+                    </div>
+
+                    <div class="ct-card">
+                        <div class="table-responsive">
+                            <table class="table table-ct">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 40px;"><input type="checkbox" class="form-check-input"></th>
+                                        <th>Item Name</th>
+                                        <th>Code</th>
+                                        <th>Job Titles</th>
+                                        <th>Qualified Department</th>
+                                        <th>Address / Geofence</th>
+                                        <th class="text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="jobTableBody">
+                                    <tr><td colspan="7" class="text-center py-4 text-muted">Loading active job list...</td></tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
-                    <div id="departmentDirectoryContainer" class="space-y-4"></div>
                 </div>
 
-            </main>
+                <!-- 3. TIME CLOCK & TIMESHEETS MODULE -->
+                <div id="tab-dtr" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h4 class="page-title"><i class="bi bi-clock me-2"></i>Time Clock & Timesheets</h4>
+                            <p class="text-muted small mb-0">Real-time attendance tracking, matrix timesheets, and GPS location pins</p>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-outline-secondary rounded-pill" onclick="loadDTRLogs()"><i class="bi bi-arrow-clockwise me-1"></i> Refresh</button>
+                            <button class="btn btn-success rounded-pill px-4" onclick="window.open('/api/punch/export', '_blank')"><i class="bi bi-file-earmark-excel me-1"></i> Export Timesheet (CSV)</button>
+                        </div>
+                    </div>
+
+                    <div class="ct-card p-3 mb-3">
+                        <div class="row g-2 align-items-center">
+                            <div class="col-md-4">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
+                                    <input type="text" id="employeeSearchInput" class="form-control" placeholder="Search by name or Employee ID..." onkeyup="filterLogs()">
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <select id="deptFilter" class="form-select form-select-sm" onchange="filterLogs()">
+                                    <option value="ALL">All Departments</option>
+                                    <option value="Admin">Admin</option>
+                                    <option value="HO IT">Head Office IT</option>
+                                    <option value="Operations">Operations</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <select id="viewTypeFilter" class="form-select form-select-sm" onchange="toggleViewType()">
+                                    <option value="LOGS">View Mode: Live Punch Logs</option>
+                                    <option value="TIMESHEET">View Mode: Weekly Matrix Timesheet</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="view-logs" class="row g-3 mb-4">
+                        <div class="col-md-7">
+                            <div class="ct-card p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-ct">
+                                        <thead>
+                                            <tr>
+                                                <th>Timestamp</th>
+                                                <th>Employee ID</th>
+                                                <th>Punch Type</th>
+                                                <th>Job Title / Note</th>
+                                                <th>GPS Pin</th>
+                                                <th>Accuracy</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="dtrLogsBody">
+                                            <tr><td colspan="6" class="text-center py-4 text-muted">Loading punch records...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-5">
+                            <div class="ct-card p-3">
+                                <h6 class="fw-bold mb-3"><i class="bi bi-geo-alt-fill text-danger me-1"></i> Live GPS Map Location</h6>
+                                <div id="map-container"></div>
+                                <div class="mt-2 text-muted small text-center fw-bold" id="mapLocationText">Click any log row to pinpoint GPS coordinates</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="view-timesheet" class="ct-card p-3 mb-4" style="display: none;">
+                        <h6 class="fw-bold mb-3"><i class="bi bi-calendar-week me-2"></i>Weekly Timesheet Matrix</h6>
+                        <div class="table-responsive">
+                            <table class="table table-ct text-center align-middle">
+                                <thead>
+                                    <tr>
+                                        <th class="text-start">Full Name</th>
+                                        <th>Mon 9/1</th>
+                                        <th>Tue 9/2</th>
+                                        <th>Wed 9/3</th>
+                                        <th>Thu 9/4</th>
+                                        <th>Fri 9/5</th>
+                                        <th>Sat 9/6</th>
+                                        <th>Sun 9/7</th>
+                                        <th>Total Hours</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="text-start fw-bold">Jaypee Balonzo <br><small class="text-muted">ID: 3286</small></td>
+                                        <td><span class="ts-pill">16:00</span></td>
+                                        <td><span class="ts-pill">16:00</span></td>
+                                        <td><span class="ts-pill">11:30</span></td>
+                                        <td><span class="ts-pill">16:00</span></td>
+                                        <td><span class="ts-pill">16:00</span></td>
+                                        <td><span class="ts-pill-off">--</span></td>
+                                        <td><span class="ts-pill-off">--</span></td>
+                                        <td class="fw-bold text-primary">75:30 hrs</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
         </div>
 
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
         <script>
-            const API_BASE = "/api";
-            let leafletMap = null;
-            let mapMarkers = [];
-            let adminSyncPoller = null;
+            let map, marker;
+            let rawLogs = [];
+            let cachedUsers = [];
 
-            function initLeafletMap() {
-                if (leafletMap) return;
-                leafletMap = L.map('map').setView([14.5764, 121.0851], 12);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(leafletMap);
-            }
+            document.addEventListener("DOMContentLoaded", () => {
+                loadJobList();
+                initMap();
+            });
 
-            function switchTab(tabName) {
-                const clockTab = document.getElementById("tabContentClocks");
-                const reqTab = document.getElementById("tabContentRequests");
-                const userTab = document.getElementById("tabContentUsers");
+            function switchTab(tab) {
+                document.getElementById('tab-jobs').style.display = tab === 'jobs' ? 'block' : 'none';
+                document.getElementById('tab-dtr').style.display = tab === 'dtr' ? 'block' : 'none';
+                document.getElementById('tab-users').style.display = tab === 'users' ? 'block' : 'none';
 
-                clockTab.classList.add("hidden");
-                reqTab.classList.add("hidden");
-                userTab.classList.add("hidden");
+                document.querySelectorAll('.ct-nav-link').forEach(el => el.classList.remove('active'));
+                if(document.getElementById('nav-' + tab)) document.getElementById('nav-' + tab).classList.add('active');
 
-                if (tabName === 'clocks') {
-                    clockTab.classList.remove("hidden");
-                    if (leafletMap) leafletMap.invalidateSize();
-                } else if (tabName === 'requests') {
-                    reqTab.classList.remove("hidden");
-                    loadShiftRequests();
-                } else if (tabName === 'users') {
-                    userTab.classList.remove("hidden");
+                if (tab === 'jobs') loadJobList();
+                if (tab === 'users') { hideUserProfile(); loadUsersList(); }
+                if (tab === 'dtr') {
+                    loadDTRLogs();
+                    setTimeout(() => { if (map) map.invalidateSize(); }, 200);
                 }
             }
 
-            document.getElementById("adminLoginForm").addEventListener("submit", async (e) => {
-                e.preventDefault();
-                const empId = document.getElementById("adminIdInput").value;
-                const pass = document.getElementById("adminPassInput").value;
+            async function loadUsersList() {
+                try {
+                    const res = await fetch('/api/auth/users');
+                    cachedUsers = await res.json();
+                    const tbody = document.getElementById('usersTableBody');
+                    tbody.innerHTML = '';
 
-                const res = await fetch(`${API_BASE}/login`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ employee_id: empId, password: pass })
+                    cachedUsers.forEach(u => {
+                        const initial = u.name ? u.name.charAt(0) : 'U';
+                        tbody.innerHTML += `
+                            <tr onclick="showUserProfile('${u.employee_id}')">
+                                <td><input type="checkbox" class="form-check-input" onclick="event.stopPropagation()"></td>
+                                <td>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="bg-primary text-white rounded-circle fw-bold d-flex align-items-center justify-content-center" style="width: 28px; height: 28px; font-size: 11px;">${initial}</div>
+                                        <span class="fw-bold text-primary">${u.name}</span>
+                                    </div>
+                                </td>
+                                <td><strong>${u.employee_id}</strong></td>
+                                <td>${u.position}</td>
+                                <td><span class="badge bg-secondary-subtle text-secondary px-2 py-1">${u.department}</span></td>
+                                <td><code>${u.kiosk_code}</code></td>
+                                <td>${u.last_login}</td>
+                                <td>${u.date_added}</td>
+                            </tr>
+                        `;
+                    });
+                } catch (e) {
+                    console.log('Error loading users:', e);
+                }
+            }
+
+            function showUserProfile(empId) {
+                const user = cachedUsers.find(u => u.employee_id === empId);
+                if (!user) return;
+
+                document.getElementById('editFirstName').value = user.first_name || '';
+                document.getElementById('editLastName').value = user.last_name || '';
+                document.getElementById('editMobilePhone').value = user.mobile_phone || '';
+                document.getElementById('editEmail').value = user.email || '';
+                document.getElementById('editEmployeeId').value = user.employee_id;
+                document.getElementById('editBirthday').value = user.birthday || '';
+                document.getElementById('editGender').value = user.gender || 'Male';
+                document.getElementById('editCivilStatus').value = user.civil_status || 'Single';
+                document.getElementById('editAgency').value = user.agency || 'Direct Hire';
+
+                document.getElementById('profileHeaderName').innerText = user.name;
+                document.getElementById('profileHeaderDept').innerText = user.department;
+                document.getElementById('profileAvatar').innerText = user.name.charAt(0);
+                document.getElementById('activityUserName').innerText = user.name;
+
+                document.getElementById('users-list-view').style.display = 'none';
+                document.getElementById('user-profile-editor-view').style.display = 'block';
+            }
+
+            function hideUserProfile() {
+                document.getElementById('users-list-view').style.display = 'block';
+                document.getElementById('user-profile-editor-view').style.display = 'none';
+            }
+
+            async function saveUserProfile() {
+                const empId = document.getElementById('editEmployeeId').value;
+                const payload = {
+                    first_name: document.getElementById('editFirstName').value,
+                    last_name: document.getElementById('editLastName').value,
+                    mobile_phone: document.getElementById('editMobilePhone').value,
+                    email: document.getElementById('editEmail').value,
+                    birthday: document.getElementById('editBirthday').value,
+                    gender: document.getElementById('editGender').value,
+                    civil_status: document.getElementById('editCivilStatus').value,
+                    agency: document.getElementById('editAgency').value
+                };
+
+                const res = await fetch('/api/auth/users/' + empId, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
                 });
 
                 if (res.ok) {
-                    const data = await res.json();
-                    if (data.role === "super_admin") {
-                        document.getElementById("loginOverlay").classList.add("hidden");
-                        document.getElementById("adminWorkspace").classList.remove("hidden");
-                        initLeafletMap();
-                        await loadDashboard();
-
-                        clearInterval(adminSyncPoller);
-                        adminSyncPoller = setInterval(loadPunches, 3000);
-                    }
+                    alert('User profile updated successfully!');
+                    loadUsersList();
+                } else {
+                    alert('Failed to update user profile.');
                 }
-            });
-
-            function logoutAdmin() {
-                clearInterval(adminSyncPoller);
-                document.getElementById("adminWorkspace").classList.add("hidden");
-                document.getElementById("loginOverlay").classList.remove("hidden");
             }
 
-            async function loadDashboard() {
-                await loadPunches();
-                await loadShiftRequests();
+            function initMap() {
+                map = L.map('map-container', { zoomControl: true }).setView([14.5764, 121.0851], 15);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+                marker = L.marker([14.5764, 121.0851]).addTo(map);
             }
 
-            async function loadPunches() {
-                try {
-                    const res = await fetch(`${API_BASE}/admin/dtr`);
-                    const data = await res.json();
+            function updateMapPin(lat, lng, label) {
+                if(lat && lng) {
+                    map.setView([lat, lng], 16);
+                    marker.setLatLng([lat, lng]);
+                    setTimeout(() => map.invalidateSize(), 100);
+                    document.getElementById('mapLocationText').innerText = `GPS Pin: ${lat.toFixed(5)}, ${lng.toFixed(5)} (${label})`;
+                }
+            }
+
+            async function loadJobList() {
+                const res = await fetch('/api/jobs');
+                const data = await res.json();
+                const tbody = document.getElementById('jobTableBody');
+                tbody.innerHTML = '';
+
+                data.forEach(job => {
+                    const titlesCount = job.sub_items ? job.sub_items.length : 0;
+                    const titlesListText = titlesCount > 0 ? `<span class="jobtitle-pill"><i class="bi bi-arrow-return-right me-1"></i>${titlesCount} Job Titles</span>` : '<span class="text-muted small">No Job Title</span>';
                     
-                    const tbody = document.getElementById("dtrTableBody");
-                    const mapUserList = document.getElementById("mapUserList");
-                    tbody.innerHTML = "";
-                    mapUserList.innerHTML = "";
-
-                    mapMarkers.forEach(m => leafletMap.removeLayer(m));
-                    mapMarkers = [];
-
-                    let activeClockedInCount = 0;
-                    const seenUsers = new Set();
-
-                    data.forEach(p => {
-                        const isClockIn = p.punch_type === 'CLOCK_IN';
-                        if (!seenUsers.has(p.employee_id)) {
-                            seenUsers.add(p.employee_id);
-                            if (isClockIn) activeClockedInCount++;
-                        }
-
-                        tbody.innerHTML += `
-                            <tr class="hover:bg-slate-50 transition">
-                                <td class="p-3.5 pl-5 font-mono text-xs text-slate-400">#${p.id}</td>
-                                <td class="p-3.5 font-bold text-slate-800">${p.employee_name} (${p.employee_id})</td>
-                                <td class="p-3.5">
-                                    <span class="px-2.5 py-0.5 rounded-full text-xs font-bold ${isClockIn ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}">
-                                        ${p.punch_type}
-                                    </span>
-                                </td>
-                                <td class="p-3.5 text-xs font-mono font-semibold text-slate-700">${p.formatted_time}</td>
-                                <td class="p-3.5 text-xs text-slate-500">${p.address}</td>
-                                <td class="p-3.5 pr-5 text-right">
-                                    <button onclick="deletePunch(${p.id})" class="text-xs text-rose-600 hover:underline font-semibold">Delete</button>
-                                </td>
-                            </tr>
-                        `;
-
-                        const lat = parseFloat(p.latitude) || 14.5764;
-                        const lng = parseFloat(p.longitude) || 121.0851;
-
-                        if (leafletMap) {
-                            const marker = L.marker([lat, lng]).addTo(leafletMap);
-                            mapMarkers.push(marker);
-                        }
-                    });
-
-                    document.getElementById("statClockedInCount").innerText = activeClockedInCount;
-                } catch(e) {}
+                    tbody.innerHTML += `
+                        <tr>
+                            <td><input type="checkbox" class="form-check-input"></td>
+                            <td><div class="fw-bold"><i class="bi bi-circle-fill text-primary me-2" style="font-size:10px;"></i>${job.name}</div></td>
+                            <td><span class="badge bg-light text-dark border">${job.code || 'N/A'}</span></td>
+                            <td>${titlesListText}</td>
+                            <td><span class="badge bg-secondary-subtle text-secondary px-2 py-1">${job.description || 'Head Office'}</span></td>
+                            <td><span class="text-muted small">Head Office Geofence</span></td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteJob(${job.id})"><i class="bi bi-trash"></i></button>
+                            </td>
+                        </tr>
+                    `;
+                });
             }
 
-            async function loadShiftRequests() {
+            async function loadDTRLogs() {
                 try {
-                    const res = await fetch(`${API_BASE}/admin/shift-requests`);
-                    const requests = await res.json();
-                    const tbody = document.getElementById("requestsTableBody");
-                    tbody.innerHTML = "";
-
-                    requests.forEach(r => {
-                        const isPending = r.status === 'PENDING';
-                        tbody.innerHTML += `
-                            <tr class="hover:bg-slate-50 transition">
-                                <td class="p-3.5 font-mono text-slate-400">#${r.id}</td>
-                                <td class="p-3.5 font-bold text-slate-800">${r.employee_name} (${r.employee_id})</td>
-                                <td class="p-3.5 font-bold">${r.requested_punch_type}</td>
-                                <td class="p-3.5 font-mono">${r.requested_timestamp}</td>
-                                <td class="p-3.5 text-slate-600">${r.reason}</td>
-                                <td class="p-3.5">
-                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold ${r.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' : r.status === 'REJECTED' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'}">${r.status}</span>
-                                </td>
-                                <td class="p-3.5 text-right space-x-2">
-                                    ${isPending ? `
-                                        <button onclick="approveRequest(${r.id})" class="px-2.5 py-1 bg-emerald-600 text-white rounded font-semibold text-xs hover:bg-emerald-700">Approve</button>
-                                        <button onclick="rejectRequest(${r.id})" class="px-2.5 py-1 bg-rose-600 text-white rounded font-semibold text-xs hover:bg-rose-700">Reject</button>
-                                    ` : '<span class="text-slate-400">Processed</span>'}
-                                </td>
-                            </tr>
-                        `;
-                    });
-                } catch(e) {}
-            }
-
-            async function approveRequest(id) {
-                if (confirm(`Approve shift edit request #${id}?`)) {
-                    await fetch(`${API_BASE}/admin/shift-requests/${id}/approve`, { method: "POST" });
-                    loadShiftRequests();
-                    loadPunches();
+                    const res = await fetch('/api/punch/logs');
+                    rawLogs = await res.json();
+                    renderLogsTable(rawLogs);
+                } catch (e) {
+                    console.log('Error loading logs:', e);
                 }
             }
 
-            async function rejectRequest(id) {
-                if (confirm(`Reject shift edit request #${id}?`)) {
-                    await fetch(`${API_BASE}/admin/shift-requests/${id}/reject`, { method: "POST" });
-                    loadShiftRequests();
+            function renderLogsTable(logs) {
+                const tbody = document.getElementById('dtrLogsBody');
+                tbody.innerHTML = '';
+
+                if (logs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">No matching punch records found.</td></tr>';
+                    return;
                 }
+
+                logs.forEach((log, index) => {
+                    const badgeClass = log.punch_type === 'CLOCK_IN' ? 'bg-success' : 'bg-danger';
+                    const lat = log.latitude || 14.5764;
+                    const lng = log.longitude || 121.0851;
+                    
+                    tbody.innerHTML += `
+                        <tr onclick="updateMapPin(${lat}, ${lng}, '${log.address}')">
+                            <td>${log.timestamp}</td>
+                            <td><strong>${log.employee_id}</strong></td>
+                            <td><span class="badge ${badgeClass}">${log.punch_type}</span></td>
+                            <td>${log.address}</td>
+                            <td><span class="text-primary text-decoration-underline">${lat.toFixed(4)}, ${lng.toFixed(4)}</span></td>
+                            <td>${log.accuracy}m</td>
+                        </tr>
+                    `;
+
+                    if (index === 0) {
+                        updateMapPin(lat, lng, log.address);
+                    }
+                });
             }
 
-            async function deletePunch(id) {
-                if (confirm(`Delete DTR entry #${id}?`)) {
-                    await fetch(`${API_BASE}/admin/dtr/${id}`, { method: "DELETE" });
-                    loadPunches();
-                }
+            function filterLogs() {
+                const query = (document.getElementById('employeeSearchInput').value || document.getElementById('globalSearchInput').value || '').toLowerCase();
+                const filtered = rawLogs.filter(log => {
+                    return log.employee_id.toLowerCase().includes(query) || log.address.toLowerCase().includes(query);
+                });
+                renderLogsTable(filtered);
             }
         </script>
     </body>
     </html>
     """
-    return HTMLResponse(content=html_content)
