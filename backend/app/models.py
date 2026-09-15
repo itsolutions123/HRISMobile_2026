@@ -11,6 +11,7 @@ class Employee(Base):
     name = Column(String, nullable=False)
     first_name = Column(String, nullable=True)
     last_name = Column(String, nullable=True)
+    suffix = Column(String, nullable=True)
     position = Column(String, nullable=True)
     department = Column(String, nullable=True)
     password_hash = Column(String, nullable=False)
@@ -22,6 +23,8 @@ class Employee(Base):
     agency = Column(String, nullable=True)
     kiosk_code = Column(String, nullable=True)
     role = Column(String, default="Employee", nullable=False)  # 'Employee', 'Manager', 'Admin'
+    status = Column(String, default="APPROVED", nullable=False) # 'PENDING', 'APPROVED', 'DENIED'
+    created_at = Column(DateTime, default=datetime.utcnow)
     manager_id = Column(String, ForeignKey("employees.employee_id"), nullable=True)
 
 class JobCategory(Base):

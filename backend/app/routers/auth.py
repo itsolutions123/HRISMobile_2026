@@ -18,12 +18,23 @@ class LoginRequest(BaseModel):
     employee_id: str
     password: str
 
+class UserRegisterRequest(BaseModel):
+    first_name: str
+    last_name: str
+    suffix: Optional[str] = None
+    email: str
+    password: str
+    department: str
+    mobile_phone: Optional[str] = None
+    name: Optional[str] = None
+
 class UserCreateRequest(BaseModel):
     employee_id: str
     name: str
     password: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    suffix: Optional[str] = None
     position: Optional[str] = None
     department: Optional[str] = None
     role: Optional[str] = "Employee"
@@ -33,6 +44,7 @@ class UserCreateRequest(BaseModel):
 class UserUpdateRequest(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    suffix: Optional[str] = None
     mobile_phone: Optional[str] = None
     email: Optional[str] = None
     position: Optional[str] = None
@@ -42,20 +54,80 @@ class UserUpdateRequest(BaseModel):
     civil_status: Optional[str] = None
     agency: Optional[str] = None
     role: Optional[str] = None
+    status: Optional[str] = None
+
+class UserStatusUpdateRequest(BaseModel):
+    status: str  # 'APPROVED', 'DENIED'
+
+@router.post("/register")
+def register_user(payload: UserRegisterRequest, db: Session = Depends(get_db)):
+    # Check if email is already registered
+    existing_email = db.query(Employee).filter(Employee.email == payload.email).first()
+    if existing_email:
+        raise HTTPException(status_code=400, detail="Email is already registered")
+
+    # Construct full combined display name
+    full_name_parts = [payload.first_name.strip(), payload.last_name.strip()]
+    if payload.suffix and payload.suffix.strip():
+        full_name_parts.append(payload.suffix.strip())
+    combined_name = payload.name.strip() if payload.name and payload.name.strip() else " ".join(full_name_parts)
+
+    # Generate auto employee ID based on user count
+    emp_count = db.query(Employee).count() + 1
+    generated_emp_id = f"EMP{str(emp_count).zfill(3)}"
+
+    hashed_pwd = get_password_hash(payload.password)
+    new_user = Employee(
+        employee_id=generated_emp_id,
+        name=combined_name,
+        first_name=payload.first_name.strip(),
+        last_name=payload.last_name.strip(),
+        suffix=payload.suffix.strip() if payload.suffix else None,
+        email=payload.email,
+        password_hash=hashed_pwd,
+        department=payload.department,
+        mobile_phone=payload.mobile_phone,
+        role="Employee",
+        status="PENDING"
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    return {
+        "status": "success",
+        "message": "Registration request submitted. Awaiting admin approval.",
+        "employee_id": new_user.employee_id
+    }
 
 @router.post("/login")
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(Employee).filter(Employee.employee_id == payload.employee_id).first()
+    user = db.query(Employee).filter(
+        (Employee.employee_id == payload.employee_id) | (Employee.email == payload.employee_id)
+    ).first()
+
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid Employee ID or Password"
+            detail="Invalid Credentials"
         )
-    
+
+    if user.status == "PENDING":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account join request is pending approval by the Admin."
+        )
+
+    if user.status == "DENIED":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account join request was denied by the Admin."
+        )
+
     access_token = create_access_token(
         data={"sub": user.employee_id, "role": user.role}
     )
-    
+
     return {
         "status": "success",
         "access_token": access_token,
@@ -76,11 +148,13 @@ def get_me(current_user: Employee = Depends(get_current_user)):
         "name": current_user.name,
         "first_name": current_user.first_name,
         "last_name": current_user.last_name,
+        "suffix": current_user.suffix,
         "position": current_user.position,
         "department": current_user.department,
         "role": current_user.role,
         "email": current_user.email,
-        "mobile_phone": current_user.mobile_phone
+        "mobile_phone": current_user.mobile_phone,
+        "status": current_user.status
     }
 
 @router.get("/users")
@@ -98,6 +172,7 @@ def get_all_users(
             "name": u.name,
             "first_name": first,
             "last_name": last,
+            "suffix": u.suffix or "",
             "position": u.position or "Staff",
             "department": u.department or "General",
             "mobile_phone": u.mobile_phone or "",
@@ -107,42 +182,16 @@ def get_all_users(
             "civil_status": u.civil_status or "",
             "agency": u.agency or "",
             "role": u.role,
+            "status": getattr(u, "status", "APPROVED"),
+            "created_at": u.created_at.strftime("%Y-%m-%d %H:%M:%S") if getattr(u, "created_at", None) else "",
             "kiosk_code": u.employee_id.zfill(4)
         })
     return results
 
-@router.post("/users")
-def create_user(
-    payload: UserCreateRequest,
-    db: Session = Depends(get_db),
-    current_user: Employee = Depends(require_roles(["Admin"]))
-):
-    existing = db.query(Employee).filter(Employee.employee_id == payload.employee_id).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Employee ID already exists")
-
-    hashed_pwd = get_password_hash(payload.password)
-    new_user = Employee(
-        employee_id=payload.employee_id,
-        name=payload.name,
-        first_name=payload.first_name,
-        last_name=payload.last_name,
-        position=payload.position,
-        department=payload.department,
-        password_hash=hashed_pwd,
-        role=payload.role or "Employee",
-        email=payload.email,
-        mobile_phone=payload.mobile_phone
-    )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-    return {"status": "success", "message": "User created", "employee_id": new_user.employee_id}
-
-@router.put("/users/{emp_id}")
-def update_user_details(
+@router.put("/users/{emp_id}/status")
+def update_user_status(
     emp_id: str,
-    payload: UserUpdateRequest,
+    payload: UserStatusUpdateRequest,
     db: Session = Depends(get_db),
     current_user: Employee = Depends(require_roles(["Admin"]))
 ):
@@ -150,20 +199,7 @@ def update_user_details(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if payload.first_name is not None: user.first_name = payload.first_name
-    if payload.last_name is not None: user.last_name = payload.last_name
-    if payload.first_name or payload.last_name:
-        user.name = f"{user.first_name or ''} {user.last_name or ''}".strip()
-    if payload.mobile_phone is not None: user.mobile_phone = payload.mobile_phone
-    if payload.email is not None: user.email = payload.email
-    if payload.position is not None: user.position = payload.position
-    if payload.department is not None: user.department = payload.department
-    if payload.birthday is not None: user.birthday = payload.birthday
-    if payload.gender is not None: user.gender = payload.gender
-    if payload.civil_status is not None: user.civil_status = payload.civil_status
-    if payload.agency is not None: user.agency = payload.agency
-    if payload.role is not None: user.role = payload.role
-
+    user.status = payload.status
     db.commit()
     db.refresh(user)
-    return {"status": "success", "message": "User information updated"}
+    return {"status": "success", "message": f"User status updated to {payload.status}"}

@@ -39,7 +39,8 @@ def seed_initial_data():
                 password_hash="bigtime@123",
                 mobile_phone="+63 998 940 0957",
                 email="itsupport.associate@bigtimeempire.com",
-                role="Admin"
+                role="Admin",
+                status="APPROVED"
             )
             db.add(test_user)
             db.commit()
@@ -90,6 +91,7 @@ def get_admin_dashboard():
             .modal-content { border-radius: 16px; border: none; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
             .modal-header { border-bottom: 1px solid #f1f5f9; padding: 20px 24px; }
             .modal-footer { border-top: 1px solid #f1f5f9; padding: 16px 24px; }
+            .pending-badge { background-color: #ffe4e6; color: #e11d48; border-radius: 20px; font-size: 11px; font-weight: 700; padding: 2px 8px; }
         </style>
     </head>
     <body>
@@ -104,7 +106,10 @@ def get_admin_dashboard():
                     <div class="section-label">Main</div>
                     <a class="nav-link active" id="nav-clock" onclick="switchTab('clock')"><i class="bi bi-clock-history"></i> Time Clock</a>
                     <a class="nav-link" id="nav-jobs" onclick="switchTab('jobs')"><i class="bi bi-briefcase"></i> Job List</a>
-                    <a class="nav-link" id="nav-users" onclick="switchTab('users')"><i class="bi bi-people"></i> Users & Directory</a>
+                    <a class="nav-link d-flex justify-content-between align-items-center" id="nav-users" onclick="switchTab('users')">
+                        <span><i class="bi bi-people me-2"></i> Users & Directory</span>
+                        <span class="pending-badge" id="sidebar-pending-count" style="display:none;">0</span>
+                    </a>
 
                     <div class="section-label">Management</div>
                     <a class="nav-link" onclick="alert('Feature accessible via mobile App screen.')"><i class="bi bi-calendar-event"></i> Scheduling</a>
@@ -182,8 +187,33 @@ def get_admin_dashboard():
                         </div>
 
                         <div id="tab-users" class="card-custom" style="display:none;">
+                            <!-- JOIN REQUEST NOTIFICATION CARD -->
+                            <div id="join-requests-card" class="card border-primary mb-4 shadow-sm" style="display:none;">
+                                <div class="card-header bg-primary text-white fw-bold d-flex justify-content-between align-items-center">
+                                    <span><i class="bi bi-bell-fill me-2"></i> Pending Join Requests</span>
+                                    <span class="badge bg-light text-primary fw-bold" id="pending-requests-count">0</span>
+                                </div>
+                                <div class="card-body p-0">
+                                    <div class="table-responsive">
+                                        <table class="table table-hover align-middle m-0">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th>Applicant Name</th>
+                                                    <th>Email</th>
+                                                    <th>Department</th>
+                                                    <th>Mobile Phone</th>
+                                                    <th>Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="pending-users-table-body">
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="d-flex justify-content-between align-items-center mb-3">
-                                <h5 class="fw-bold m-0"><i class="bi bi-people text-primary me-2"></i> Employee Directory</h5>
+                                <h5 class="fw-bold m-0"><i class="bi bi-people text-primary me-2"></i> Active Employee Directory</h5>
                             </div>
                             <div class="table-responsive">
                                 <table class="table table-hover align-middle">
@@ -193,11 +223,12 @@ def get_admin_dashboard():
                                             <th>Full Name</th>
                                             <th>Role</th>
                                             <th>Department</th>
-                                            <th>Position</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody id="users-table-body">
-                                        <tr><td colspan="5" class="text-center text-muted">Loading employees...</td></tr>
+                                        <tr><td colspan="6" class="text-center text-muted">Loading employees...</td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -422,22 +453,80 @@ def get_admin_dashboard():
                     });
                     if (!res.ok) throw new Error('HTTP ' + res.status);
                     const users = await res.json();
+
+                    const pendingUsers = users.filter(u => u.status === 'PENDING');
+                    const activeUsers = users.filter(u => u.status !== 'PENDING');
+
+                    // Render Pending Requests Card
+                    if (pendingUsers.length > 0) {
+                        document.getElementById('join-requests-card').style.display = 'block';
+                        document.getElementById('pending-requests-count').innerText = pendingUsers.length;
+                        document.getElementById('sidebar-pending-count').innerText = pendingUsers.length;
+                        document.getElementById('sidebar-pending-count').style.display = 'inline-block';
+
+                        let pendingHtml = '';
+                        pendingUsers.forEach(u => {
+                            pendingHtml += `
+                                <tr>
+                                    <td><strong>${u.name}</strong> (${u.employee_id})</td>
+                                    <td>${u.email || '-'}</td>
+                                    <td><span class="badge bg-secondary">${u.department || 'General'}</span></td>
+                                    <td>${u.mobile_phone || '-'}</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-success me-1 fw-bold" onclick="updateUserStatus('${u.employee_id}', 'APPROVED')"><i class="bi bi-check-lg me-1"></i> Accept</button>
+                                        <button class="btn btn-sm btn-outline-danger fw-bold" onclick="updateUserStatus('${u.employee_id}', 'DENIED')"><i class="bi bi-x-lg me-1"></i> Deny</button>
+                                    </td>
+                                </tr>`;
+                        });
+                        document.getElementById('pending-users-table-body').innerHTML = pendingHtml;
+                    } else {
+                        document.getElementById('join-requests-card').style.display = 'none';
+                        document.getElementById('sidebar-pending-count').style.display = 'none';
+                    }
+
+                    // Render Active Users Table
                     let html = '';
-                    users.forEach(u => {
+                    activeUsers.forEach(u => {
+                        const statusBadge = u.status === 'APPROVED' 
+                            ? '<span class="badge bg-success">Approved</span>' 
+                            : '<span class="badge bg-danger">Denied</span>';
+
                         html += `
                             <tr>
                                 <td><strong>${u.employee_id}</strong></td>
                                 <td>${u.name}</td>
                                 <td><span class="badge bg-info text-dark">${u.role}</span></td>
                                 <td>${u.department || 'N/A'}</td>
-                                <td>${u.position || 'N/A'}</td>
+                                <td>${statusBadge}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="alert('User ID: ${u.employee_id}')"><i class="bi bi-gear"></i> Manage</button>
+                                </td>
                             </tr>`;
                     });
-                    document.getElementById('users-table-body').innerHTML = html || '<tr><td colspan="5" class="text-center text-muted">No users found.</td></tr>';
+                    document.getElementById('users-table-body').innerHTML = html || '<tr><td colspan="6" class="text-center text-muted">No active employees found.</td></tr>';
                 } catch(e) {
                     console.error('Error loading users:', e);
-                    document.getElementById('users-table-body').innerHTML = '<tr><td colspan="5" class="text-center text-danger">Failed to load users.</td></tr>';
+                    document.getElementById('users-table-body').innerHTML = '<tr><td colspan="6" class="text-center text-danger">Failed to load users.</td></tr>';
                 }
+            }
+
+            async function updateUserStatus(empId, newStatus) {
+                try {
+                    const token = await getAdminAuthToken();
+                    const res = await fetch(`/api/auth/users/${empId}/status`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + token
+                        },
+                        body: JSON.stringify({ status: newStatus })
+                    });
+                    if (res.ok) {
+                        loadUsersTable();
+                    } else {
+                        alert('Failed to update user status.');
+                    }
+                } catch(e) { alert('Server error updating user request.'); }
             }
 
             function toggleSelectAllJobs(source) {
