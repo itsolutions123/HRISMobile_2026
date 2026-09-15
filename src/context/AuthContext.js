@@ -4,6 +4,7 @@ export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const [token, setToken] = useState(null);
   const API_BASE_URL = 'http://10.0.10.37:8089';
 
   const parseErrorMessage = (detail, fallbackMsg) => {
@@ -38,6 +39,9 @@ export const AuthProvider = ({ children }) => {
 
       if (data.status === 'success' && data.user) {
         setUser(data.user);
+        if (data.access_token) {
+          setToken(data.access_token);
+        }
         return { success: true, message: 'Login successful' };
       }
       return { success: false, message: 'Invalid response from server' };
@@ -81,10 +85,11 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     setUser(null);
+    setToken(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, API_BASE_URL }}>
+    <AuthContext.Provider value={{ user, token, login, register, logout, API_BASE_URL }}>
       {children}
     </AuthContext.Provider>
   );

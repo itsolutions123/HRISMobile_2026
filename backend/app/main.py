@@ -92,6 +92,7 @@ def get_admin_dashboard():
             .modal-header { border-bottom: 1px solid #f1f5f9; padding: 20px 24px; }
             .modal-footer { border-top: 1px solid #f1f5f9; padding: 16px 24px; }
             .pending-badge { background-color: #ffe4e6; color: #e11d48; border-radius: 20px; font-size: 11px; font-weight: 700; padding: 2px 8px; }
+            .offcanvas-user-drawer { width: 450px !important; }
         </style>
     </head>
     <body>
@@ -112,7 +113,7 @@ def get_admin_dashboard():
                     </a>
 
                     <div class="section-label">Management</div>
-                    <a class="nav-link" onclick="alert('Feature accessible via mobile App screen.')"><i class="bi bi-calendar-event"></i> Scheduling</a>
+                    <a class="nav-link" onclick="showToast('Scheduling module accessible via Mobile App workspace.', 'info')"><i class="bi bi-calendar-event"></i> Scheduling</a>
                     <a class="nav-link" onclick="window.open('/api/dtr/export', '_blank')"><i class="bi bi-file-earmark-excel"></i> Export DTR</a>
                 </div>
 
@@ -130,8 +131,8 @@ def get_admin_dashboard():
                                 <i class="bi bi-chevron-down text-muted ms-1"></i>
                             </button>
                             <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-2">
-                                <li><a class="dropdown-item py-2" onclick="alert('System Admin ID: 3286\\nRole: Admin\\nStatus: Active')"><i class="bi bi-person me-2"></i> Profile & Roles</a></li>
-                                <li><a class="dropdown-item py-2" onclick="alert('Settings configured via environment.')"><i class="bi bi-gear me-2"></i> Settings</a></li>
+                                <li><a class="dropdown-item py-2" onclick="showToast('System Admin ID: 3286 | Role: Admin | Status: Active', 'info')"><i class="bi bi-person me-2"></i> Profile & Roles</a></li>
+                                <li><a class="dropdown-item py-2" onclick="showToast('System configuration loaded.', 'info')"><i class="bi bi-gear me-2"></i> Settings</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item py-2 text-danger" onclick="location.reload()"><i class="bi bi-box-arrow-right me-2"></i> Sign out</a></li>
                             </ul>
@@ -213,8 +214,46 @@ def get_admin_dashboard():
                             </div>
 
                             <div class="d-flex justify-content-between align-items-center mb-3">
-                                <h5 class="fw-bold m-0"><i class="bi bi-people text-primary me-2"></i> Active Employee Directory</h5>
+                                <h5 class="fw-bold m-0"><i class="bi bi-people text-primary me-2"></i> Employee Directory</h5>
                             </div>
+
+                            <!-- SEARCH BAR & FILTERS ROW -->
+                            <div class="row g-2 mb-3 bg-light p-3 rounded-3 border">
+                                <div class="col-md-4">
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                                        <input type="text" class="form-control border-start-0" id="userSearchInput" placeholder="Search by ID, name, or email..." onkeyup="renderFilteredUsers()">
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <select class="form-select" id="filterDept" onchange="renderFilteredUsers()">
+                                        <option value="">All Departments</option>
+                                        <option value="Admin">Admin</option>
+                                        <option value="IT Operations">IT Operations</option>
+                                        <option value="Executive">Executive</option>
+                                        <option value="Operations">Operations</option>
+                                        <option value="Sales">Sales</option>
+                                        <option value="HR">HR</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <select class="form-select" id="filterRole" onchange="renderFilteredUsers()">
+                                        <option value="">All Roles</option>
+                                        <option value="Employee">Employee</option>
+                                        <option value="Manager">Manager</option>
+                                        <option value="Admin">Admin</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <select class="form-select" id="filterStatus" onchange="renderFilteredUsers()">
+                                        <option value="">All Statuses (Active & Archived)</option>
+                                        <option value="APPROVED">Approved</option>
+                                        <option value="DENIED">Denied</option>
+                                        <option value="ARCHIVED">Archived</option>
+                                    </select>
+                                </div>
+                            </div>
+
                             <div class="table-responsive">
                                 <table class="table table-hover align-middle">
                                     <thead class="table-light">
@@ -223,12 +262,13 @@ def get_admin_dashboard():
                                             <th>Full Name</th>
                                             <th>Role</th>
                                             <th>Department</th>
+                                            <th>Date Added</th>
                                             <th>Status</th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody id="users-table-body">
-                                        <tr><td colspan="6" class="text-center text-muted">Loading employees...</td></tr>
+                                        <tr><td colspan="7" class="text-center text-muted">Loading employees...</td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -239,6 +279,88 @@ def get_admin_dashboard():
             </div>
         </div>
 
+        <!-- USER PROFILE EDIT DRAWER -->
+        <div class="offcanvas offcanvas-end offcanvas-user-drawer" tabindex="-1" id="userDrawer" aria-labelledby="userDrawerLabel">
+            <div class="offcanvas-header border-bottom">
+                <h5 class="offcanvas-title fw-bold" id="userDrawerLabel"><i class="bi bi-person-gear text-primary me-2"></i> Edit Employee Profile</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+            </div>
+            <div class="offcanvas-body p-4">
+                <form id="editUserForm">
+                    <input type="hidden" id="drawerOriginalEmpId">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold fs-7 text-secondary">Employee ID *</label>
+                        <input type="text" class="form-control" id="drawerEmpId" required placeholder="e.g. EMP001">
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-5">
+                            <label class="form-label fw-bold fs-7 text-secondary">First Name *</label>
+                            <input type="text" class="form-control" id="drawerFirstName" required>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label fw-bold fs-7 text-secondary">Last Name *</label>
+                            <input type="text" class="form-control" id="drawerLastName" required>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold fs-7 text-secondary">Suffix</label>
+                            <input type="text" class="form-control" id="drawerSuffix" placeholder="Jr.">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold fs-7 text-secondary">Email Address</label>
+                        <input type="email" class="form-control" id="drawerEmail">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold fs-7 text-secondary">Mobile Phone Number</label>
+                        <input type="text" class="form-control" id="drawerMobilePhone">
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold fs-7 text-secondary">Department</label>
+                            <select class="form-select" id="drawerDepartment">
+                                <option value="Admin">Admin</option>
+                                <option value="IT Operations">IT Operations</option>
+                                <option value="Executive">Executive</option>
+                                <option value="Operations">Operations</option>
+                                <option value="Sales">Sales</option>
+                                <option value="HR">HR</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold fs-7 text-secondary">System Role</label>
+                            <select class="form-select" id="drawerRole">
+                                <option value="Employee">Employee</option>
+                                <option value="Manager">Manager</option>
+                                <option value="Admin">Admin</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold fs-7 text-secondary">Position Title</label>
+                        <input type="text" class="form-control" id="drawerPosition" placeholder="e.g. IT Staff">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold fs-7 text-secondary">Account Status</label>
+                        <select class="form-select" id="drawerStatus">
+                            <option value="APPROVED">APPROVED (Active Access)</option>
+                            <option value="DENIED">DENIED (Blocked Access)</option>
+                            <option value="ARCHIVED">ARCHIVED (User Retained / Access Blocked)</option>
+                            <option value="PENDING">PENDING (Approval Queue)</option>
+                        </select>
+                    </div>
+                    <div class="d-grid mt-4 gap-2">
+                        <button type="button" class="btn btn-primary fw-bold py-2" onclick="saveUserProfileFromDrawer()">
+                            <i class="bi bi-save me-1"></i> Save Employee Profile
+                        </button>
+                        <button type="button" class="btn btn-outline-warning fw-bold py-2" onclick="archiveUserFromDrawer()">
+                            <i class="bi bi-archive me-1"></i> Archive User (Retain Data)
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- JOB MODAL -->
         <div class="modal fade" id="jobModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
@@ -268,12 +390,32 @@ def get_admin_dashboard():
             </div>
         </div>
 
+        <!-- TOAST CONTAINER -->
+        <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1080;">
+            <div id="liveToast" class="toast align-items-center text-white border-0 shadow" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="d-flex">
+                    <div class="toast-body fs-7 fw-medium" id="toastMessage"></div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        </div>
+
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
         <script>
             let map, markersGroup;
-            let currentBsModal;
+            let currentBsModal, currentBsDrawer;
             let adminToken = '';
+            let globalUsersList = [];
+
+            function showToast(msg, type = 'success') {
+                const toastEl = document.getElementById('liveToast');
+                const toastMsg = document.getElementById('toastMessage');
+                toastEl.className = `toast align-items-center text-white border-0 shadow bg-${type === 'success' ? 'success' : type === 'danger' ? 'danger' : 'primary'}`;
+                toastMsg.innerText = msg;
+                const toast = new bootstrap.Toast(toastEl, { delay: 4000 });
+                toast.show();
+            }
 
             async function getAdminAuthToken() {
                 if (adminToken) return adminToken;
@@ -423,7 +565,7 @@ def get_admin_dashboard():
                 const subItemsStr = document.getElementById('modalJobSubItems').value.trim();
 
                 if (!name) {
-                    alert('Please enter a job category name.');
+                    showToast('Please enter a job category name.', 'danger');
                     return;
                 }
 
@@ -437,12 +579,13 @@ def get_admin_dashboard():
                     });
                     if (res.ok) {
                         if (currentBsModal) currentBsModal.hide();
+                        showToast('Job category saved successfully!');
                         loadJobsTable();
                     } else {
                         const err = await res.json();
-                        alert(err.detail || 'Failed to save job category.');
+                        showToast(err.detail || 'Failed to save job category.', 'danger');
                     }
-                } catch(e) { alert('Error connecting to backend server.'); }
+                } catch(e) { showToast('Error connecting to backend server.', 'danger'); }
             }
 
             async function loadUsersTable() {
@@ -452,10 +595,9 @@ def get_admin_dashboard():
                         headers: { 'Authorization': 'Bearer ' + token }
                     });
                     if (!res.ok) throw new Error('HTTP ' + res.status);
-                    const users = await res.json();
+                    globalUsersList = await res.json();
 
-                    const pendingUsers = users.filter(u => u.status === 'PENDING');
-                    const activeUsers = users.filter(u => u.status !== 'PENDING');
+                    const pendingUsers = globalUsersList.filter(u => u.status === 'PENDING');
 
                     // Render Pending Requests Card
                     if (pendingUsers.length > 0) {
@@ -484,30 +626,149 @@ def get_admin_dashboard():
                         document.getElementById('sidebar-pending-count').style.display = 'none';
                     }
 
-                    // Render Active Users Table
-                    let html = '';
-                    activeUsers.forEach(u => {
-                        const statusBadge = u.status === 'APPROVED' 
-                            ? '<span class="badge bg-success">Approved</span>' 
-                            : '<span class="badge bg-danger">Denied</span>';
-
-                        html += `
-                            <tr>
-                                <td><strong>${u.employee_id}</strong></td>
-                                <td>${u.name}</td>
-                                <td><span class="badge bg-info text-dark">${u.role}</span></td>
-                                <td>${u.department || 'N/A'}</td>
-                                <td>${statusBadge}</td>
-                                <td>
-                                    <button class="btn btn-sm btn-outline-secondary" onclick="alert('User ID: ${u.employee_id}')"><i class="bi bi-gear"></i> Manage</button>
-                                </td>
-                            </tr>`;
-                    });
-                    document.getElementById('users-table-body').innerHTML = html || '<tr><td colspan="6" class="text-center text-muted">No active employees found.</td></tr>';
+                    renderFilteredUsers();
                 } catch(e) {
                     console.error('Error loading users:', e);
-                    document.getElementById('users-table-body').innerHTML = '<tr><td colspan="6" class="text-center text-danger">Failed to load users.</td></tr>';
+                    document.getElementById('users-table-body').innerHTML = '<tr><td colspan="7" class="text-center text-danger">Failed to load users.</td></tr>';
                 }
+            }
+
+            function renderFilteredUsers() {
+                const search = (document.getElementById('userSearchInput').value || '').toLowerCase().trim();
+                const deptFilter = document.getElementById('filterDept').value;
+                const roleFilter = document.getElementById('filterRole').value;
+                const statusFilter = document.getElementById('filterStatus').value;
+
+                let filtered = globalUsersList.filter(u => u.status !== 'PENDING');
+
+                if (search) {
+                    filtered = filtered.filter(u => 
+                        (u.employee_id && u.employee_id.toLowerCase().includes(search)) ||
+                        (u.name && u.name.toLowerCase().includes(search)) ||
+                        (u.email && u.email.toLowerCase().includes(search))
+                    );
+                }
+
+                if (deptFilter) {
+                    filtered = filtered.filter(u => (u.department || '') === deptFilter);
+                }
+
+                if (roleFilter) {
+                    filtered = filtered.filter(u => (u.role || '') === roleFilter);
+                }
+
+                if (statusFilter) {
+                    filtered = filtered.filter(u => (u.status || '') === statusFilter);
+                }
+
+                let html = '';
+                filtered.forEach(u => {
+                    const statusClass = u.status === 'APPROVED' ? 'bg-success' : u.status === 'ARCHIVED' ? 'bg-warning text-dark' : 'bg-danger';
+
+                    html += `
+                        <tr>
+                            <td><strong>${u.employee_id}</strong></td>
+                            <td>${u.name}</td>
+                            <td><span class="badge bg-info text-dark">${u.role}</span></td>
+                            <td>${u.department || 'N/A'}</td>
+                            <td><small class="text-muted">${u.date_added || 'N/A'}</small></td>
+                            <td>
+                                <select class="form-select form-select-sm border-0 fw-bold ${statusClass}" 
+                                        style="width: 125px;" 
+                                        onchange="updateUserStatus('${u.employee_id}', this.value)">
+                                    <option value="APPROVED" ${u.status === 'APPROVED' ? 'selected' : ''} class="bg-white text-dark">Approved</option>
+                                    <option value="DENIED" ${u.status === 'DENIED' ? 'selected' : ''} class="bg-white text-dark">Denied</option>
+                                    <option value="ARCHIVED" ${u.status === 'ARCHIVED' ? 'selected' : ''} class="bg-white text-dark">Archived</option>
+                                </select>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary fw-bold me-1" onclick="openUserEditDrawer('${u.employee_id}')"><i class="bi bi-pencil-square me-1"></i> Manage Profile</button>
+                                <button class="btn btn-sm btn-outline-warning fw-bold" onclick="updateUserStatus('${u.employee_id}', 'ARCHIVED')"><i class="bi bi-archive"></i> Archive</button>
+                            </td>
+                        </tr>`;
+                });
+                document.getElementById('users-table-body').innerHTML = html || '<tr><td colspan="7" class="text-center text-muted">No employees match the search/filter criteria.</td></tr>';
+            }
+
+            function openUserEditDrawer(empId) {
+                const user = globalUsersList.find(u => u.employee_id === empId);
+                if (!user) return;
+
+                document.getElementById('drawerOriginalEmpId').value = user.employee_id;
+                document.getElementById('drawerEmpId').value = user.employee_id;
+                document.getElementById('drawerFirstName').value = user.first_name || '';
+                document.getElementById('drawerLastName').value = user.last_name || '';
+                document.getElementById('drawerSuffix').value = user.suffix || '';
+                document.getElementById('drawerEmail').value = user.email || '';
+                document.getElementById('drawerMobilePhone').value = user.mobile_phone || '';
+                document.getElementById('drawerDepartment').value = user.department || 'Admin';
+                document.getElementById('drawerRole').value = user.role || 'Employee';
+                document.getElementById('drawerPosition').value = user.position || '';
+                document.getElementById('drawerStatus').value = user.status || 'APPROVED';
+
+                const drawerEl = document.getElementById('userDrawer');
+                currentBsDrawer = new bootstrap.Offcanvas(drawerEl);
+                currentBsDrawer.show();
+            }
+
+            async function saveUserProfileFromDrawer() {
+                const origEmpId = document.getElementById('drawerOriginalEmpId').value;
+                const newEmpId = document.getElementById('drawerEmpId').value.trim();
+                const firstName = document.getElementById('drawerFirstName').value.trim();
+                const lastName = document.getElementById('drawerLastName').value.trim();
+                const suffix = document.getElementById('drawerSuffix').value.trim();
+                const email = document.getElementById('drawerEmail').value.trim();
+                const mobilePhone = document.getElementById('drawerMobilePhone').value.trim();
+                const department = document.getElementById('drawerDepartment').value;
+                const role = document.getElementById('drawerRole').value;
+                const position = document.getElementById('drawerPosition').value.trim();
+                const status = document.getElementById('drawerStatus').value;
+
+                if (!newEmpId || !firstName || !lastName) {
+                    showToast('Employee ID, First Name, and Last Name are required.', 'danger');
+                    return;
+                }
+
+                try {
+                    const token = await getAdminAuthToken();
+                    const res = await fetch(`/api/auth/users/${origEmpId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + token
+                        },
+                        body: JSON.stringify({
+                            new_employee_id: newEmpId,
+                            first_name: firstName,
+                            last_name: lastName,
+                            suffix: suffix || '',
+                            email: email,
+                            mobile_phone: mobilePhone,
+                            department: department,
+                            role: role,
+                            position: position,
+                            status: status
+                        })
+                    });
+
+                    if (res.ok) {
+                        if (currentBsDrawer) currentBsDrawer.hide();
+                        showToast(`Profile updated successfully!`);
+                        loadUsersTable();
+                    } else {
+                        const err = await res.json();
+                        showToast(err.detail || 'Failed to update employee profile.', 'danger');
+                    }
+                } catch(e) {
+                    showToast('Server error updating employee profile.', 'danger');
+                }
+            }
+
+            async function archiveUserFromDrawer() {
+                const origEmpId = document.getElementById('drawerOriginalEmpId').value;
+                if (!confirm(`Are you sure you want to archive employee ${origEmpId}? (User data will be safely retained)`)) return;
+                await updateUserStatus(origEmpId, 'ARCHIVED');
+                if (currentBsDrawer) currentBsDrawer.hide();
             }
 
             async function updateUserStatus(empId, newStatus) {
@@ -522,11 +783,12 @@ def get_admin_dashboard():
                         body: JSON.stringify({ status: newStatus })
                     });
                     if (res.ok) {
+                        showToast(`Employee ${empId} status changed to ${newStatus}`);
                         loadUsersTable();
                     } else {
-                        alert('Failed to update user status.');
+                        showToast('Failed to update user status.', 'danger');
                     }
-                } catch(e) { alert('Server error updating user request.'); }
+                } catch(e) { showToast('Server error updating user request.', 'danger'); }
             }
 
             function toggleSelectAllJobs(source) {
@@ -539,17 +801,18 @@ def get_admin_dashboard():
                 try {
                     const res = await fetch(`/api/jobs/${id}`, { method: 'DELETE' });
                     if (res.ok) {
+                        showToast('Job category deleted.');
                         loadJobsTable();
                     } else {
-                        alert('Failed to delete job.');
+                        showToast('Failed to delete job.', 'danger');
                     }
-                } catch(e) { alert('Server error deleting job.'); }
+                } catch(e) { showToast('Server error deleting job.', 'danger'); }
             }
 
             async function bulkDeleteJobs() {
                 const selected = Array.from(document.querySelectorAll('.job-checkbox:checked')).map(cb => cb.value);
                 if (selected.length === 0) {
-                    alert('Please select at least one job category to delete.');
+                    showToast('Please select at least one job category to delete.', 'danger');
                     return;
                 }
                 if (!confirm(`Delete ${selected.length} selected job categories?`)) return;
@@ -557,6 +820,7 @@ def get_admin_dashboard():
                 for (let id of selected) {
                     await fetch(`/api/jobs/${id}`, { method: 'DELETE' });
                 }
+                showToast(`Deleted ${selected.length} job categories.`);
                 loadJobsTable();
             }
 

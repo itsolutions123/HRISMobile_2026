@@ -42,6 +42,7 @@ class UserCreateRequest(BaseModel):
     mobile_phone: Optional[str] = None
 
 class UserUpdateRequest(BaseModel):
+    new_employee_id: Optional[str] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     suffix: Optional[str] = None
@@ -57,22 +58,19 @@ class UserUpdateRequest(BaseModel):
     status: Optional[str] = None
 
 class UserStatusUpdateRequest(BaseModel):
-    status: str  # 'APPROVED', 'DENIED'
+    status: str  # 'APPROVED', 'DENIED', 'PENDING', 'ARCHIVED'
 
 @router.post("/register")
 def register_user(payload: UserRegisterRequest, db: Session = Depends(get_db)):
-    # Check if email is already registered
     existing_email = db.query(Employee).filter(Employee.email == payload.email).first()
     if existing_email:
         raise HTTPException(status_code=400, detail="Email is already registered")
 
-    # Construct full combined display name
     full_name_parts = [payload.first_name.strip(), payload.last_name.strip()]
     if payload.suffix and payload.suffix.strip():
         full_name_parts.append(payload.suffix.strip())
     combined_name = payload.name.strip() if payload.name and payload.name.strip() else " ".join(full_name_parts)
 
-    # Generate auto employee ID based on user count
     emp_count = db.query(Employee).count() + 1
     generated_emp_id = f"EMP{str(emp_count).zfill(3)}"
 
@@ -122,6 +120,12 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Your account join request was denied by the Admin."
+        )
+
+    if user.status == "ARCHIVED":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account has been archived. Please contact your System Administrator."
         )
 
     access_token = create_access_token(
@@ -184,9 +188,67 @@ def get_all_users(
             "role": u.role,
             "status": getattr(u, "status", "APPROVED"),
             "created_at": u.created_at.strftime("%Y-%m-%d %H:%M:%S") if getattr(u, "created_at", None) else "",
+            "date_added": u.created_at.strftime("%b %d, %Y") if getattr(u, "created_at", None) else "N/A",
             "kiosk_code": u.employee_id.zfill(4)
         })
     return results
+
+@router.put("/users/{emp_id}")
+def update_user_profile(
+    emp_id: str,
+    payload: UserUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(require_roles(["Admin"]))
+):
+    user = db.query(Employee).filter(Employee.employee_id == emp_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if payload.new_employee_id and payload.new_employee_id.strip() != emp_id:
+        existing_emp = db.query(Employee).filter(Employee.employee_id == payload.new_employee_id.strip()).first()
+        if existing_emp:
+            raise HTTPException(status_code=400, detail="Employee ID already exists")
+        user.employee_id = payload.new_employee_id.strip()
+
+    if payload.first_name is not None:
+        user.first_name = payload.first_name
+    if payload.last_name is not None:
+        user.last_name = payload.last_name
+    if payload.suffix is not None:
+        user.suffix = payload.suffix
+
+    fname = user.first_name or ""
+    lname = user.last_name or ""
+    sfx = user.suffix or ""
+    parts = [fname.strip(), lname.strip()]
+    if sfx.strip():
+        parts.append(sfx.strip())
+    user.name = " ".join(parts) if any(parts) else user.name
+
+    if payload.mobile_phone is not None:
+        user.mobile_phone = payload.mobile_phone
+    if payload.email is not None:
+        user.email = payload.email
+    if payload.position is not None:
+        user.position = payload.position
+    if payload.department is not None:
+        user.department = payload.department
+    if payload.birthday is not None:
+        user.birthday = payload.birthday
+    if payload.gender is not None:
+        user.gender = payload.gender
+    if payload.civil_status is not None:
+        user.civil_status = payload.civil_status
+    if payload.agency is not None:
+        user.agency = payload.agency
+    if payload.role is not None:
+        user.role = payload.role
+    if payload.status is not None:
+        user.status = payload.status
+
+    db.commit()
+    db.refresh(user)
+    return {"status": "success", "message": f"User updated successfully", "employee_id": user.employee_id}
 
 @router.put("/users/{emp_id}/status")
 def update_user_status(

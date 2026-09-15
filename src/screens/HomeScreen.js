@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../context/AuthContext';
 
 export default function HomeScreen() {
-  const { user, logout, API_BASE_URL } = useContext(AuthContext);
+  const { user, token, logout, API_BASE_URL } = useContext(AuthContext);
   const [isClockedIn, setIsClockedIn] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [activeJob, setActiveJob] = useState('');
@@ -25,6 +25,15 @@ export default function HomeScreen() {
   const [coords, setCoords] = useState(null);
   const [accuracy, setAccuracy] = useState(null);
 
+  // Post Clock Out Review Modal
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [showEditModal, setShowReviewModalEdit] = useState(false);
+  const [dtrSummary, setDtrSummary] = useState(null);
+  const [editPunchType, setEditPunchType] = useState('CLOCK_IN');
+  const [editTimeString, setEditTimeString] = useState('');
+  const [editReason, setEditReason] = useState('');
+  const [submittingRevision, setSubmittingRevision] = useState(false);
+
   const timerRef = useRef(null);
 
   const fetchJobs = async () => {
@@ -40,10 +49,8 @@ export default function HomeScreen() {
           const catNameLower = (cat.name || '').trim().toLowerCase();
           const catCodeLower = (cat.code || '').trim().toLowerCase();
 
-          // Role-based Department Filtering:
-          // Admins see all jobs; regular users only see jobs matching their department or code
-          const isDeptMatch = isAdmin || !userDept || 
-            catNameLower.includes(userDept) || 
+          const isDeptMatch = isAdmin || !userDept ||
+            catNameLower.includes(userDept) ||
             userDept.includes(catNameLower) ||
             catCodeLower.includes(userDept);
 
@@ -169,6 +176,22 @@ export default function HomeScreen() {
     getHighAccuracyLocation();
   };
 
+  const fetchTodayDtrSummary = async () => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    try {
+      const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const res = await fetch(`${API_BASE_URL}/api/dtr/summary/${user.employee_id}?start_date=${todayStr}&end_date=${todayStr}`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.daily_details && data.daily_details.length > 0) {
+          setDtrSummary(data.daily_details[0]);
+        }
+      }
+    } catch (e) {
+      console.log('Error fetching today summary:', e);
+    }
+  };
+
   const handleConfirmPunch = async () => {
     if (!coords) {
       Alert.alert('Location Missing', 'Please wait for GPS location or tap Recalibrate GPS.');
@@ -196,6 +219,10 @@ export default function HomeScreen() {
 
       if (response.ok) {
         await fetchActiveStatus();
+        if (punchType === 'CLOCK_OUT') {
+          await fetchTodayDtrSummary();
+          setShowReviewModal(true);
+        }
       } else {
         const err = await response.json();
         Alert.alert('Punch Error', err.detail || 'Failed to save DTR punch record.');
@@ -204,6 +231,51 @@ export default function HomeScreen() {
       Alert.alert('Network Error', 'Unable to reach backend server.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOpenEditShift = () => {
+    const now = new Date();
+    const formatted = `${now.toISOString().split('T')[0]} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:00`;
+    setEditTimeString(formatted);
+    setEditReason('');
+    setShowReviewModalEdit(true);
+  };
+
+  const handleSubmitShiftRevision = async () => {
+    if (!editTimeString.trim() || !editReason.trim()) {
+      Alert.alert('Required Fields', 'Please enter the requested timestamp and a valid reason.');
+      return;
+    }
+
+    setSubmittingRevision(true);
+    try {
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      };
+      const res = await fetch(`${API_BASE_URL}/api/manager/revisions/request`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          requested_punch_type: editPunchType,
+          requested_timestamp: editTimeString,
+          reason: editReason
+        })
+      });
+
+      if (res.ok) {
+        Alert.alert('Revision Submitted', 'Your shift edit request has been sent to your manager for approval.');
+        setShowReviewModalEdit(false);
+        setShowReviewModal(false);
+      } else {
+        const err = await res.json();
+        Alert.alert('Submission Failed', err.detail || 'Could not submit shift edit request.');
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Unable to reach backend server.');
+    } finally {
+      setSubmittingRevision(false);
     }
   };
 
@@ -373,6 +445,116 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
+          </View>
+        </View>
+      </Modal>
+
+      {/* POST CLOCK OUT DTR SUMMARY REVIEW MODAL */}
+      <Modal visible={showReviewModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Daily DTR Shift Review</Text>
+                <Text style={styles.modalSub}>Shift completed for today</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowReviewModal(false)}>
+                <Ionicons name="close" size={24} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ backgroundColor: '#f8fafc', padding: 16, borderRadius: 12, marginBottom: 16 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                <Text style={{ fontSize: 13, color: '#64748b' }}>Clock In:</Text>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#1e293b' }}>{dtrSummary?.clock_in || 'N/A'}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                <Text style={{ fontSize: 13, color: '#64748b' }}>Clock Out:</Text>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#1e293b' }}>{dtrSummary?.clock_out || 'N/A'}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                <Text style={{ fontSize: 13, color: '#64748b' }}>Regular Hours:</Text>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#0284c7' }}>{dtrSummary?.regular_hours || 0} hrs</Text>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ fontSize: 13, color: '#64748b' }}>Late / Undertimes:</Text>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#ef4444' }}>
+                  {dtrSummary?.late_minutes || 0}m late / {dtrSummary?.undertime_minutes || 0}m undertime
+                </Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={{ backgroundColor: '#eff6ff', borderColor: '#bfdbfe', borderWidth: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center', marginBottom: 12 }}
+              onPress={handleOpenEditShift}
+            >
+              <Text style={{ color: '#0284c7', fontWeight: '800', fontSize: 14 }}>Edit Shift (Submit to Manager)</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{ backgroundColor: '#0284c7', paddingVertical: 12, borderRadius: 12, alignItems: 'center' }}
+              onPress={() => setShowReviewModal(false)}
+            >
+              <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 14 }}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* SHIFT REVISION EDIT MODAL */}
+      <Modal visible={showEditModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Request Shift Edit</Text>
+              <TouchableOpacity onPress={() => setShowReviewModalEdit(false)}>
+                <Ionicons name="close" size={24} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748b', marginBottom: 4 }}>PUNCH TYPE</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+              <TouchableOpacity
+                style={{ flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: editPunchType === 'CLOCK_IN' ? '#0284c7' : '#cbd5e1', backgroundColor: editPunchType === 'CLOCK_IN' ? '#eff6ff' : '#ffffff', alignItems: 'center' }}
+                onPress={() => setEditPunchType('CLOCK_IN')}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '700', color: editPunchType === 'CLOCK_IN' ? '#0284c7' : '#475569' }}>CLOCK IN</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: editPunchType === 'CLOCK_OUT' ? '#0284c7' : '#cbd5e1', backgroundColor: editPunchType === 'CLOCK_OUT' ? '#eff6ff' : '#ffffff', alignItems: 'center' }}
+                onPress={() => setEditPunchType('CLOCK_OUT')}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '700', color: editPunchType === 'CLOCK_OUT' ? '#0284c7' : '#475569' }}>CLOCK OUT</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748b', marginBottom: 4 }}>REQUESTED TIMESTAMP (YYYY-MM-DD HH:MM:SS)</Text>
+            <TextInput
+              style={{ borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, padding: 10, marginBottom: 12, fontSize: 13 }}
+              value={editTimeString}
+              onChangeText={setEditTimeString}
+            />
+
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748b', marginBottom: 4 }}>REASON FOR EDIT</Text>
+            <TextInput
+              style={{ borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, padding: 10, marginBottom: 16, fontSize: 13, height: 70 }}
+              placeholder="Explain why shift edit is required..."
+              multiline
+              value={editReason}
+              onChangeText={setEditReason}
+            />
+
+            <TouchableOpacity
+              style={{ backgroundColor: '#0284c7', paddingVertical: 12, borderRadius: 12, alignItems: 'center' }}
+              onPress={handleSubmitShiftRevision}
+              disabled={submittingRevision}
+            >
+              {submittingRevision ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 14 }}>Send to Manager for Approval</Text>
+              )}
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
