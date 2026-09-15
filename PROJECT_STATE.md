@@ -21,22 +21,23 @@ Last updated: September 15, 2026
 ## System Architecture & Master Specs (Architect Baseline)
 - Primary Keying: `employees.employee_id` (String key, e.g., `"3286"`)
 - Roles: `Employee`, `Manager`, `Admin`
-- Target Models: `Employee`, `JobCategory`, `JobSubItem`, `PunchLog`, `Schedule`, `LeaveRequest`
+- Target Models: `Employee`, `JobCategory`, `JobSubItem`, `PunchLog`, `Schedule`, `ScheduleGroup`, `ScheduleGroupAssignment`, `DtrRevision`, `LeaveRequest`
 - Punches Supported: `CLOCK_IN`, `CLOCK_OUT`, `BREAK_IN`, `BREAK_OUT`
 - API Matrix Ownership:
   - `/api/auth/login`, `/api/auth/users`, `/api/auth/users/{emp_id}` -> Auth/RBAC Gem
-  - `/api/punch/log`, `/api/punch/logs` -> GPS Clock In/Out Gem
-  - `/api/manager/team`, `/api/manager/schedules` -> Manager & Scheduling Gem
-  - `/api/dtr/timesheet`, `/api/dtr/export` -> DTR & Payroll Export Gem
+  - `/api/punch`, `/api/punch/active/{employee_id}`, `/api/punch/logs`, `/api/punch/export` -> GPS Clock In/Out Gem
+  - `/api/manager/team`, `/api/manager/schedules`, `/api/manager/revisions` -> Manager & Scheduling Gem
+  - `/api/dtr/summary/{employee_id}`, `/api/dtr/export` -> DTR & Payroll Export Gem
 
 ## Done (do not rebuild these)
-- [x] Backend REST API (`/api/auth/login`, `/api/auth/users`, `/api/jobs`, `/api/punch`)
-- [x] Database baseline ORM models (`Employee`, `JobCategory`, `JobSubItem`, `PunchLog`)
+- [x] Backend REST API (`/api/auth/login`, `/api/auth/users`, `/api/jobs`)
+- [x] Database baseline ORM models (`Employee`, `JobCategory`, `JobSubItem`, `PunchLog`, `Schedule`, `ScheduleGroup`, `ScheduleGroupAssignment`, `DtrRevision`, `LeaveRequest`)
 - [x] React Native Mobile App scaffolding (`LoginScreen`, `DashboardScreen`, `HomeScreen`, `ManagerScreen`, `TimesheetScreen`)
 - [x] Web Admin UI (`/admin`) Connecteam layout: Job datatables, OpenStreetMap Leaflet GPS map integration, User profile editor drawer
+- [x] GPS Clock In/Out Core Backend (`POST /api/punch`, `GET /api/punch/active/{employee_id}`, duplicate rejection validation, mock location detection flags, PST timestamping)
+- [x] Manager & Scheduling Backend (`/api/manager/team`, `/api/manager/schedules`, `/api/manager/revisions`)
+- [x] DTR Engine & Computation API (`app/dtr_engine.py`, `GET /api/dtr/summary/{employee_id}`, `GET /api/dtr/export`)
+- [x] Schema alteration (`ALTER TABLE schedules ADD COLUMN IF NOT EXISTS group_id...`)
 
-## In Progress / Ready for Part-Gems
-- [ ] Auth/RBAC Gem: Add `role`, `manager_id`, and `kiosk_code` fields to models & router endpoints
-- [ ] GPS Clock In/Out Gem: Support `BREAK_IN`/`BREAK_OUT` & `job_sub_item_id` in `/api/punch/log`
-- [ ] Manager & Scheduling Gem: Implement `/api/manager/team` and shift schedule endpoints
-- [ ] DTR & Payroll Export Gem: Implement late/undertime calculation engine and CSV export stream at `/api/dtr/export`
+## In Progress / Ready for Next Steps
+- [ ] DTR Timesheet verification with mock punch data & mobile frontend timesheet integration (`TimesheetScreen.js`)

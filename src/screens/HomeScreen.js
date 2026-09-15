@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, ScrollView, Modal, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, ScrollView, Modal, Platform, TextInput, FlatList } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,10 +9,17 @@ export default function HomeScreen() {
   const { user, logout, API_BASE_URL } = useContext(AuthContext);
   const [isClockedIn, setIsClockedIn] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [activeJob, setActiveJob] = useState('');
   const [loading, setLoading] = useState(false);
   const [fetchingStatus, setFetchingStatus] = useState(true);
 
-  // Modal and GPS States
+  // Duty Selection States
+  const [showDutyModal, setShowDutyModal] = useState(false);
+  const [jobList, setJobList] = useState([]);
+  const [searchDuty, setSearchDuty] = useState('');
+  const [selectedDuty, setSelectedDuty] = useState(null);
+
+  // GPS States
   const [showModal, setShowModal] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [coords, setCoords] = useState(null);
@@ -20,7 +27,53 @@ export default function HomeScreen() {
 
   const timerRef = useRef(null);
 
-  // Acquire High-Precision Device Hardware GPS
+  const fetchJobs = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/jobs`);
+      if (res.ok) {
+        const data = await res.json();
+        let items = [];
+        const userDept = (user?.department || '').trim().toLowerCase();
+        const isAdmin = user?.role === 'Admin' || user?.role === 'SuperAdmin';
+
+        data.forEach(cat => {
+          const catNameLower = (cat.name || '').trim().toLowerCase();
+          const catCodeLower = (cat.code || '').trim().toLowerCase();
+
+          // Role-based Department Filtering:
+          // Admins see all jobs; regular users only see jobs matching their department or code
+          const isDeptMatch = isAdmin || !userDept || 
+            catNameLower.includes(userDept) || 
+            userDept.includes(catNameLower) ||
+            catCodeLower.includes(userDept);
+
+          if (isDeptMatch) {
+            if (cat.sub_items && cat.sub_items.length > 0) {
+              cat.sub_items.forEach(sub => {
+                items.push({
+                  id: `${cat.id}-${sub.id}`,
+                  name: `${cat.name} - ${sub.name}`,
+                  catName: cat.name,
+                  subName: sub.name
+                });
+              });
+            } else {
+              items.push({
+                id: `${cat.id}`,
+                name: cat.name,
+                catName: cat.name,
+                subName: ''
+              });
+            }
+          }
+        });
+        setJobList(items);
+      }
+    } catch (e) {
+      console.log('Error fetching jobs:', e);
+    }
+  };
+
   const getHighAccuracyLocation = async () => {
     setGpsLoading(true);
     try {
@@ -60,8 +113,10 @@ export default function HomeScreen() {
         setIsClockedIn(data.is_clocked_in);
         if (data.is_clocked_in) {
           setElapsedSeconds(data.elapsed_seconds || 0);
+          setActiveJob(data.job_name || 'General Shift');
         } else {
           setElapsedSeconds(0);
+          setActiveJob('');
         }
       }
     } catch (error) {
@@ -73,10 +128,11 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      fetchJobs();
       fetchActiveStatus();
       const poller = setInterval(fetchActiveStatus, 3000);
       return () => clearInterval(poller);
-    }, [fetchActiveStatus])
+    }, [fetchActiveStatus, user])
   );
 
   useEffect(() => {
@@ -96,13 +152,23 @@ export default function HomeScreen() {
     };
   }, [isClockedIn]);
 
-  // Open modal directly on UI thread first, then query hardware GPS
-  const handleInitiatePunch = () => {
+  const handleStartClockIn = () => {
+    if (isClockedIn) {
+      setSelectedDuty(null);
+      setShowModal(true);
+      getHighAccuracyLocation();
+    } else {
+      setShowDutyModal(true);
+    }
+  };
+
+  const handleSelectDuty = (duty) => {
+    setSelectedDuty(duty);
+    setShowDutyModal(false);
     setShowModal(true);
     getHighAccuracyLocation();
   };
 
-  // Submit Final DTR Punch to Backend
   const handleConfirmPunch = async () => {
     if (!coords) {
       Alert.alert('Location Missing', 'Please wait for GPS location or tap Recalibrate GPS.');
@@ -112,6 +178,7 @@ export default function HomeScreen() {
     setLoading(true);
     setShowModal(false);
     const punchType = isClockedIn ? 'CLOCK_OUT' : 'CLOCK_IN';
+    const dutyAddress = selectedDuty ? selectedDuty.name : activeJob || 'Duty Shift';
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/punch`, {
@@ -123,14 +190,15 @@ export default function HomeScreen() {
           latitude: coords.latitude,
           longitude: coords.longitude,
           accuracy: accuracy || 10.0,
-          address: `GPS Pin: ${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}`,
+          address: dutyAddress,
         }),
       });
 
       if (response.ok) {
         await fetchActiveStatus();
       } else {
-        Alert.alert('Punch Error', 'Failed to save DTR punch record.');
+        const err = await response.json();
+        Alert.alert('Punch Error', err.detail || 'Failed to save DTR punch record.');
       }
     } catch (error) {
       Alert.alert('Network Error', 'Unable to reach backend server.');
@@ -146,9 +214,11 @@ export default function HomeScreen() {
     return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
+  const filteredJobs = jobList.filter(j => j.name.toLowerCase().includes(searchDuty.toLowerCase()));
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      {/* Profile Header */}
+      {/* Header Profile */}
       <View style={styles.headerCard}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{user?.name ? user.name.charAt(0) : 'U'}</Text>
@@ -164,46 +234,98 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Main Clock Card */}
-      <View style={styles.clockCard}>
-        <View style={[styles.badge, isClockedIn ? styles.badgeOnDuty : styles.badgeOffDuty]}>
-          <View style={[styles.dot, isClockedIn ? styles.dotOnDuty : styles.dotOffDuty]} />
-          <Text style={[styles.badgeText, isClockedIn ? styles.badgeTextOnDuty : styles.badgeTextOffDuty]}>
-            {isClockedIn ? 'ON DUTY' : 'OFF DUTY'}
-          </Text>
-        </View>
+      {/* Main Connecteam Card */}
+      <View style={[styles.clockCard, isClockedIn && styles.clockCardActive]}>
+        {isClockedIn && activeJob ? (
+          <View style={styles.dutyPill}>
+            <Text style={styles.dutyPillText}>Work time on • {activeJob}</Text>
+          </View>
+        ) : null}
 
         <Text style={styles.timerText}>{formatTimer(elapsedSeconds)}</Text>
         <Text style={styles.subText}>
-          {isClockedIn ? 'Shift duration running' : 'Ready to start shift'}
+          {isClockedIn ? `Clocked in on ${activeJob}` : 'Ready to start shift'}
         </Text>
 
-        <TouchableOpacity
-          style={[styles.punchBtn, isClockedIn ? styles.punchBtnOut : styles.punchBtnIn]}
-          onPress={handleInitiatePunch}
-          disabled={loading || fetchingStatus}
-          activeOpacity={0.85}
-        >
-          {loading ? (
-            <ActivityIndicator color="#ffffff" />
-          ) : (
-            <Text style={styles.punchBtnText}>
-              {isClockedIn ? 'CLOCK OUT NOW' : 'CLOCK IN NOW'}
-            </Text>
+        <View style={styles.actionRow}>
+          {isClockedIn && (
+            <TouchableOpacity
+              style={styles.switchJobBtn}
+              onPress={() => setShowDutyModal(true)}
+            >
+              <Ionicons name="swap-horizontal" size={18} color="#0284c7" />
+              <Text style={styles.switchJobText}>Switch Job</Text>
+            </TouchableOpacity>
           )}
-        </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.punchBtn, isClockedIn ? styles.punchBtnOut : styles.punchBtnIn]}
+            onPress={handleStartClockIn}
+            disabled={loading || fetchingStatus}
+            activeOpacity={0.85}
+          >
+            {loading ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.punchBtnText}>
+                {isClockedIn ? 'End Shift' : 'Clock in'}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* PRE-PUNCH LOCATION REVIEW POP-UP MODAL */}
+      {/* DUTY / JOB SELECTION MODAL */}
+      <Modal visible={showDutyModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.dutyModalContent}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Select Duty / Position</Text>
+                <Text style={styles.modalSub}>
+                  Assigned Department: <Text style={{ fontWeight: '700', color: '#0284c7' }}>{user?.department || 'All'}</Text>
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowDutyModal(false)}>
+                <Ionicons name="close" size={24} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.searchBox}>
+              <Ionicons name="search" size={18} color="#94a3b8" />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search duty..."
+                value={searchDuty}
+                onChangeText={setSearchDuty}
+              />
+            </View>
+
+            <FlatList
+              data={filteredJobs}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <TouchableOpacity style={styles.dutyItem} onPress={() => handleSelectDuty(item)}>
+                  <View style={styles.dutyDot} />
+                  <Text style={styles.dutyItemText}>{item.name}</Text>
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={<Text style={styles.emptyText}>No matching duties for {user?.department || 'your department'}.</Text>}
+              style={{ maxHeight: 300 }}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* PRE-PUNCH LOCATION CONFIRMATION MODAL */}
       <Modal visible={showModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            
             <View style={styles.modalHeader}>
               <View>
-                <Text style={styles.modalTitle}>Confirm DTR Location</Text>
+                <Text style={styles.modalTitle}>Confirm GPS Location</Text>
                 <Text style={styles.modalSub}>
-                  Action: <Text style={isClockedIn ? styles.textOut : styles.textIn}>{isClockedIn ? 'CLOCK OUT' : 'CLOCK IN'}</Text>
+                  Duty: <Text style={{ fontWeight: 'bold', color: '#0284c7' }}>{selectedDuty ? selectedDuty.name : activeJob || 'Shift'}</Text>
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setShowModal(false)}>
@@ -211,12 +333,11 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* GPS Preview Box */}
             <View style={styles.gpsPreviewBox}>
-              <Ionicons name="navigate-circle" size={36} color="#2563eb" />
+              <Ionicons name="navigate-circle" size={36} color="#0284c7" />
               {gpsLoading ? (
                 <View style={{ flex: 1, marginLeft: 10 }}>
-                  <ActivityIndicator size="small" color="#2563eb" />
+                  <ActivityIndicator size="small" color="#0284c7" />
                   <Text style={styles.gpsLoadingText}>Acquiring high-accuracy GPS fix...</Text>
                 </View>
               ) : coords ? (
@@ -231,17 +352,11 @@ export default function HomeScreen() {
               )}
             </View>
 
-            {/* Recalibrate Button */}
-            <TouchableOpacity 
-              style={styles.recalibrateBtn} 
-              onPress={getHighAccuracyLocation}
-              disabled={gpsLoading}
-            >
-              <Ionicons name="refresh" size={16} color="#2563eb" />
+            <TouchableOpacity style={styles.recalibrateBtn} onPress={getHighAccuracyLocation} disabled={gpsLoading}>
+              <Ionicons name="refresh" size={16} color="#0284c7" />
               <Text style={styles.recalibrateText}>Recalibrate GPS Location</Text>
             </TouchableOpacity>
 
-            {/* Action Buttons */}
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowModal(false)}>
                 <Text style={styles.cancelBtnText}>Cancel</Text>
@@ -253,7 +368,7 @@ export default function HomeScreen() {
                 disabled={gpsLoading || !coords}
               >
                 <Text style={styles.confirmBtnText}>
-                  {isClockedIn ? 'Confirm Time Out' : 'Confirm Time In'}
+                  {isClockedIn ? 'Confirm End Shift' : 'Confirm Clock In'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -268,50 +383,52 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flexGrow: 1, backgroundColor: '#f8fafc', padding: 20, paddingTop: 40 },
-  headerCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 16, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: '#f1f5f9' },
-  avatar: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#2563eb', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  headerCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 16, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: '#e2e8f0' },
+  avatar: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#0284c7', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   avatarText: { color: '#ffffff', fontWeight: '800', fontSize: 18 },
   headerInfo: { flex: 1 },
   userName: { fontSize: 16, fontWeight: '800', color: '#0f172a' },
   userDetails: { fontSize: 12, color: '#64748b', marginTop: 2 },
   logoutBtn: { padding: 8 },
-  clockCard: { backgroundColor: '#ffffff', borderRadius: 20, padding: 28, alignItems: 'center', borderWidth: 1, borderColor: '#f1f5f9' },
-  badge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginBottom: 16 },
-  badgeOnDuty: { backgroundColor: '#dcfce7' },
-  badgeOffDuty: { backgroundColor: '#f1f5f9' },
-  dot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
-  dotOnDuty: { backgroundColor: '#16a34a' },
-  dotOffDuty: { backgroundColor: '#64748b' },
-  badgeText: { fontSize: 12, fontWeight: '800' },
-  badgeTextOnDuty: { color: '#15803d' },
-  badgeTextOffDuty: { color: '#475569' },
-  timerText: { fontSize: 42, fontWeight: '800', color: '#0f172a', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', marginBottom: 4 },
-  subText: { fontSize: 13, color: '#64748b', marginBottom: 24 },
-  punchBtn: { width: '100%', height: 54, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  punchBtnIn: { backgroundColor: '#2563eb' },
-  punchBtnOut: { backgroundColor: '#dc2626' },
-  punchBtnText: { color: '#ffffff', fontWeight: '800', fontSize: 16 },
+  clockCard: { backgroundColor: '#ffffff', borderRadius: 20, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0' },
+  clockCardActive: { backgroundColor: '#0284c7', borderColor: '#0284c7' },
+  dutyPill: { backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, marginBottom: 12 },
+  dutyPillText: { color: '#ffffff', fontWeight: '700', fontSize: 13 },
+  timerText: { fontSize: 42, fontWeight: '800', color: '#0f172a', marginBottom: 4 },
+  subText: { fontSize: 13, color: '#64748b', marginBottom: 20 },
+  actionRow: { flexDirection: 'row', gap: 10, width: '100%' },
+  switchJobBtn: { flex: 1, backgroundColor: '#ffffff', height: 48, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6 },
+  switchJobText: { color: '#0284c7', fontWeight: '700', fontSize: 14 },
+  punchBtn: { flex: 1, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  punchBtnIn: { backgroundColor: '#0284c7' },
+  punchBtnOut: { backgroundColor: '#ef4444' },
+  punchBtnText: { color: '#ffffff', fontWeight: '800', fontSize: 15 },
 
-  // Modal Styles
   modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.7)', justifyContent: 'center', padding: 20 },
-  modalContent: { backgroundColor: '#ffffff', borderRadius: 24, padding: 22, borderWidth: 1, borderColor: '#f1f5f9' },
+  dutyModalContent: { backgroundColor: '#ffffff', borderRadius: 24, padding: 20 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   modalTitle: { fontSize: 18, fontWeight: '800', color: '#0f172a' },
   modalSub: { fontSize: 12, color: '#64748b', marginTop: 2 },
-  textIn: { color: '#2563eb', fontWeight: '800' },
-  textOut: { color: '#dc2626', fontWeight: '800' },
+  searchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f1f5f9', paddingHorizontal: 12, borderRadius: 10, marginBottom: 12 },
+  searchInput: { flex: 1, paddingVertical: 10, marginLeft: 8, fontSize: 14 },
+  dutyItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  dutyDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#0284c7', marginRight: 12 },
+  dutyItemText: { fontSize: 14, fontWeight: '600', color: '#1e293b' },
+  emptyText: { textAlign: 'center', color: '#94a3b8', marginVertical: 20 },
+
+  modalContent: { backgroundColor: '#ffffff', borderRadius: 24, padding: 22 },
   gpsPreviewBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 12 },
   gpsLoadingText: { fontSize: 12, color: '#64748b', marginTop: 4 },
   coordsTitle: { fontSize: 11, color: '#64748b', fontWeight: '700', textTransform: 'uppercase' },
-  coordsVal: { fontSize: 13, fontWeight: '700', color: '#0f172a', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' },
+  coordsVal: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
   accuracyText: { fontSize: 10, color: '#16a34a', fontWeight: '700', marginTop: 2 },
   recalibrateBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#eff6ff', paddingVertical: 10, borderRadius: 12, marginBottom: 20, justifyContent: 'center' },
-  recalibrateText: { color: '#2563eb', fontWeight: '700', fontSize: 12 },
+  recalibrateText: { color: '#0284c7', fontWeight: '700', fontSize: 12 },
   modalActions: { flexDirection: 'row', gap: 10 },
   cancelBtn: { flex: 1, height: 48, borderRadius: 12, backgroundColor: '#f1f5f9', justifyContent: 'center', alignItems: 'center' },
   cancelBtnText: { color: '#475569', fontWeight: '700', fontSize: 14 },
   confirmBtn: { flex: 1.5, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  confirmBtnIn: { backgroundColor: '#2563eb' },
-  confirmBtnOut: { backgroundColor: '#dc2626' },
+  confirmBtnIn: { backgroundColor: '#0284c7' },
+  confirmBtnOut: { backgroundColor: '#ef4444' },
   confirmBtnText: { color: '#ffffff', fontWeight: '800', fontSize: 14 },
 });

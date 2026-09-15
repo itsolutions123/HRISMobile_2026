@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Float, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Float, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from .database import Base
@@ -61,11 +61,41 @@ class Schedule(Base):
     __tablename__ = "schedules"
 
     id = Column(Integer, primary_key=True, index=True)
-    employee_id = Column(String, ForeignKey("employees.employee_id"), nullable=False)
+    employee_id = Column(String, ForeignKey("employees.employee_id"), nullable=True)
+    group_id = Column(Integer, ForeignKey("schedule_groups.id"), nullable=True)
     day_of_week = Column(Integer, nullable=False)  # 0=Monday, 6=Sunday
     shift_start = Column(String, nullable=False)   # HH:MM format
     shift_end = Column(String, nullable=False)     # HH:MM format
     break_duration_mins = Column(Integer, default=60)
+
+class ScheduleGroup(Base):
+    __tablename__ = "schedule_groups"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)  # e.g., "HO - Accounting"
+    description = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class ScheduleGroupAssignment(Base):
+    __tablename__ = "schedule_group_assignments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    group_id = Column(Integer, ForeignKey("schedule_groups.id"), nullable=False)
+    employee_id = Column(String, ForeignKey("employees.employee_id"), nullable=False)
+
+class DtrRevision(Base):
+    __tablename__ = "dtr_revisions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(String, ForeignKey("employees.employee_id"), nullable=False)
+    punch_log_id = Column(Integer, ForeignKey("punch_logs.id"), nullable=True)
+    requested_punch_type = Column(String, nullable=False)  # CLOCK_IN, CLOCK_OUT, BREAK_IN, BREAK_OUT
+    requested_timestamp = Column(DateTime, nullable=False)
+    reason = Column(String, nullable=False)
+    status = Column(String, default="PENDING", nullable=False)  # PENDING, APPROVED, REJECTED
+    reviewed_by = Column(String, ForeignKey("employees.employee_id"), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 class LeaveRequest(Base):
     __tablename__ = "leave_requests"

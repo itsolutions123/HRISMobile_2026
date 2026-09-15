@@ -20,10 +20,10 @@ class JobCategoryCreate(BaseModel):
 
 @router.get("")
 def get_all_jobs(db: Session = Depends(get_db)):
-    categories = db.query(JobCategory).filter(JobCategory.is_active == True).all()
+    categories = db.query(JobCategory).all()
     result = []
     for cat in categories:
-        subs = db.query(JobSubItem).filter(JobSubItem.category_id == cat.id, JobSubItem.is_active == True).all()
+        subs = db.query(JobSubItem).filter(JobSubItem.category_id == cat.id).all()
         result.append({
             "id": cat.id,
             "name": cat.name,
@@ -35,28 +35,32 @@ def get_all_jobs(db: Session = Depends(get_db)):
 
 @router.post("")
 def create_job_category(payload: JobCategoryCreate, db: Session = Depends(get_db)):
-    existing = db.query(JobCategory).filter(JobCategory.name == payload.name).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Job category already exists")
+    cat = db.query(JobCategory).filter(JobCategory.name == payload.name).first()
     
-    new_cat = JobCategory(name=payload.name, code=payload.code, description=payload.description)
-    db.add(new_cat)
-    db.commit()
-    db.refresh(new_cat)
+    if not cat:
+        cat = JobCategory(name=payload.name, code=payload.code, description=payload.description)
+        db.add(cat)
+        db.commit()
+        db.refresh(cat)
 
     if payload.sub_items:
         for sub in payload.sub_items:
-            db_sub = JobSubItem(category_id=new_cat.id, name=sub.name, code=sub.code)
-            db.add(db_sub)
+            existing_sub = db.query(JobSubItem).filter(
+                JobSubItem.category_id == cat.id,
+                JobSubItem.name == sub.name
+            ).first()
+            if not existing_sub:
+                db_sub = JobSubItem(category_id=cat.id, name=sub.name, code=sub.code)
+                db.add(db_sub)
         db.commit()
 
-    return {"status": "success", "category_id": new_cat.id}
+    return {"status": "success", "category_id": cat.id}
 
 @router.delete("/{category_id}")
 def delete_job_category(category_id: int, db: Session = Depends(get_db)):
     cat = db.query(JobCategory).filter(JobCategory.id == category_id).first()
     if not cat:
         raise HTTPException(status_code=404, detail="Job category not found")
-    cat.is_active = False
+    db.delete(cat)
     db.commit()
-    return {"status": "success", "message": "Category soft-deleted"}
+    return {"status": "success", "message": "Category deleted"}
