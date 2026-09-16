@@ -1,5 +1,5 @@
 # DTR App — Project State
-Last updated: September 15, 2026
+Last updated: September 16, 2026
 
 ## Stack (confirmed, do not change without discussion)
 - Backend: FastAPI (Python 3.11, Uvicorn)
@@ -39,9 +39,10 @@ Last updated: September 15, 2026
 - [x] DTR Engine & Computation API (`app/dtr_engine.py`, `GET /api/dtr/summary/{employee_id}`, `GET /api/dtr/export`)
 - [x] Mobile User Registration with separate First Name, Last Name, Suffix, Email, Password, Department, and Mobile Phone.
 - [x] Mobile "Remember password on this device" credentials caching via `AsyncStorage`.
-- [x] Web Admin Users & Directory enhancements: Live Search, Department/Role/Status filters, Date Added column, Editable Employee ID, Offcanvas Profile Drawer Editor, Archive User Retention, and Bootstrap Toast feedback.
+- [x] Web Admin Users & Directory: Connecteam-aligned user directory datatable and read-only User Profile dashboard drilldown view.
 - [x] Mobile DTR Shift Review modal on Clock Out with "Edit Shift" revision requests sent to the user's manager for approval.
 - [x] Mobile Timesheet Screen calendar date filtering, 12-hour AM/PM time formatting, and direct shift edit request action.
+- [x] Web Admin Smart Groups: Collapsible & editable main Brands (`Head Office`, `Stores`, `Commissary`), `+ Add Brand` creation, removable sub-groups, animated Pop-out Offcanvas detail drawer with close button, dynamic Clocked In metric, group admin assigner, and duplicate enrollment warnings.
 
 ## In Progress / Ready for Next Steps
 - [ ] Manager Approval Dashboard view for reviewing team DTR shift revision requests on mobile/web.
