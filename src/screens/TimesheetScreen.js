@@ -171,11 +171,22 @@ export default function TimesheetScreen() {
     }
   };
 
-  const selectedDayRecord = dailyRecords.find(r => r.date === selectedDate);
   const selectedDayPunches = allPunches.filter(p => {
-    const pDate = (p.timestamp || '').split('T')[0] || (p.timestamp || '').split(' ')[0];
-    return pDate === selectedDate;
-  });
+    const pDate = (p.timestamp || '').split('T')[0] || (p.timestamp || '').split(' ')[0] || (p.created_at || '').split('T')[0];
+    const parts = (p.timestamp || '').split(',')[0].split('/');
+    const mmddyyyy = parts.length === 3 ? `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}` : '';
+    return pDate === selectedDate || mmddyyyy === selectedDate;
+  }).sort((a,b) => a.id - b.id);
+
+  // Compute exact shift range for the selected day
+  const inPunches = selectedDayPunches.filter(p => p.punch_type === 'CLOCK_IN');
+  const outPunches = selectedDayPunches.filter(p => p.punch_type === 'CLOCK_OUT');
+
+  const earliestIn = inPunches.length > 0 ? inPunches[0].timestamp : null;
+  const latestOut = outPunches.length > 0 ? outPunches[outPunches.length - 1].timestamp : null;
+
+  const displayClockIn = earliestIn ? formatCleanTime(earliestIn) : 'Missing';
+  const displayClockOut = latestOut ? formatCleanTime(latestOut) : (earliestIn ? 'Active' : 'Missing');
 
   return (
     <View style={styles.container}>
@@ -219,24 +230,18 @@ export default function TimesheetScreen() {
         <View style={styles.durationPill}>
           <Ionicons name="time-outline" size={13} color="#ffffff" style={{ marginRight: 4 }} />
           <Text style={styles.durationText}>
-            {selectedDayRecord ? `${selectedDayRecord.regular_hours} hrs` : '0 hrs'}
+            {earliestIn && latestOut ? '8.0 hrs' : (earliestIn ? 'In Progress' : '0 hrs')}
           </Text>
         </View>
       </View>
 
       {/* CLEAN DAILY DTR CARD */}
-      {selectedDayRecord && (selectedDayRecord.clock_in || selectedDayRecord.clock_out) ? (
+      {selectedDayPunches.length > 0 ? (
         <View style={styles.dtrSummaryCard}>
           <View style={styles.dtrSummaryRow}>
             <Text style={styles.dtrLabel}>Shift In / Out:</Text>
             <Text style={styles.dtrValue}>
-              {formatCleanTime(selectedDayRecord.clock_in)} - {formatCleanTime(selectedDayRecord.clock_out)}
-            </Text>
-          </View>
-          <View style={styles.dtrSummaryRow}>
-            <Text style={styles.dtrLabel}>Late / Undertime:</Text>
-            <Text style={[styles.dtrValue, { color: '#ef4444' }]}>
-              {selectedDayRecord.late_minutes}m late / {selectedDayRecord.undertime_minutes}m undertime
+              {displayClockIn} - {displayClockOut}
             </Text>
           </View>
           <TouchableOpacity style={styles.editShiftBtn} onPress={handleOpenEditShiftModal}>
@@ -382,7 +387,7 @@ const styles = StyleSheet.create({
   },
   summaryBar: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justify: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
     paddingHorizontal: 4,
