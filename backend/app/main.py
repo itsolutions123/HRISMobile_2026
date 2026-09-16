@@ -4,6 +4,7 @@ from fastapi.responses import HTMLResponse
 from .database import engine, Base, SessionLocal
 from .models import JobCategory, JobSubItem, Employee, PunchLog
 from .routers import auth, punch, jobs, manager, dtr
+from .auth_utils import get_password_hash
 
 Base.metadata.create_all(bind=engine)
 
@@ -27,22 +28,51 @@ app.include_router(dtr.router)
 def seed_initial_data():
     db = SessionLocal()
     try:
-        existing_user = db.query(Employee).filter(Employee.employee_id == "3286").first()
-        if not existing_user:
-            test_user = Employee(
+        # Seed or restore primary Superadmin account (xinxaola)
+        super_admin = db.query(Employee).filter(Employee.employee_id == "xinxaola").first()
+        if not super_admin:
+            super_admin = Employee(
+                employee_id="xinxaola",
+                name="Super Admin Xenon",
+                first_name="Xenon",
+                last_name="Admin",
+                position="Super Administrator",
+                department="Admin",
+                password_hash=get_password_hash("xenonjay@123"),
+                mobile_phone="+63 998 940 0957",
+                email="admin@bigtimeempire.com",
+                role="Admin",
+                status="APPROVED"
+            )
+            db.add(super_admin)
+            db.commit()
+        else:
+            super_admin.role = "Admin"
+            super_admin.status = "APPROVED"
+            super_admin.password_hash = get_password_hash("xenonjay@123")
+            db.commit()
+
+        # Ensure Jaypee Balonzo (3286) remains an active Admin
+        admin_jaypee = db.query(Employee).filter(Employee.employee_id == "3286").first()
+        if not admin_jaypee:
+            admin_jaypee = Employee(
                 employee_id="3286",
                 name="Jaypee Balonzo",
                 first_name="Jaypee",
                 last_name="Balonzo",
                 position="IT System Administrator",
                 department="Admin",
-                password_hash="bigtime@123",
+                password_hash=get_password_hash("bigtime@123"),
                 mobile_phone="+63 998 940 0957",
                 email="itsupport.associate@bigtimeempire.com",
                 role="Admin",
                 status="APPROVED"
             )
-            db.add(test_user)
+            db.add(admin_jaypee)
+            db.commit()
+        else:
+            admin_jaypee.role = "Admin"
+            admin_jaypee.status = "APPROVED"
             db.commit()
 
         if db.query(JobCategory).count() == 0:
@@ -72,8 +102,8 @@ def get_admin_dashboard():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>HRIS Portal</title>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <title>atWork — Bigtime Empire Corporation</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -86,8 +116,10 @@ def get_admin_dashboard():
                 --text-primary: #0f172a;
                 --text-secondary: #475569;
                 --text-muted: #94a3b8;
-                --accent-primary: #0284c7;
-                --accent-hover: #0369a1;
+                --gold-primary: #d97706;
+                --gold-accent: #f59e0b;
+                --gold-bg: #fffbeb;
+                --gold-border: #fef3c7;
                 --sidebar-bg: #0f172a;
                 --sidebar-hover: #1e293b;
             }
@@ -122,7 +154,7 @@ def get_admin_dashboard():
                 color: #ffffff;
             }
             .sidebar .nav-link.active i {
-                color: #38bdf8;
+                color: var(--gold-accent);
             }
             .sidebar .section-label {
                 font-size: 10px;
@@ -153,8 +185,9 @@ def get_admin_dashboard():
             .avatar-circle {
                 width: 32px;
                 height: 32px;
-                background-color: #e0f2fe;
-                color: #0369a1;
+                background-color: var(--gold-bg);
+                color: var(--gold-primary);
+                border: 1px solid var(--gold-border);
                 border-radius: 50%;
                 display: flex;
                 align-items: center;
@@ -174,7 +207,7 @@ def get_admin_dashboard():
                 border: 2px solid #ffffff;
             }
             .btn-primary-custom {
-                background-color: var(--accent-primary);
+                background-color: var(--gold-primary);
                 color: #ffffff;
                 border: none;
                 border-radius: 8px;
@@ -184,7 +217,7 @@ def get_admin_dashboard():
                 transition: background-color 0.15s ease;
             }
             .btn-primary-custom:hover {
-                background-color: var(--accent-hover);
+                background-color: #b45309;
                 color: #ffffff;
             }
             .btn-outline-custom {
@@ -233,8 +266,8 @@ def get_admin_dashboard():
                 border-bottom: 2px solid transparent;
             }
             .nav-tabs-connecteam .nav-link.active {
-                color: var(--accent-primary);
-                border-bottom: 2px solid var(--accent-primary);
+                color: var(--gold-primary);
+                border-bottom: 2px solid var(--gold-primary);
                 background: transparent;
             }
             .readonly-box {
@@ -247,33 +280,88 @@ def get_admin_dashboard():
                 font-weight: 500;
             }
             .filter-pill {
-                background-color: #eff6ff;
-                border: 1px solid #bfdbfe;
-                color: #0284c7;
+                background-color: var(--gold-bg);
+                border: 1px solid var(--gold-border);
+                color: var(--gold-primary);
                 font-weight: 600;
                 font-size: 12px;
                 padding: 4px 10px;
                 border-radius: 16px;
             }
             .offcanvas-group-drawer {
-                width: 720px !important;
+                width: 760px !important;
                 border-left: 1px solid var(--border-color);
+            }
+            .login-container {
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background-color: var(--sidebar-bg);
+            }
+            .login-card {
+                width: 420px;
+                background: #ffffff;
+                border-radius: 16px;
+                padding: 36px;
+                box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
             }
         </style>
     </head>
     <body>
-        <div class="container-fluid p-0">
+        <!-- STANDALONE LOGIN PAGE OVERLAY -->
+        <div id="login-overlay-page" class="login-container" style="display:none;">
+            <div class="login-card">
+                <div class="text-center mb-4">
+                    <div class="d-inline-flex align-items-center justify-content-center p-3 rounded-circle mb-2" style="background: var(--gold-bg);">
+                        <i class="bi bi-shield-lock-fill text-warning fs-2"></i>
+                    </div>
+                    <h4 class="fw-bold text-dark m-0">atWork</h4>
+                    <small class="text-muted fw-semibold">Bigtime Empire Corporation</small>
+                </div>
+
+                <form id="adminLoginForm" onsubmit="handleAdminLogin(event)">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold text-secondary" style="font-size: 12px;">EMPLOYEE ID OR USERNAME</label>
+                        <input type="text" class="form-control py-2" id="loginEmpId" placeholder="e.g. xinxaola or 3286" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold text-secondary" style="font-size: 12px;">PASSWORD</label>
+                        <div class="input-group">
+                            <input type="password" class="form-control py-2 border-end-0" id="loginPassword" placeholder="••••••••" required>
+                            <button class="btn btn-outline-secondary border-start-0 bg-white" type="button" onclick="toggleLoginPassword()"><i class="bi bi-eye" id="passwordToggleIcon"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="rememberMeCheckbox">
+                            <label class="form-check-label text-secondary fs-7" for="rememberMeCheckbox">Remember me on this device</label>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary-custom w-100 py-2 fs-6 mb-2">Sign In to Workspace</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- MAIN HRIS PORTAL VIEW -->
+        <div id="portal-main-view" class="container-fluid p-0">
             <div class="row g-0">
                 <!-- SIDEBAR -->
                 <div class="col-md-2 sidebar p-3">
-                    <div class="d-flex align-items-center gap-2 mb-4 px-2 pt-2">
-                        <i class="bi bi-shield-check text-info fs-5"></i>
-                        <span class="fs-6 fw-bold text-white tracking-tight">HRIS Portal</span>
+                    <div class="d-flex align-items-center gap-2 mb-1 px-2 pt-2">
+                        <i class="bi bi-hexagon-fill text-warning fs-5"></i>
+                        <span class="fs-5 fw-extrabold text-white tracking-tight" style="letter-spacing:-0.03em;">atWork</span>
+                    </div>
+                    <div class="px-2 mb-4">
+                        <small class="text-warning fw-semibold" style="font-size: 10px; letter-spacing:0.05em;">BIGTIME EMPIRE CORP</small>
                     </div>
 
                     <div class="section-label">Core Workspace</div>
-                    <a class="nav-link" id="nav-clock" onclick="switchTab('clock')"><i class="bi bi-stopwatch"></i> Time Clock</a>
-                    <a class="nav-link active" id="nav-jobs" onclick="switchTab('jobs')"><i class="bi bi-diagram-3"></i> Smart Groups</a>
+                    <a class="nav-link active" id="nav-clock" onclick="switchTab('clock')"><i class="bi bi-stopwatch"></i> Time Clock</a>
+                    <a class="nav-link" id="nav-jobs" onclick="switchTab('jobs')"><i class="bi bi-diagram-3"></i> Smart Groups</a>
                     <a class="nav-link d-flex justify-content-between align-items-center" id="nav-users" onclick="switchTab('users')">
                         <span><i class="bi bi-people me-2"></i> Users & Directory</span>
                     </a>
@@ -286,37 +374,47 @@ def get_admin_dashboard():
                 <!-- MAIN CONTENT -->
                 <div class="col-md-10">
                     <div class="top-bar d-flex justify-content-between align-items-center">
-                        <h6 class="m-0 fw-bold text-dark" id="page-title">Smart Groups</h6>
+                        <div>
+                            <h6 class="m-0 fw-bold text-dark" id="page-title">Time Clock</h6>
+                            <small class="text-muted" style="font-size:11px;">Bigtime Empire Corporation</small>
+                        </div>
 
                         <div class="dropdown profile-dropdown">
                             <button class="btn border-0 d-flex align-items-center gap-2 p-1" type="button" data-bs-toggle="dropdown">
-                                <div class="avatar-circle">JB</div>
+                                <div class="avatar-circle">SA</div>
                                 <div class="text-start d-none d-sm-block ms-1">
-                                    <div class="fw-bold text-dark lh-1" style="font-size: 13px;">Jaypee Balonzo</div>
-                                    <small class="text-muted" style="font-size: 11px;">System Admin (3286)</small>
+                                    <div class="fw-bold text-dark lh-1" style="font-size: 13px;" id="topbar-user-name">Super Admin Xenon</div>
+                                    <small class="text-muted" style="font-size: 11px;">Superadmin (xinxaola)</small>
                                 </div>
                                 <i class="bi bi-chevron-down text-muted ms-1" style="font-size: 10px;"></i>
                             </button>
                             <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 mt-2">
-                                <li><a class="dropdown-item py-2 fs-7" onclick="showToast('Admin ID: 3286 | Status: Active')"><i class="bi bi-person me-2"></i> Profile details</a></li>
+                                <li><a class="dropdown-item py-2 fs-7" onclick="showToast('Superadmin ID: xinxaola | Status: Active')"><i class="bi bi-person me-2"></i> Profile details</a></li>
                                 <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item py-2 fs-7 text-danger" onclick="location.reload()"><i class="bi bi-box-arrow-right me-2"></i> Sign out</a></li>
+                                <li><a class="dropdown-item py-2 fs-7 text-danger" onclick="performSignOut()"><i class="bi bi-box-arrow-right me-2"></i> Sign Out</a></li>
                             </ul>
                         </div>
                     </div>
 
                     <div class="p-4">
-                        <!-- TAB 1: TIME CLOCK -->
-                        <div id="tab-clock" style="display:none;">
+                        <!-- TAB 1: TIME CLOCK (DEFAULT LANDING VIEW ON REFRESH) -->
+                        <div id="tab-clock">
                             <div class="card-custom">
                                 <div class="d-flex justify-content-between align-items-center mb-4">
-                                    <h6 class="fw-bold m-0 text-dark">Live Clock Feed</h6>
-                                    <button class="btn btn-outline-custom" onclick="loadPunchMap()"><i class="bi bi-arrow-clockwise me-1"></i> Refresh</button>
+                                    <div>
+                                        <h6 class="fw-bold m-0 text-dark">Live Clock In Feed</h6>
+                                        <small class="text-muted">Displaying currently clocked-in active employees only</small>
+                                    </div>
+                                    <button class="btn btn-outline-custom" onclick="loadPunchMap()"><i class="bi bi-arrow-clockwise me-1"></i> Refresh Feed</button>
                                 </div>
+
                                 <div class="row g-4">
                                     <div class="col-md-4">
-                                        <div id="punch-list-sidebar" style="max-height: 400px; overflow-y: auto;">
-                                            <p class="text-muted fs-7">Loading recent logs...</p>
+                                        <div class="mb-3">
+                                            <input type="text" class="form-control" id="searchClockedInInput" placeholder="Search employee name or ID..." onkeyup="filterLiveClockFeed(this.value)">
+                                        </div>
+                                        <div id="punch-list-sidebar" style="max-height: 440px; overflow-y: auto;">
+                                            <p class="text-muted fs-7">Loading clocked-in active members...</p>
                                         </div>
                                     </div>
                                     <div class="col-md-8"><div id="map"></div></div>
@@ -325,7 +423,7 @@ def get_admin_dashboard():
                         </div>
 
                         <!-- TAB 2: CONNECTEAM SMART GROUPS PROVISIONING -->
-                        <div id="tab-jobs">
+                        <div id="tab-jobs" style="display:none;">
                             <!-- TOP OVERVIEW ACTIONS -->
                             <div class="d-flex justify-content-between align-items-center mb-3">
                                 <div class="d-flex align-items-center gap-2">
@@ -348,23 +446,18 @@ def get_admin_dashboard():
                                 <div class="d-flex justify-content-between align-items-center mb-3">
                                     <ul class="nav nav-tabs nav-tabs-connecteam border-0 m-0">
                                         <li class="nav-item">
-                                            <a class="nav-link active" id="user-subtab-active" onclick="filterUserCategory('APPROVED')">Users (88/87)</a>
+                                            <a class="nav-link active" id="user-subtab-active" onclick="filterUserCategory('APPROVED')">Users</a>
                                         </li>
                                         <li class="nav-item">
-                                            <a class="nav-link" id="user-subtab-admins" onclick="filterUserCategory('ADMIN')">Admins (34)</a>
+                                            <a class="nav-link" id="user-subtab-admins" onclick="filterUserCategory('ADMIN')">Admins</a>
                                         </li>
                                         <li class="nav-item">
-                                            <a class="nav-link" id="user-subtab-archived" onclick="filterUserCategory('ARCHIVED')">Archived (124)</a>
+                                            <a class="nav-link" id="user-subtab-archived" onclick="filterUserCategory('ARCHIVED')">Archived</a>
                                         </li>
                                     </ul>
 
                                     <div class="d-flex align-items-center gap-2">
-                                        <small class="text-muted fw-semibold">Permissions</small>
-                                        <div class="d-flex align-items-center me-2">
-                                            <span class="avatar-chip bg-primary text-white">JB</span>
-                                            <span class="avatar-chip bg-dark text-white">+8</span>
-                                        </div>
-                                        <button class="btn btn-outline-custom btn-sm" onclick="showToast('Pending approvals view')">Pending approvals</button>
+                                        <button class="btn btn-outline-custom btn-sm text-primary fw-bold" onclick="openPendingApprovalsModal()"><i class="bi bi-bell me-1"></i> Pending approvals</button>
                                         <button class="btn btn-outline-custom btn-sm" onclick="showToast('Company policies view')">Company policies</button>
                                         <button class="btn btn-outline-custom btn-sm" onclick="showToast('Settings opened')"><i class="bi bi-gear me-1"></i> Settings</button>
                                     </div>
@@ -376,7 +469,7 @@ def get_admin_dashboard():
                                             <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
                                             <input type="text" class="form-control border-start-0" id="userSearchDirectory" placeholder="Search users..." onkeyup="filterDirectoryRows(this.value)">
                                         </div>
-                                        <button class="btn btn-primary-custom" onclick="showToast('Export / Add users')"><i class="bi bi-plus-lg me-1"></i> Add users</button>
+                                        <button class="btn btn-primary-custom" onclick="openDirectAddUserModal()"><i class="bi bi-plus-lg me-1"></i> Add users</button>
                                     </div>
 
                                     <div class="table-responsive">
@@ -392,6 +485,7 @@ def get_admin_dashboard():
                                                     <th>Kiosk code</th>
                                                     <th>Date added</th>
                                                     <th>Added by</th>
+                                                    <th class="text-end">Actions</th>
                                                 </tr>
                                             </thead>
                                             <tbody id="directory-users-tbody">
@@ -401,8 +495,12 @@ def get_admin_dashboard():
                                 </div>
                             </div>
 
+                            <!-- EDITABLE CONNECTEAM USER PROFILE DASHBOARD VIEW -->
                             <div id="user-profile-dashboard-view" style="display:none;" class="mt-2">
-                                <button class="btn btn-outline-custom btn-sm mb-3" onclick="closeUserProfileDashboard()"><i class="bi bi-arrow-left me-1"></i> Back to Users Directory</button>
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <button class="btn btn-outline-custom btn-sm" onclick="closeUserProfileDashboard()"><i class="bi bi-arrow-left me-1"></i> Back to Users Directory</button>
+                                    <button class="btn btn-primary-custom btn-sm" onclick="saveAdminUserProfileEdit()"><i class="bi bi-check-lg me-1"></i> Save Profile Changes</button>
+                                </div>
 
                                 <div class="card-custom p-3 mb-4 d-flex justify-content-between align-items-center">
                                     <div class="d-flex align-items-center gap-3">
@@ -416,9 +514,18 @@ def get_admin_dashboard():
                                     </div>
 
                                     <div class="d-flex align-items-center gap-2">
-                                        <button class="btn btn-outline-custom btn-sm" onclick="showToast('Reward feature')"><i class="bi bi-gift me-1"></i> Send reward</button>
-                                        <button class="btn btn-outline-custom btn-sm" onclick="showToast('Options menu')">Options <i class="bi bi-chevron-down ms-1"></i></button>
-                                        <button class="btn btn-outline-custom btn-sm" onclick="showToast('Text message initiated')"><i class="bi bi-chat-text me-1"></i> Text Message</button>
+                                        <div class="dropdown">
+                                            <button class="btn btn-outline-custom btn-sm dropdown-toggle fw-bold" type="button" data-bs-toggle="dropdown">
+                                                <i class="bi bi-person-gear me-1"></i> Change Role
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                                                <li><a class="dropdown-item fs-7" onclick="changeActiveUserRole('Admin')">Assign as Admin</a></li>
+                                                <li><a class="dropdown-item fs-7" onclick="changeActiveUserRole('Manager')">Assign as Manager</a></li>
+                                                <li><a class="dropdown-item fs-7" onclick="changeActiveUserRole('Employee')">Assign as Employee</a></li>
+                                            </ul>
+                                        </div>
+                                        <button class="btn btn-outline-custom btn-sm text-success" id="unarchive-profile-btn" style="display:none;" onclick="unarchiveActiveUserProfile()"><i class="bi bi-arrow-counterclockwise me-1"></i> Un-archive User</button>
+                                        <button class="btn btn-outline-custom btn-sm text-danger" id="archive-profile-btn" onclick="archiveActiveUserProfile()"><i class="bi bi-archive me-1"></i> Archive User</button>
                                     </div>
                                 </div>
 
@@ -426,45 +533,50 @@ def get_admin_dashboard():
                                     <div class="col-md-3">
                                         <div class="card-custom p-3 mb-3">
                                             <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">Personal Details</h6>
-                                            <div class="mb-3"><small class="text-muted fw-semibold d-block mb-1">First name *</small><div class="readonly-box" id="profile-detail-firstname">Alejandro</div></div>
-                                            <div class="mb-3"><small class="text-muted fw-semibold d-block mb-1">Last name *</small><div class="readonly-box" id="profile-detail-lastname">Luanzon Jr.</div></div>
-                                            <div class="mb-3"><small class="text-muted fw-semibold d-block mb-1">Mobile phone *</small><div class="readonly-box" id="profile-detail-mobile">+63 912 794 6060</div></div>
-                                            <div class="mb-3"><small class="text-muted fw-semibold d-block mb-1">Email *</small><div class="readonly-box text-truncate" id="profile-detail-email">amluanzon1979@gmail.com</div></div>
-                                            <div class="mb-3"><small class="text-muted fw-semibold d-block mb-1">Employee ID *</small><div class="readonly-box" id="profile-detail-empid">3490</div></div>
-                                            <div class="mb-3"><small class="text-muted fw-semibold d-block mb-1">Birthday</small><div class="readonly-box">02/02/1979</div></div>
-                                            <div class="mb-3"><small class="text-muted fw-semibold d-block mb-1">Gender</small><div class="readonly-box">Male</div></div>
+                                            <input type="hidden" id="edit-user-original-empid">
+                                            <div class="mb-3">
+                                                <label class="form-label text-muted fw-semibold mb-1" style="font-size:11px;">FIRST NAME *</label>
+                                                <input type="text" class="form-control" id="edit-user-firstname">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label text-muted fw-semibold mb-1" style="font-size:11px;">LAST NAME *</label>
+                                                <input type="text" class="form-control" id="edit-user-lastname">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label text-muted fw-semibold mb-1" style="font-size:11px;">MOBILE PHONE *</label>
+                                                <input type="text" class="form-control" id="edit-user-mobile">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label text-muted fw-semibold mb-1" style="font-size:11px;">EMAIL *</label>
+                                                <input type="email" class="form-control" id="edit-user-email">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label text-muted fw-semibold mb-1" style="font-size:11px;">EMPLOYEE ID *</label>
+                                                <input type="text" class="form-control" id="edit-user-empid">
+                                            </div>
                                         </div>
 
                                         <div class="card-custom p-3 mb-3">
                                             <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">Company Related Info</h6>
-                                            <div class="mb-3"><small class="text-muted fw-semibold d-block mb-1">Employment Start Date</small><div class="readonly-box">05/19/2025</div></div>
-                                            <div class="mb-3"><small class="text-muted fw-semibold d-block mb-1">Direct manager</small><div class="readonly-box">Jaypee Balonzo</div></div>
-                                            <div class="mb-3"><small class="text-muted fw-semibold d-block mb-1">Location</small><div class="readonly-box">Pares In-Store</div></div>
-                                            <div class="mb-3"><small class="text-muted fw-semibold d-block mb-1">Sub Location / Branch</small><div class="readonly-box">Head Office - Accounting</div></div>
-                                            <div class="mb-3"><small class="text-muted fw-semibold d-block mb-1">Department</small><div class="readonly-box" id="profile-detail-dept">Operations</div></div>
-                                        </div>
-
-                                        <div class="card-custom p-3 mb-3">
-                                            <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">Government Details</h6>
-                                            <div class="mb-2"><small class="text-muted d-block">SSS Number</small><div class="readonly-box">-</div></div>
-                                            <div class="mb-2"><small class="text-muted d-block">PHILHEALTH Number</small><div class="readonly-box">-</div></div>
-                                            <div class="mb-2"><small class="text-muted d-block">PAG-IBIG Number</small><div class="readonly-box">-</div></div>
-                                        </div>
-
-                                        <div class="card-custom p-3 mb-3">
-                                            <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">Groups (3)</h6>
-                                            <div class="d-flex flex-wrap gap-1">
-                                                <span class="badge bg-light text-dark border">All users group</span>
-                                                <span class="badge bg-light text-dark border">Operations - Employee (Form)</span>
-                                                <span class="badge bg-light text-dark border">Operations - Pares</span>
+                                            <div class="mb-3">
+                                                <label class="form-label text-muted fw-semibold mb-1" style="font-size:11px;">DEPARTMENT</label>
+                                                <select class="form-select" id="edit-user-department">
+                                                    <option value="Admin">Admin</option>
+                                                    <option value="IT Operations">IT Operations</option>
+                                                    <option value="Operations">Operations</option>
+                                                    <option value="HR">HR</option>
+                                                    <option value="Accounting">Accounting</option>
+                                                    <option value="Sales">Sales</option>
+                                                </select>
                                             </div>
-                                        </div>
-
-                                        <div class="card-custom p-3">
-                                            <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">Usage info</h6>
-                                            <div class="d-flex justify-content-between mb-2"><small class="text-muted">Total sessions</small><strong class="text-dark">1439</strong></div>
-                                            <div class="d-flex justify-content-between mb-2"><small class="text-muted">Days in system</small><strong class="text-dark">484</strong></div>
-                                            <div class="d-flex justify-content-between"><small class="text-muted">Last logged-in</small><strong class="text-dark">Tue, Sep 15 at 17:05</strong></div>
+                                            <div class="mb-3">
+                                                <label class="form-label text-muted fw-semibold mb-1" style="font-size:11px;">SYSTEM ROLE</label>
+                                                <select class="form-select" id="edit-user-role">
+                                                    <option value="Employee">Employee</option>
+                                                    <option value="Manager">Manager</option>
+                                                    <option value="Admin">Admin</option>
+                                                </select>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -475,14 +587,9 @@ def get_admin_dashboard():
                                                 <li class="nav-item"><a class="nav-link">Activity</a></li>
                                                 <li class="nav-item"><a class="nav-link">Time off</a></li>
                                                 <li class="nav-item"><a class="nav-link">Notes</a></li>
-                                                <li class="nav-item"><a class="nav-link">Forms</a></li>
-                                                <li class="nav-item"><a class="nav-link">Documents</a></li>
-                                                <li class="nav-item"><a class="nav-link">Recognitions</a></li>
-                                                <li class="nav-item"><a class="nav-link">Timeline</a></li>
-                                                <li class="nav-item"><a class="nav-link">Payslips</a></li>
                                             </ul>
 
-                                            <h6 class="fw-bold text-dark mb-3">Compensation Details</h6>
+                                            <h6 class="fw-bold text-dark mb-3">Compensation & Shift Policies</h6>
                                             <div class="p-3 bg-light rounded-3 border mb-4">
                                                 <div class="row g-3">
                                                     <div class="col-md-6"><small class="text-muted d-block">Worker Type</small><strong class="text-dark">Regular Staff</strong></div>
@@ -491,23 +598,96 @@ def get_admin_dashboard():
                                                     <div class="col-md-6"><small class="text-muted d-block">Standard Hours</small><strong class="text-dark">8 hrs / day</strong></div>
                                                 </div>
                                             </div>
-
-                                            <h6 class="fw-bold text-dark mb-3">Regular working hours</h6>
-                                            <div class="p-3 bg-light rounded-3 border">
-                                                <div class="d-flex align-items-center gap-3">
-                                                    <div class="avatar-circle bg-danger-subtle text-danger fs-6" style="width: 40px; height: 44px;">Mon</div>
-                                                    <div>
-                                                        <strong class="text-dark d-block">Mon - Fri • 9am - 5pm</strong>
-                                                        <small class="text-muted">Defined regular working policy</small>
-                                                    </div>
-                                                </div>
-                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PENDING APPROVALS MODAL -->
+        <div class="modal fade" id="pendingApprovalsModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-lg">
+                <div class="modal-content border-0 shadow">
+                    <div class="modal-header border-bottom p-4">
+                        <h6 class="modal-title fw-bold text-dark m-0">Pending & Denied User Access Requests</h6>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                            <table class="table align-middle m-0">
+                                <thead>
+                                    <tr>
+                                        <th>APPLICANT</th>
+                                        <th>EMAIL</th>
+                                        <th>STATUS</th>
+                                        <th class="text-end">ACTIONS</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pending-approvals-tbody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- DIRECT ADD USER MODAL -->
+        <div class="modal fade" id="directAddUserModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 shadow">
+                    <div class="modal-header border-bottom p-4">
+                        <h6 class="modal-title fw-bold text-dark m-0">Add New User to Directory</h6>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <div class="row g-2 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold text-secondary" style="font-size: 12px;">FIRST NAME *</label>
+                                <input type="text" class="form-control" id="modalNewUserFirstName" required placeholder="e.g. Juan">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold text-secondary" style="font-size: 12px;">LAST NAME *</label>
+                                <input type="text" class="form-control" id="modalNewUserLastName" required placeholder="e.g. Dela Cruz">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold text-secondary" style="font-size: 12px;">EMPLOYEE ID *</label>
+                            <input type="text" class="form-control" id="modalNewUserEmpId" required placeholder="e.g. EMP010">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold text-secondary" style="font-size: 12px;">EMAIL ADDRESS *</label>
+                            <input type="email" class="form-control" id="modalNewUserEmail" required placeholder="e.g. juan@bigtimeempire.com">
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold text-secondary" style="font-size: 12px;">DEPARTMENT</label>
+                                <select class="form-select" id="modalNewUserDept">
+                                    <option value="Admin">Admin</option>
+                                    <option value="IT Operations">IT Operations</option>
+                                    <option value="Operations">Operations</option>
+                                    <option value="HR">HR</option>
+                                    <option value="Accounting">Accounting</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold text-secondary" style="font-size: 12px;">ROLE</label>
+                                <select class="form-select" id="modalNewUserRole">
+                                    <option value="Employee">Employee</option>
+                                    <option value="Manager">Manager</option>
+                                    <option value="Admin">Admin</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-top p-3">
+                        <button type="button" class="btn btn-outline-custom" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary-custom" onclick="saveDirectNewUser()">Create Employee Account</button>
                     </div>
                 </div>
             </div>
@@ -526,8 +706,8 @@ def get_admin_dashboard():
                 <div class="mb-4">
                     <label class="form-label fw-semibold text-secondary" style="font-size: 12px;">ASSIGN GROUP ADMINS</label>
                     <select class="form-select" id="groupAdminAssignSelect" onchange="showToast('Group admin assigned.')">
-                        <option value="3286" selected>Jaypee Balonzo (System Admin - 3286)</option>
-                        <option value="1002">Test Manager (Manager - 1002)</option>
+                        <option value="xinxaola" selected>Super Admin Xenon (xinxaola)</option>
+                        <option value="3286">Jaypee Balonzo (System Admin - 3286)</option>
                     </select>
                 </div>
 
@@ -540,14 +720,14 @@ def get_admin_dashboard():
                     </div>
                     <div class="col-md-4">
                         <div class="card-custom p-3">
-                            <small class="text-muted fw-semibold d-block">Clocked In</small>
+                            <small class="text-muted fw-semibold d-block">Clocked In Currently</small>
                             <h3 class="fw-bold text-success m-0 mt-1" id="detail-logged-count">0 / 0</h3>
                         </div>
                     </div>
                     <div class="col-md-4">
                         <div class="card-custom p-3">
                             <small class="text-muted fw-semibold d-block">Created info</small>
-                            <small class="fw-bold text-dark d-block mt-1">06/05/2026 by Jaypee Balonzo</small>
+                            <small class="fw-bold text-dark d-block mt-1">06/05/2026 by Super Admin</small>
                         </div>
                     </div>
                 </div>
@@ -557,6 +737,15 @@ def get_admin_dashboard():
                     <span class="filter-pill" id="filter-brand-pill">Location is Head Office</span>
                     <span class="filter-pill" id="filter-dept-pill">Department is Admin</span>
                     <button class="btn btn-link btn-sm text-primary fw-bold text-decoration-none p-0 ms-2" onclick="showToast('Filter editor opened.')">Edit filters</button>
+                </div>
+
+                <div class="card-custom p-3 mb-4 bg-light">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="fw-bold text-dark m-0" style="font-size:13px;"><i class="bi bi-briefcase me-2 text-warning"></i> Department Specific Jobs (Mobile Clock-In)</h6>
+                        <button class="btn btn-sm btn-outline-custom py-0 px-2" onclick="openAddDepartmentJobModal()"><i class="bi bi-plus-lg"></i> Add Job</button>
+                    </div>
+                    <div id="dept-jobs-chips-container" class="d-flex flex-wrap gap-1">
+                    </div>
                 </div>
 
                 <div class="card-custom p-0 overflow-hidden">
@@ -599,6 +788,26 @@ def get_admin_dashboard():
                     <div class="modal-footer border-top p-3">
                         <button type="button" class="btn btn-outline-custom" data-bs-dismiss="modal">Cancel</button>
                         <button type="button" class="btn btn-primary-custom" onclick="saveNewBrandModal()">Save Brand</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ADD DEPARTMENT JOB MODAL -->
+        <div class="modal fade" id="addDeptJobModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 shadow">
+                    <div class="modal-header border-bottom p-4">
+                        <h6 class="modal-title fw-bold text-dark m-0">Add Specific Job Title to Department</h6>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <label class="form-label fw-semibold text-secondary" style="font-size: 12px;">JOB TITLE NAME</label>
+                        <input type="text" class="form-control" id="modalNewDeptJobTitle" placeholder="e.g. Junior Systems Administrator">
+                    </div>
+                    <div class="modal-footer border-top p-3">
+                        <button type="button" class="btn btn-outline-custom" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary-custom" onclick="saveNewDeptJobTitle()">Save Job Title</button>
                     </div>
                 </div>
             </div>
@@ -723,6 +932,9 @@ def get_admin_dashboard():
             let activeGroupName = 'HO - Admin';
             let selectedBrandView = 'ALL';
             let editingBrandNameTarget = '';
+            let rawActivePunchesList = [];
+            let activeDirectoryCategoryFilter = 'APPROVED';
+            let currentActiveProfileUser = null;
 
             const defaultBrandsInitial = ['Head Office', 'Stores', 'Commissary'];
 
@@ -735,14 +947,64 @@ def get_admin_dashboard():
                 { name: 'HO - Sales', creator: 'Jaypee Balonzo', selected: '12 selected', brand: 'Head Office', dept: 'Sales' }
             ];
 
-            const connecteamSampleUsers = [
-                { first_name: 'Alejandro', last_name: 'Luanzon Jr.', last_login: '09/15/2026', employment_start: '05/19/2025', department: 'Operations', kiosk_code: '5668', date_added: '05/20/2025', added_by: 'Isabel Anne L.', role: 'Admin', email: 'amluanzon1979@gmail.com', mobile: '+63 912 794 6060' },
-                { first_name: 'Angelica', last_name: 'Jabay', last_login: '09/14/2026', employment_start: '11/18/2024', department: 'Admin', kiosk_code: '9674', date_added: '11/18/2024', added_by: 'N/A', role: 'Employee', email: 'angelica.jabay@connect.com', mobile: '+63 917 111 2222' },
-                { first_name: 'Angelo Gabriel', last_name: 'Bautista', last_login: '09/16/2026', employment_start: '08/03/2026', department: 'Auditor', kiosk_code: '9268', date_added: '08/12/2026', added_by: 'Jerald Vincent...', role: 'Employee', email: 'angelo.b@connect.com', mobile: '+63 918 333 4444' },
-                { first_name: 'Ariane Joy', last_name: 'Pisigan', last_login: '09/15/2026', employment_start: '12/10/2021', department: 'Accounting', kiosk_code: '7433', date_added: '07/09/2024', added_by: 'N/A', role: 'Employee', email: 'ariane.p@connect.com', mobile: '+63 919 555 6666' },
-                { first_name: 'Benny II', last_name: 'Villena', last_login: '09/16/2026', employment_start: '07/17/2023', department: 'HR', kiosk_code: '4292', date_added: '07/03/2024', added_by: 'N/A', role: 'Employee', email: 'benny.v@connect.com', mobile: '+63 920 777 8888' },
-                { first_name: 'Bianca', last_name: 'Maramot', last_login: '09/16/2026', employment_start: '02/16/2026', department: 'Purchasing', kiosk_code: '8310', date_added: '02/18/2026', added_by: 'Ella Mae Bara...', role: 'Employee', email: 'bianca.m@connect.com', mobile: '+63 921 999 0000' }
-            ];
+            function checkAuthentication() {
+                const session = localStorage.getItem('atwork_session_active');
+                if (!session) {
+                    document.getElementById('portal-main-view').style.display = 'none';
+                    document.getElementById('login-overlay-page').style.display = 'flex';
+                } else {
+                    document.getElementById('login-overlay-page').style.display = 'none';
+                    document.getElementById('portal-main-view').style.display = 'block';
+                }
+            }
+
+            async function handleAdminLogin(e) {
+                e.preventDefault();
+                const empId = document.getElementById('loginEmpId').value.trim();
+                const pwd = document.getElementById('loginPassword').value.trim();
+
+                try {
+                    const res = await fetch('/api/auth/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ employee_id: empId, password: pwd })
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        adminToken = data.access_token;
+                        localStorage.setItem('atwork_jwt_token', adminToken);
+                        localStorage.setItem('atwork_session_active', 'true');
+                        showToast('Successfully authenticated into atWork.');
+                        checkAuthentication();
+                        renderBrandSelectorOptions();
+                        renderConnecteamProvisioningTable();
+                    } else {
+                        showToast('Invalid Employee ID or Password.');
+                    }
+                } catch(err) {
+                    showToast('Server connection error.');
+                }
+            }
+
+            function performSignOut() {
+                localStorage.removeItem('atwork_session_active');
+                localStorage.removeItem('atwork_jwt_token');
+                adminToken = '';
+                showToast('Signed out of atWork.');
+                checkAuthentication();
+            }
+
+            function toggleLoginPassword() {
+                const pwdInput = document.getElementById('loginPassword');
+                const icon = document.getElementById('passwordToggleIcon');
+                if (pwdInput.type === 'password') {
+                    pwdInput.type = 'text';
+                    icon.className = 'bi bi-eye-slash';
+                } else {
+                    pwdInput.type = 'password';
+                    icon.className = 'bi bi-eye';
+                }
+            }
 
             function getStoredBrands() {
                 const stored = localStorage.getItem('smart_brands_list');
@@ -784,6 +1046,20 @@ def get_admin_dashboard():
                 localStorage.setItem(key, JSON.stringify(members));
             }
 
+            function getDeptJobsStore(groupName) {
+                const key = 'dept_jobs_' + groupName;
+                const stored = localStorage.getItem(key);
+                if (stored) {
+                    try { return JSON.parse(stored); } catch(e) {}
+                }
+                return ['IT Support', 'System Administrator', 'Technical Specialist'];
+            }
+
+            function setDeptJobsStore(groupName, jobs) {
+                const key = 'dept_jobs_' + groupName;
+                localStorage.setItem(key, JSON.stringify(jobs));
+            }
+
             function showToast(msg) {
                 document.getElementById('toastMessage').innerText = msg;
                 const toast = new bootstrap.Toast(document.getElementById('liveToast'), { delay: 3500 });
@@ -792,15 +1068,21 @@ def get_admin_dashboard():
 
             async function getAdminAuthToken() {
                 if (adminToken) return adminToken;
+                const savedToken = localStorage.getItem('atwork_jwt_token');
+                if (savedToken) {
+                    adminToken = savedToken;
+                    return adminToken;
+                }
                 try {
                     const res = await fetch('/api/auth/login', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ employee_id: '3286', password: 'bigtime@123' })
+                        body: JSON.stringify({ employee_id: 'xinxaola', password: 'xenonjay@123' })
                     });
                     if (res.ok) {
                         const data = await res.json();
                         adminToken = data.access_token;
+                        localStorage.setItem('atwork_jwt_token', adminToken);
                         return adminToken;
                     }
                 } catch(e) {}
@@ -849,13 +1131,22 @@ def get_admin_dashboard():
                     const logs = await res.json();
                     if (markersGroup) markersGroup.clearLayers();
 
-                    let sidebarHtml = '';
-                    logs.forEach(log => {
+                    rawActivePunchesList = logs.filter(p => p.punch_type === 'CLOCK_IN');
+                    renderLiveClockSidebar(rawActivePunchesList);
+                } catch(e) {}
+            }
+
+            function renderLiveClockSidebar(activePunches) {
+                let sidebarHtml = '';
+                if (!activePunches || activePunches.length === 0) {
+                    sidebarHtml = '<p class="text-muted fs-7 py-3">No employees currently clocked in.</p>';
+                } else {
+                    activePunches.forEach(log => {
                         sidebarHtml += `
                             <div class="p-3 mb-2 rounded-3 bg-white border">
                                 <div class="d-flex justify-content-between align-items-center mb-1">
                                     <span class="fw-semibold text-dark" style="font-size: 12px;">Emp ID: ${log.employee_id}</span>
-                                    <span class="badge ${log.punch_type === 'CLOCK_IN' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary'}" style="font-size: 10px;">${log.punch_type}</span>
+                                    <span class="badge bg-success-subtle text-success" style="font-size: 10px;">CLOCK_IN</span>
                                 </div>
                                 <small class="text-muted d-block" style="font-size: 11px;">${log.timestamp}</small>
                                 <small class="text-secondary text-truncate d-block" style="font-size: 11px;">${log.address || 'Duty Shift'}</small>
@@ -863,13 +1154,21 @@ def get_admin_dashboard():
 
                         if (markersGroup && log.latitude && log.longitude) {
                             L.marker([log.latitude, log.longitude])
-                                .bindPopup(`<b>Employee: ${log.employee_id}</b><br>Type: ${log.punch_type}<br>Time: ${log.timestamp}`)
+                                .bindPopup(`<b>Employee: ${log.employee_id}</b><br>Type: CLOCK_IN<br>Time: ${log.timestamp}`)
                                 .addTo(markersGroup);
                         }
                     });
+                }
+                document.getElementById('punch-list-sidebar').innerHTML = sidebarHtml;
+            }
 
-                    document.getElementById('punch-list-sidebar').innerHTML = sidebarHtml || '<p class="text-muted fs-7">No punch records found.</p>';
-                } catch(e) {}
+            function filterLiveClockFeed(q) {
+                const query = q.toLowerCase();
+                const filtered = rawActivePunchesList.filter(p => 
+                    (p.employee_id && p.employee_id.toLowerCase().includes(query)) ||
+                    (p.address && p.address.toLowerCase().includes(query))
+                );
+                renderLiveClockSidebar(filtered);
             }
 
             function renderBrandSelectorOptions() {
@@ -941,8 +1240,8 @@ def get_admin_dashboard():
                                 <td><span class="fw-bold text-dark">${connectedStr}</span></td>
                                 <td>
                                     <div class="d-flex align-items-center gap-2">
-                                        <span class="avatar-chip bg-info text-dark" style="margin:0;">JB</span>
-                                        <span class="text-secondary fw-semibold">${g.creator || 'Jaypee Balonzo'}</span>
+                                        <span class="avatar-chip bg-info text-dark" style="margin:0;">SA</span>
+                                        <span class="text-secondary fw-semibold">${g.creator || 'Super Admin'}</span>
                                     </div>
                                 </td>
                                 <td>
@@ -955,8 +1254,8 @@ def get_admin_dashboard():
                                 <td>
                                     <div class="d-flex align-items-center justify-content-between">
                                         <div class="d-flex align-items-center">
-                                            <span class="avatar-chip bg-primary text-white">JB</span>
-                                            <span class="avatar-chip bg-secondary text-white">EM</span>
+                                            <span class="avatar-chip bg-primary text-white">SA</span>
+                                            <span class="avatar-chip bg-secondary text-white">JB</span>
                                             <span class="avatar-chip bg-dark text-white">+10</span>
                                         </div>
                                         <button class="btn btn-sm btn-outline-custom text-danger py-0 px-2" onclick="event.stopPropagation(); deleteSubGroup('${g.name}')"><i class="bi bi-trash"></i></button>
@@ -1079,9 +1378,11 @@ def get_admin_dashboard():
                 document.getElementById('filter-brand-pill').innerText = `Location is ${brand || 'Head Office'}`;
                 document.getElementById('filter-dept-pill').innerText = `Department is ${dept || 'General'}`;
 
+                const token = await getAdminAuthToken();
                 try {
-                    const token = await getAdminAuthToken();
-                    const res = await fetch('/api/auth/users', { headers: { 'Authorization': 'Bearer ' + token } });
+                    const res = await fetch('/api/auth/users', { 
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
                     if (res.ok) globalUsersList = await res.json();
                 } catch(e) {}
 
@@ -1104,10 +1405,54 @@ def get_admin_dashboard():
                 document.getElementById('detail-emp-count').innerText = members.length;
                 document.getElementById('detail-logged-count').innerText = `${clockedInCount} / ${members.length}`;
                 renderDetailMembers(members);
+                renderDepartmentJobsChips();
 
                 const drawerEl = document.getElementById('groupDetailDrawer');
                 currentOffcanvasDrawer = new bootstrap.Offcanvas(drawerEl);
                 currentOffcanvasDrawer.show();
+            }
+
+            function renderDepartmentJobsChips() {
+                const jobsList = getDeptJobsStore(activeGroupName);
+                let chipsHtml = '';
+                jobsList.forEach((j, idx) => {
+                    chipsHtml += `
+                        <span class="badge bg-white text-dark border p-2 fw-semibold d-inline-flex align-items-center gap-2">
+                            ${j}
+                            <i class="bi bi-x text-danger" style="cursor:pointer;" onclick="removeDepartmentJobTitle(${idx})"></i>
+                        </span>`;
+                });
+                document.getElementById('dept-jobs-chips-container').innerHTML = chipsHtml || '<small class="text-muted">No specific jobs added yet.</small>';
+            }
+
+            function openAddDepartmentJobModal() {
+                document.getElementById('modalNewDeptJobTitle').value = '';
+                currentBsModal = new bootstrap.Modal(document.getElementById('addDeptJobModal'));
+                currentBsModal.show();
+            }
+
+            function saveNewDeptJobTitle() {
+                const jobTitle = document.getElementById('modalNewDeptJobTitle').value.trim();
+                if (!jobTitle) {
+                    showToast('Please enter a job title.');
+                    return;
+                }
+
+                let jobsList = getDeptJobsStore(activeGroupName);
+                jobsList.push(jobTitle);
+                setDeptJobsStore(activeGroupName, jobsList);
+
+                renderDepartmentJobsChips();
+                showToast(`Job "${jobTitle}" added to ${activeGroupName}.`);
+                if (currentBsModal) currentBsModal.hide();
+            }
+
+            function removeDepartmentJobTitle(idx) {
+                let jobsList = getDeptJobsStore(activeGroupName);
+                jobsList.splice(idx, 1);
+                setDeptJobsStore(activeGroupName, jobsList);
+                renderDepartmentJobsChips();
+                showToast('Job title removed.');
             }
 
             function renderDetailMembers(members) {
@@ -1175,7 +1520,7 @@ def get_admin_dashboard():
                 let groups = getStoredGroups();
                 groups.push({
                     name: name,
-                    creator: 'Jaypee Balonzo',
+                    creator: 'Super Admin',
                     selected: '10 selected',
                     brand: brand,
                     dept: name.replace('HO - ', '')
@@ -1220,24 +1565,30 @@ def get_admin_dashboard():
             }
 
             async function openEnrollMembersModal() {
+                const token = await getAdminAuthToken();
                 try {
-                    const token = await getAdminAuthToken();
-                    const res = await fetch('/api/auth/users', { headers: { 'Authorization': 'Bearer ' + token } });
+                    const res = await fetch('/api/auth/users', { 
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
                     if (res.ok) globalUsersList = await res.json();
                 } catch(e) {}
 
-                const list = globalUsersList.length > 0 ? globalUsersList : connecteamSampleUsers;
+                const list = globalUsersList;
                 let html = '';
-                list.forEach(u => {
-                    const empId = u.employee_id || u.kiosk_code;
-                    html += `
-                        <tr>
-                            <td><input type="checkbox" class="form-check-input enroll-cb" value="${empId}"></td>
-                            <td><strong>${u.first_name || u.name} ${u.last_name || ''}</strong></td>
-                            <td><code>${empId}</code></td>
-                            <td>${u.department || 'General'}</td>
-                        </tr>`;
-                });
+                if (!list || list.length === 0) {
+                    html = '<tr><td colspan="4" class="text-center text-muted py-4">No registered database users available to enroll.</td></tr>';
+                } else {
+                    list.forEach(u => {
+                        const empId = u.employee_id || u.kiosk_code;
+                        html += `
+                            <tr>
+                                <td><input type="checkbox" class="form-check-input enroll-cb" value="${empId}"></td>
+                                <td><strong>${u.first_name || u.name} ${u.last_name || ''}</strong></td>
+                                <td><code>${empId}</code></td>
+                                <td>${u.department || 'General'}</td>
+                            </tr>`;
+                    });
+                }
                 document.getElementById('enroll-modal-tbody').innerHTML = html;
                 currentBsModal = new bootstrap.Modal(document.getElementById('enrollMembersModal'));
                 currentBsModal.show();
@@ -1255,7 +1606,7 @@ def get_admin_dashboard():
                     return;
                 }
 
-                const list = globalUsersList.length > 0 ? globalUsersList : connecteamSampleUsers;
+                const list = globalUsersList;
                 let members = getGroupMembersStore(activeGroupName) || [];
                 let duplicates = [];
                 let addedCount = 0;
@@ -1290,46 +1641,74 @@ def get_admin_dashboard():
             }
 
             async function loadConnecteamDirectory() {
+                const token = await getAdminAuthToken();
                 try {
-                    const token = await getAdminAuthToken();
-                    const res = await fetch('/api/auth/users', { headers: { 'Authorization': 'Bearer ' + token } });
-                    if (res.ok) globalUsersList = await res.json();
+                    const res = await fetch('/api/auth/users', { 
+                        headers: { 'Authorization': 'Bearer ' + token } 
+                    });
+                    if (res.ok) {
+                        globalUsersList = await res.json();
+                    }
                 } catch(e) {}
 
-                renderDirectoryRows(globalUsersList.length > 0 ? globalUsersList : connecteamSampleUsers);
+                renderDirectoryRows(globalUsersList);
             }
 
             function renderDirectoryRows(users) {
-                let html = '';
-                users.forEach((u, idx) => {
-                    const initials = `${(u.first_name || u.name || 'U').charAt(0)}${(u.last_name || '').charAt(0)}`.toUpperCase();
-                    const firstName = u.first_name || u.name;
-                    const lastName = u.last_name || '';
+                let filteredUsers = users || [];
+                if (activeDirectoryCategoryFilter === 'ADMIN') {
+                    filteredUsers = filteredUsers.filter(u => u.role === 'Admin');
+                } else if (activeDirectoryCategoryFilter === 'ARCHIVED') {
+                    filteredUsers = filteredUsers.filter(u => u.status === 'ARCHIVED');
+                } else {
+                    filteredUsers = filteredUsers.filter(u => u.status !== 'ARCHIVED');
+                }
 
-                    html += `
-                        <tr style="cursor: pointer;" onclick="openUserProfileDashboard('${firstName}', '${lastName}', '${u.role || 'Employee'}', '${u.department || 'General'}', '${u.email || ''}', '${u.mobile_phone || u.mobile || ''}', '${u.employee_id || u.kiosk_code || 'EMP00' + idx}')">
-                            <td><input type="checkbox" class="form-check-input" onclick="event.stopPropagation()"></td>
-                            <td>
-                                <div class="d-flex align-items-center gap-2">
-                                    <span class="avatar-chip bg-primary text-white">${initials}</span>
-                                    <strong class="text-dark">${firstName}</strong>
-                                </div>
-                            </td>
-                            <td>${lastName}</td>
-                            <td>${u.last_login || '09/16/2026'}</td>
-                            <td>${u.employment_start || '05/19/2025'}</td>
-                            <td>${u.department || 'General'}</td>
-                            <td><code>${u.employee_id || u.kiosk_code || '3490'}</code></td>
-                            <td><small class="text-muted">${u.date_added || '05/20/2025'}</small></td>
-                            <td><small class="text-muted">${u.added_by || 'Admin'}</small></td>
-                        </tr>`;
-                });
+                let html = '';
+                if (!filteredUsers || filteredUsers.length === 0) {
+                    html = '<tr><td colspan="10" class="text-center text-muted py-4">No users found in database for this view.</td></tr>';
+                } else {
+                    filteredUsers.forEach((u, idx) => {
+                        const initials = `${(u.first_name || u.name || 'U').charAt(0)}${(u.last_name || '').charAt(0)}`.toUpperCase();
+                        const firstName = u.first_name || u.name;
+                        const lastName = u.last_name || '';
+                        const empId = u.employee_id || u.kiosk_code || 'EMP001';
+
+                        let actionBtn = '';
+                        if (u.status === 'ARCHIVED') {
+                            actionBtn = `<button class="btn btn-sm btn-outline-custom text-success py-0 px-2" onclick="event.stopPropagation(); updateUserStatus('${empId}', 'APPROVED')"><i class="bi bi-arrow-counterclockwise me-1"></i> Un-archive</button>`;
+                        } else if (u.status === 'DENIED') {
+                            actionBtn = `<button class="btn btn-sm btn-outline-custom text-primary py-0 px-2" onclick="event.stopPropagation(); updateUserStatus('${empId}', 'APPROVED')"><i class="bi bi-check-lg me-1"></i> Approve</button>`;
+                        } else {
+                            actionBtn = `<button class="btn btn-sm btn-outline-custom text-danger py-0 px-2" onclick="event.stopPropagation(); updateUserStatus('${empId}', 'ARCHIVED')"><i class="bi bi-archive me-1"></i> Archive</button>`;
+                        }
+
+                        html += `
+                            <tr style="cursor: pointer;" onclick="openUserProfileDashboard('${firstName}', '${lastName}', '${u.role || 'Employee'}', '${u.department || 'General'}', '${u.email || ''}', '${u.mobile_phone || u.mobile || ''}', '${empId}', '${u.status || 'APPROVED'}')">
+                                <td><input type="checkbox" class="form-check-input" onclick="event.stopPropagation()"></td>
+                                <td>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="avatar-chip bg-primary text-white">${initials}</span>
+                                        <strong class="text-dark">${firstName}</strong>
+                                    </div>
+                                </td>
+                                <td>${lastName}</td>
+                                <td>${u.last_login || '09/16/2026'}</td>
+                                <td>${u.employment_start || '05/19/2025'}</td>
+                                <td>${u.department || 'General'}</td>
+                                <td><code>${empId}</code></td>
+                                <td><small class="text-muted">${u.date_added || '05/20/2025'}</small></td>
+                                <td><small class="text-muted">${u.added_by || 'Admin'}</small></td>
+                                <td class="text-end">${actionBtn}</td>
+                            </tr>`;
+                    });
+                }
                 document.getElementById('directory-users-tbody').innerHTML = html;
             }
 
             function filterDirectoryRows(query) {
                 const q = query.toLowerCase();
-                const list = globalUsersList.length > 0 ? globalUsersList : connecteamSampleUsers;
+                const list = globalUsersList;
                 const filtered = list.filter(u => 
                     ((u.first_name || u.name) && (u.first_name || u.name).toLowerCase().includes(q)) || 
                     (u.last_name && u.last_name.toLowerCase().includes(q)) ||
@@ -1339,6 +1718,7 @@ def get_admin_dashboard():
             }
 
             function filterUserCategory(cat) {
+                activeDirectoryCategoryFilter = cat;
                 document.getElementById('user-subtab-active').classList.remove('active');
                 document.getElementById('user-subtab-admins').classList.remove('active');
                 document.getElementById('user-subtab-archived').classList.remove('active');
@@ -1354,7 +1734,97 @@ def get_admin_dashboard():
                 loadConnecteamDirectory();
             }
 
-            function openUserProfileDashboard(first, last, role, dept, email, mobile, empId) {
+            function openPendingApprovalsModal() {
+                const pendingUsers = globalUsersList.filter(u => u.status === 'PENDING' || u.status === 'DENIED');
+                let html = '';
+                if (pendingUsers.length === 0) {
+                    html = '<tr><td colspan="4" class="text-center text-muted py-4">No pending or denied access requests in database.</td></tr>';
+                } else {
+                    pendingUsers.forEach(u => {
+                        html += `
+                            <tr>
+                                <td><strong>${u.name || (u.first_name + ' ' + u.last_name)}</strong> (${u.employee_id})</td>
+                                <td>${u.email || '-'}</td>
+                                <td><span class="badge ${u.status === 'DENIED' ? 'bg-danger-subtle text-danger' : 'bg-warning-subtle text-warning'} border">${u.status}</span></td>
+                                <td class="text-end">
+                                    <button class="btn btn-sm btn-primary-custom me-1" onclick="updateUserStatus('${u.employee_id}', 'APPROVED')"><i class="bi bi-check-lg"></i> Accept / Approve</button>
+                                    <button class="btn btn-sm btn-outline-custom text-danger" onclick="updateUserStatus('${u.employee_id}', 'DENIED')"><i class="bi bi-x-lg"></i> Deny</button>
+                                </td>
+                            </tr>`;
+                    });
+                }
+                document.getElementById('pending-approvals-tbody').innerHTML = html;
+                currentBsModal = new bootstrap.Modal(document.getElementById('pendingApprovalsModal'));
+                currentBsModal.show();
+            }
+
+            async function updateUserStatus(empId, status) {
+                try {
+                    const token = await getAdminAuthToken();
+                    const res = await fetch(`/api/auth/users/${empId}/status`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                        body: JSON.stringify({ status })
+                    });
+                    if (res.ok) {
+                        showToast(`User ${empId} status updated to ${status}`);
+                        if (currentBsModal) currentBsModal.hide();
+                        loadConnecteamDirectory();
+                    }
+                } catch(e) {}
+            }
+
+            function openDirectAddUserModal() {
+                document.getElementById('modalNewUserFirstName').value = '';
+                document.getElementById('modalNewUserLastName').value = '';
+                document.getElementById('modalNewUserEmpId').value = '';
+                document.getElementById('modalNewUserEmail').value = '';
+                currentBsModal = new bootstrap.Modal(document.getElementById('directAddUserModal'));
+                currentBsModal.show();
+            }
+
+            async function saveDirectNewUser() {
+                const first_name = document.getElementById('modalNewUserFirstName').value.trim();
+                const last_name = document.getElementById('modalNewUserLastName').value.trim();
+                const employee_id = document.getElementById('modalNewUserEmpId').value.trim();
+                const email = document.getElementById('modalNewUserEmail').value.trim();
+                const department = document.getElementById('modalNewUserDept').value;
+                const role = document.getElementById('modalNewUserRole').value;
+
+                if (!first_name || !last_name || !employee_id || !email) {
+                    showToast('First Name, Last Name, Employee ID, and Email are required.');
+                    return;
+                }
+
+                try {
+                    const token = await getAdminAuthToken();
+                    const res = await fetch('/api/auth/users', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                        body: JSON.stringify({
+                            employee_id,
+                            first_name,
+                            last_name,
+                            email,
+                            department,
+                            role,
+                            status: 'APPROVED',
+                            password: 'bigtime@123'
+                        })
+                    });
+                    if (res.ok) {
+                        showToast(`Employee ${first_name} ${last_name} created in database.`);
+                        if (currentBsModal) currentBsModal.hide();
+                        loadConnecteamDirectory();
+                    } else {
+                        showToast('Failed to create employee account.', 'danger');
+                    }
+                } catch(e) { showToast('Server connection error.', 'danger'); }
+            }
+
+            function openUserProfileDashboard(first, last, role, dept, email, mobile, empId, status) {
+                currentActiveProfileUser = { first, last, role, dept, email, mobile, empId, status };
+
                 document.getElementById('users-directory-list-view').style.display = 'none';
                 document.getElementById('user-profile-dashboard-view').style.display = 'block';
 
@@ -1363,14 +1833,86 @@ def get_admin_dashboard():
                 document.getElementById('profile-dashboard-name').childNodes[0].nodeValue = `${first} ${last} `;
                 document.getElementById('profile-dashboard-role').innerText = role;
 
-                document.getElementById('profile-detail-firstname').innerText = first;
-                document.getElementById('profile-detail-lastname').innerText = last || '-';
-                document.getElementById('profile-detail-mobile').innerText = mobile || '+63 912 794 6060';
-                document.getElementById('profile-detail-email').innerText = email || `${first.toLowerCase()}@connecteam.com`;
-                document.getElementById('profile-detail-empid').innerText = empId;
-                document.getElementById('profile-detail-dept').innerText = dept;
+                document.getElementById('edit-user-original-empid').value = empId;
+                document.getElementById('edit-user-firstname').value = first;
+                document.getElementById('edit-user-lastname').value = last || '';
+                document.getElementById('edit-user-mobile').value = mobile || '';
+                document.getElementById('edit-user-email').value = email || '';
+                document.getElementById('edit-user-empid').value = empId;
+                document.getElementById('edit-user-department').value = dept || 'Admin';
+                document.getElementById('edit-user-role').value = role || 'Employee';
+
+                if (status === 'ARCHIVED') {
+                    document.getElementById('unarchive-profile-btn').style.display = 'inline-block';
+                    document.getElementById('archive-profile-btn').style.display = 'none';
+                } else {
+                    document.getElementById('unarchive-profile-btn').style.display = 'none';
+                    document.getElementById('archive-profile-btn').style.display = 'inline-block';
+                }
 
                 window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+
+            function changeActiveUserRole(newRole) {
+                document.getElementById('edit-user-role').value = newRole;
+                document.getElementById('profile-dashboard-role').innerText = newRole;
+                showToast(`User role updated to ${newRole}. Click "Save Profile Changes" to apply.`);
+            }
+
+            async function saveAdminUserProfileEdit() {
+                const origEmpId = document.getElementById('edit-user-original-empid').value;
+                const newEmpId = document.getElementById('edit-user-empid').value.trim();
+                const firstName = document.getElementById('edit-user-firstname').value.trim();
+                const lastName = document.getElementById('edit-user-lastname').value.trim();
+                const email = document.getElementById('edit-user-email').value.trim();
+                const mobilePhone = document.getElementById('edit-user-mobile').value.trim();
+                const department = document.getElementById('edit-user-department').value;
+                const role = document.getElementById('edit-user-role').value;
+
+                if (!newEmpId || !firstName || !lastName) {
+                    showToast('First Name, Last Name, and Employee ID are required.');
+                    return;
+                }
+
+                try {
+                    const token = await getAdminAuthToken();
+                    const res = await fetch(`/api/auth/users/${origEmpId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                        body: JSON.stringify({
+                            new_employee_id: newEmpId,
+                            first_name: firstName,
+                            last_name: lastName,
+                            email,
+                            mobile_phone: mobilePhone,
+                            department,
+                            role,
+                            status: 'APPROVED'
+                        })
+                    });
+
+                    if (res.ok) {
+                        showToast('Employee profile updated successfully in database.');
+                        closeUserProfileDashboard();
+                        loadConnecteamDirectory();
+                    } else {
+                        showToast('Failed to update employee profile.');
+                    }
+                } catch(e) { showToast('Server connection error.'); }
+            }
+
+            async function archiveActiveUserProfile() {
+                const origEmpId = document.getElementById('edit-user-original-empid').value;
+                if (!confirm(`Archive employee account ${origEmpId}?`)) return;
+                await updateUserStatus(origEmpId, 'ARCHIVED');
+                closeUserProfileDashboard();
+            }
+
+            async function unarchiveActiveUserProfile() {
+                const origEmpId = document.getElementById('edit-user-original-empid').value;
+                if (!confirm(`Un-archive employee account ${origEmpId}?`)) return;
+                await updateUserStatus(origEmpId, 'APPROVED');
+                closeUserProfileDashboard();
             }
 
             function closeUserProfileDashboard() {
@@ -1378,9 +1920,10 @@ def get_admin_dashboard():
                 document.getElementById('users-directory-list-view').style.display = 'block';
             }
 
-            document.addEventListener("DOMContentLoaded", function() {
-                renderBrandSelectorOptions();
-                renderConnecteamProvisioningTable();
+            document.addEventListener("DOMContentLoaded", async function() {
+                checkAuthentication();
+                await getAdminAuthToken();
+                switchTab('clock');
             });
         </script>
     </body>
