@@ -12,19 +12,22 @@ export default function DashboardScreen() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [loading, setLoading] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
-  
-  // Real dynamic location state (null until verified hardware lock)
+
+  // Real dynamic location state
   const [location, setLocation] = useState(null);
   const [showJobModal, setShowJobModal] = useState(false);
 
   // Dynamic Jobs State from API
-  const [jobCategories, setJobCategories] = useState([]);
-  const [selectedJob, setSelectedJob] = useState('System Administrator');
+  const [deptJobTitles, setDeptJobTitles] = useState([]);
+  const [selectedJob, setSelectedJob] = useState('Staff');
   const [jobsLoading, setJobsLoading] = useState(false);
-  
+
   const timerRef = useRef(null);
   const webViewRef = useRef(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  // Active user assigned department code/name
+  const userDept = user?.department || 'HO - IT';
 
   useEffect(() => {
     Animated.loop(
@@ -35,23 +38,61 @@ export default function DashboardScreen() {
     ).start();
   }, [pulseAnim]);
 
-  // Fetch dynamic job categories & sub-items from backend API
+  // Fetch dynamic job categories/titles strictly matching assigned department
   const fetchJobs = useCallback(async () => {
     setJobsLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/jobs`);
+      let titles = [];
       if (res.ok) {
         const data = await res.json();
-        setJobCategories(data);
-        if (data.length > 0 && data[0].sub_items.length > 0) {
-          setSelectedJob(data[0].sub_items[0].name);
+        // Exact match by department code/name
+        const match = data.find(c => 
+          c.code === userDept || 
+          c.name === userDept || 
+          c.description === userDept ||
+          c.name.toLowerCase() === userDept.toLowerCase()
+        );
+
+        if (match && match.sub_items && match.sub_items.length > 0) {
+          titles = match.sub_items.map(s => s.name);
         }
+      }
+
+      // If no database category matches the specific sub-group, assign department-specific job titles
+      if (titles.length === 0) {
+        const deptUpper = userDept.toUpperCase();
+        if (deptUpper.includes('MARKETING')) {
+          titles = ['Marketing OIC', 'BME'];
+        } else if (deptUpper.includes('ADMIN')) {
+          titles = ['Admin OIC', 'Payroll Specialist', 'Admin Assistant', 'Messenger'];
+        } else if (deptUpper.includes('HR') || deptUpper.includes('HUMAN RESOURCE')) {
+          titles = ['HR Manager', 'HR Associate', 'Recruiter'];
+        } else if (deptUpper.includes('ACCOUNTING')) {
+          titles = ['Accounting Head', 'Junior Accountant', 'Billing Clerk'];
+        } else if (deptUpper.includes('SALES')) {
+          titles = ['Sales Manager', 'Sales Executive'];
+        } else {
+          titles = ['System Administrator', 'IT Head', 'Technical Specialist'];
+        }
+      }
+
+      setDeptJobTitles(titles);
+      if (titles.length > 0) {
+        setSelectedJob(titles[0]);
       }
     } catch (e) {
       console.log('Error fetching jobs:', e);
+      if (userDept.toUpperCase().includes('MARKETING')) {
+        setDeptJobTitles(['Marketing OIC', 'BME']);
+        setSelectedJob('Marketing OIC');
+      } else {
+        setDeptJobTitles(['System Administrator', 'IT Head', 'Technical Specialist']);
+        setSelectedJob('System Administrator');
+      }
     }
     setJobsLoading(false);
-  }, [API_BASE_URL]);
+  }, [API_BASE_URL, userDept]);
 
   const requestGpsLocation = async (showAlertOnFail = false) => {
     setGpsLoading(true);
@@ -120,7 +161,7 @@ export default function DashboardScreen() {
         setIsClockedIn(data.is_clocked_in);
         setElapsedSeconds(data.is_clocked_in ? (data.elapsed_seconds || 0) : 0);
         if (data.job_name) {
-          const cleanJob = data.job_name.replace('Job: ', '');
+          const cleanJob = data.job_name.replace('Job: ', '').split(' (')[0];
           setSelectedJob(cleanJob);
         }
       }
@@ -149,17 +190,27 @@ export default function DashboardScreen() {
 
     setLoading(true);
     setShowJobModal(false);
+    const now = new Date();
+    const currentDate = now.toISOString().split('T')[0];
+    const currentTimestamp = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
     try {
       const res = await fetch(`${API_BASE_URL}/api/punch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           employee_id: user.employee_id,
+          full_name: user?.name || (user?.first_name ? `${user?.first_name} ${user?.last_name || ''}` : user.employee_id),
+          department: userDept,
+          brand_subgroup: userDept,
+          job_title: jobName,
           punch_type: isClockedIn ? 'CLOCK_OUT' : 'CLOCK_IN',
           latitude: location.latitude,
           longitude: location.longitude,
           accuracy: location.accuracy || 10,
-          address: isClockedIn ? 'Shift Ended' : `Job: ${jobName}`,
+          date: currentDate,
+          timestamp: currentTimestamp,
+          address: isClockedIn ? 'Shift Ended' : `Job: ${jobName} (${userDept})`,
         }),
       });
       if (res.ok) await fetchStatus();
@@ -215,7 +266,7 @@ export default function DashboardScreen() {
 
         <View style={styles.activeCard}>
           <View style={styles.jobPill}>
-            <Text style={styles.jobPillText}>{selectedJob}</Text>
+            <Text style={styles.jobPillText}>{selectedJob} • {userDept}</Text>
           </View>
           <Text style={styles.activeTimer}>{formatTime(elapsedSeconds)}</Text>
           <View style={styles.locRow}>
@@ -259,7 +310,7 @@ export default function DashboardScreen() {
           <View style={styles.avatar}><Text style={{color:'#fff', fontWeight: '700'}}>{user?.name?.charAt(0) || 'U'}</Text></View>
           <View>
             <Text style={styles.greeting}>{user?.name}</Text>
-            <Text style={styles.subGreeting}>{user?.position || 'Staff'} • {user?.department || 'Operations'}</Text>
+            <Text style={styles.subGreeting}>{user?.position || 'Staff'} • {userDept}</Text>
           </View>
         </View>
         <TouchableOpacity onPress={logout} style={styles.logoutIconBtn}>
@@ -284,9 +335,9 @@ export default function DashboardScreen() {
       {/* Clock-In Bottom Sheet */}
       <View style={styles.bottomDrawer}>
         <Animated.View style={[styles.clockBtnWrapper, { transform: [{ scale: pulseAnim }] }]}>
-          <TouchableOpacity 
-            style={[styles.bigClockBtn, !location && { backgroundColor: '#94a3b8' }]} 
-            onPress={() => location ? setShowJobModal(true) : requestGpsLocation(true)} 
+          <TouchableOpacity
+            style={[styles.bigClockBtn, !location && { backgroundColor: '#94a3b8' }]}
+            onPress={() => location ? setShowJobModal(true) : requestGpsLocation(true)}
             disabled={loading}
           >
             {loading ? (
@@ -299,7 +350,7 @@ export default function DashboardScreen() {
             )}
           </TouchableOpacity>
         </Animated.View>
-        
+
         <View style={styles.quickStatsRow}>
           <View style={styles.statBox}>
             <Ionicons name="time-outline" size={18} color="#2563eb" />
@@ -330,22 +381,21 @@ export default function DashboardScreen() {
               <ActivityIndicator size="large" color="#2563eb" style={{ marginVertical: 40 }} />
             ) : (
               <ScrollView style={{ width: '100%' }}>
-                {jobCategories.map((cat) => (
-                  <View key={cat.id} style={{ marginBottom: 16 }}>
-                    <Text style={styles.categoryHeader}>{cat.name}</Text>
-                    {cat.sub_items.map((sub) => (
-                      <TouchableOpacity 
-                        key={sub.id} 
-                        style={styles.jobRow} 
-                        onPress={() => { setSelectedJob(sub.name); submitPunch(sub.name); }}
-                      >
-                        <View style={styles.jobDot}/>
-                        <Text style={styles.jobText}>{sub.name}</Text>
-                        <Ionicons name="chevron-forward" size={18} color="#cbd5e1" />
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                ))}
+                <View style={{ marginBottom: 16 }}>
+                  <Text style={styles.categoryHeader}>{userDept.toUpperCase()}</Text>
+
+                  {deptJobTitles.map((jobTitle, idx) => (
+                    <TouchableOpacity
+                      key={idx}
+                      style={styles.jobRow}
+                      onPress={() => { setSelectedJob(jobTitle); submitPunch(jobTitle); }}
+                    >
+                      <View style={styles.jobDot}/>
+                      <Text style={styles.jobText}>{jobTitle}</Text>
+                      <Ionicons name="chevron-forward" size={18} color="#cbd5e1" />
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </ScrollView>
             )}
           </View>
@@ -375,7 +425,7 @@ const styles = StyleSheet.create({
   statDivider: { width: 1, height: 28, backgroundColor: '#e2e8f0' },
   statLabel: { fontSize: 11, color: '#64748b', marginTop: 4 },
   statVal: { fontSize: 12, fontWeight: '700', color: '#0f172a', marginTop: 2 },
-  
+
   // Shift Active Layout
   activeShiftContainer: { flex: 1, backgroundColor: '#f8fafc', paddingTop: 48 },
   topBar: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 20, alignItems: 'center' },

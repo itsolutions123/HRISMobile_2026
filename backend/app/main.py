@@ -28,7 +28,6 @@ app.include_router(dtr.router)
 def seed_initial_data():
     db = SessionLocal()
     try:
-        # Seed or restore primary Superadmin account (xinxaola)
         super_admin = db.query(Employee).filter(Employee.employee_id == "xinxaola").first()
         if not super_admin:
             super_admin = Employee(
@@ -52,7 +51,6 @@ def seed_initial_data():
             super_admin.password_hash = get_password_hash("xenonjay@123")
             db.commit()
 
-        # Ensure Jaypee Balonzo (3286) remains an active Admin
         admin_jaypee = db.query(Employee).filter(Employee.employee_id == "3286").first()
         if not admin_jaypee:
             admin_jaypee = Employee(
@@ -323,13 +321,13 @@ def get_admin_dashboard():
                 <form id="adminLoginForm" onsubmit="handleAdminLogin(event)">
                     <div class="mb-3">
                         <label class="form-label fw-semibold text-secondary" style="font-size: 12px;">EMPLOYEE ID OR USERNAME</label>
-                        <input type="text" class="form-control py-2" id="loginEmpId" placeholder="e.g. xinxaola or 3286" required>
+                        <input type="text" class="form-control py-2" id="loginEmpId" required>
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label fw-semibold text-secondary" style="font-size: 12px;">PASSWORD</label>
                         <div class="input-group">
-                            <input type="password" class="form-control py-2 border-end-0" id="loginPassword" placeholder="••••••••" required>
+                            <input type="password" class="form-control py-2 border-end-0" id="loginPassword" required>
                             <button class="btn btn-outline-secondary border-start-0 bg-white" type="button" onclick="toggleLoginPassword()"><i class="bi bi-eye" id="passwordToggleIcon"></i></button>
                         </div>
                     </div>
@@ -534,6 +532,7 @@ def get_admin_dashboard():
                                         <div class="card-custom p-3 mb-3">
                                             <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">Personal Details</h6>
                                             <input type="hidden" id="edit-user-original-empid">
+                                            <input type="hidden" id="edit-user-original-dept">
                                             <div class="mb-3">
                                                 <label class="form-label text-muted fw-semibold mb-1" style="font-size:11px;">FIRST NAME *</label>
                                                 <input type="text" class="form-control" id="edit-user-firstname">
@@ -559,14 +558,8 @@ def get_admin_dashboard():
                                         <div class="card-custom p-3 mb-3">
                                             <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">Company Related Info</h6>
                                             <div class="mb-3">
-                                                <label class="form-label text-muted fw-semibold mb-1" style="font-size:11px;">DEPARTMENT</label>
+                                                <label class="form-label text-muted fw-semibold mb-1" style="font-size:11px;">DEPARTMENT (SMART GROUP SUB-GROUP)</label>
                                                 <select class="form-select" id="edit-user-department">
-                                                    <option value="Admin">Admin</option>
-                                                    <option value="IT Operations">IT Operations</option>
-                                                    <option value="Operations">Operations</option>
-                                                    <option value="HR">HR</option>
-                                                    <option value="Accounting">Accounting</option>
-                                                    <option value="Sales">Sales</option>
                                                 </select>
                                             </div>
                                             <div class="mb-3">
@@ -582,21 +575,53 @@ def get_admin_dashboard():
 
                                     <div class="col-md-9">
                                         <div class="card-custom p-4">
-                                            <ul class="nav nav-tabs nav-tabs-connecteam border-bottom mb-4">
-                                                <li class="nav-item"><a class="nav-link active">Employment</a></li>
-                                                <li class="nav-item"><a class="nav-link">Activity</a></li>
-                                                <li class="nav-item"><a class="nav-link">Time off</a></li>
-                                                <li class="nav-item"><a class="nav-link">Notes</a></li>
+                                            <ul class="nav nav-tabs nav-tabs-connecteam border-bottom mb-4" id="userProfileSubTabs">
+                                                <li class="nav-item"><a class="nav-link active" onclick="switchProfileTab('employment')">Employment</a></li>
+                                                <li class="nav-item"><a class="nav-link" onclick="switchProfileTab('activity')">Activity</a></li>
+                                                <li class="nav-item"><a class="nav-link" onclick="switchProfileTab('timeoff')">Time off</a></li>
+                                                <li class="nav-item"><a class="nav-link" onclick="switchProfileTab('notes')">Notes</a></li>
                                             </ul>
 
-                                            <h6 class="fw-bold text-dark mb-3">Compensation & Shift Policies</h6>
-                                            <div class="p-3 bg-light rounded-3 border mb-4">
-                                                <div class="row g-3">
-                                                    <div class="col-md-6"><small class="text-muted d-block">Worker Type</small><strong class="text-dark">Regular Staff</strong></div>
-                                                    <div class="col-md-6"><small class="text-muted d-block">Pay Type</small><strong class="text-dark">Monthly Rate</strong></div>
-                                                    <div class="col-md-6"><small class="text-muted d-block">Overtime Eligibility</small><strong class="text-dark">Eligible</strong></div>
-                                                    <div class="col-md-6"><small class="text-muted d-block">Standard Hours</small><strong class="text-dark">8 hrs / day</strong></div>
+                                            <div id="profile-subtab-employment">
+                                                <h6 class="fw-bold text-dark mb-3">Compensation & Shift Policies</h6>
+                                                <div class="p-3 bg-light rounded-3 border mb-4">
+                                                    <div class="row g-3">
+                                                        <div class="col-md-6"><small class="text-muted d-block">Worker Type</small><strong class="text-dark">Regular Staff</strong></div>
+                                                        <div class="col-md-6"><small class="text-muted d-block">Pay Type</small><strong class="text-dark">Monthly Rate</strong></div>
+                                                        <div class="col-md-6"><small class="text-muted d-block">Overtime Eligibility</small><strong class="text-dark">Eligible</strong></div>
+                                                        <div class="col-md-6"><small class="text-muted d-block">Standard Hours</small><strong class="text-dark">8 hrs / day</strong></div>
+                                                    </div>
                                                 </div>
+                                            </div>
+
+                                            <div id="profile-subtab-activity" style="display:none;">
+                                                <h6 class="fw-bold text-dark mb-3"><i class="bi bi-clock-history me-2 text-primary"></i> Clock In / Clock Out Activity</h6>
+                                                <div class="table-responsive">
+                                                    <table class="table align-middle">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>PUNCH TYPE</th>
+                                                                <th>TIMESTAMP</th>
+                                                                <th>LOCATION / ADDRESS</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody id="profile-activity-tbody">
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+
+                                            <div id="profile-subtab-timeoff" style="display:none;">
+                                                <h6 class="fw-bold text-dark mb-3"><i class="bi bi-calendar-event me-2 text-warning"></i> Time Off Requests</h6>
+                                                <div class="p-3 bg-light rounded-3 border">
+                                                    <p class="text-muted m-0 fs-7">No active time-off or leave requests submitted.</p>
+                                                </div>
+                                            </div>
+
+                                            <div id="profile-subtab-notes" style="display:none;">
+                                                <h6 class="fw-bold text-dark mb-3"><i class="bi bi-journal-text me-2 text-warning"></i> Administrative Notes</h6>
+                                                <textarea class="form-control mb-3" id="profileUserNotesInput" rows="4" placeholder="Enter administrative notes for this user..."></textarea>
+                                                <button class="btn btn-primary-custom btn-sm" onclick="showToast('Note saved for user.')">Save Note</button>
                                             </div>
                                         </div>
                                     </div>
@@ -666,13 +691,8 @@ def get_admin_dashboard():
                         </div>
                         <div class="row g-2 mb-3">
                             <div class="col-md-6">
-                                <label class="form-label fw-semibold text-secondary" style="font-size: 12px;">DEPARTMENT</label>
+                                <label class="form-label fw-semibold text-secondary" style="font-size: 12px;">DEPARTMENT (SUB-GROUP)</label>
                                 <select class="form-select" id="modalNewUserDept">
-                                    <option value="Admin">Admin</option>
-                                    <option value="IT Operations">IT Operations</option>
-                                    <option value="Operations">Operations</option>
-                                    <option value="HR">HR</option>
-                                    <option value="Accounting">Accounting</option>
                                 </select>
                             </div>
                             <div class="col-md-6">
@@ -751,7 +771,6 @@ def get_admin_dashboard():
                 <div class="card-custom p-0 overflow-hidden">
                     <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
                         <input type="text" class="form-control" style="width: 260px;" placeholder="Search group members..." onkeyup="filterDetailMembers(this.value)">
-                        <button class="btn btn-primary-custom btn-sm" onclick="openEnrollMembersModal()"><i class="bi bi-person-plus me-1"></i> Add Member</button>
                     </div>
                     <div class="table-responsive">
                         <table class="table align-middle m-0">
@@ -762,7 +781,6 @@ def get_admin_dashboard():
                                     <th>Last login</th>
                                     <th>Department</th>
                                     <th>Kiosk code</th>
-                                    <th class="text-end">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="detail-members-tbody">
@@ -880,38 +898,6 @@ def get_admin_dashboard():
             </div>
         </div>
 
-        <!-- ENROLL MEMBERS MODAL -->
-        <div class="modal fade" id="enrollMembersModal" tabindex="-1" aria-hidden="true">
-            <div class="modal-dialog modal-dialog-centered modal-lg">
-                <div class="modal-content border-0 shadow">
-                    <div class="modal-header border-bottom p-4">
-                        <h6 class="modal-title fw-bold text-dark m-0">Enroll Members into Group</h6>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body p-4">
-                        <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
-                            <table class="table align-middle m-0">
-                                <thead>
-                                    <tr>
-                                        <th width="30"><input type="checkbox" class="form-check-input" id="select-all-enroll" onclick="toggleSelectAllEnroll(this)"></th>
-                                        <th>FULL NAME</th>
-                                        <th>EMPLOYEE ID</th>
-                                        <th>DEPARTMENT</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="enroll-modal-tbody">
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <div class="modal-footer border-top p-3">
-                        <button type="button" class="btn btn-outline-custom" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-primary-custom" onclick="confirmEnrollSelectedMembers()">Enroll Selected Members</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- TOAST CONTAINER -->
         <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1080;">
             <div id="liveToast" class="toast align-items-center border-0 shadow-sm text-white bg-dark" role="alert" aria-live="assertive" aria-atomic="true">
@@ -939,7 +925,7 @@ def get_admin_dashboard():
             const defaultBrandsInitial = ['Head Office', 'Stores', 'Commissary'];
 
             const defaultGroupsInitial = [
-                { name: 'HO - I. T.', creator: 'Jaypee Balonzo', selected: '17 selected', brand: 'Head Office', dept: 'IT' },
+                { name: 'HO - IT', creator: 'Jaypee Balonzo', selected: '17 selected', brand: 'Head Office', dept: 'IT' },
                 { name: 'HO - Marketing', creator: 'Jaypee Balonzo', selected: '13 selected', brand: 'Head Office', dept: 'Marketing' },
                 { name: 'HO - Admin', creator: 'Jaypee Balonzo', selected: '15 selected', brand: 'Head Office', dept: 'Admin' },
                 { name: 'HO - Human Resource', creator: 'Jaypee Balonzo', selected: '14 selected', brand: 'Head Office', dept: 'HR' },
@@ -1060,6 +1046,17 @@ def get_admin_dashboard():
                 localStorage.setItem(key, JSON.stringify(jobs));
             }
 
+            function populateDepartmentDropdownOptions(selectedVal) {
+                const allGroups = getStoredGroups();
+                let optionsHtml = '';
+                allGroups.forEach(g => {
+                    const isSel = (g.name === selectedVal || g.dept === selectedVal) ? 'selected' : '';
+                    optionsHtml += `<option value="${g.name}" ${isSel}>${g.name}</option>`;
+                });
+                document.getElementById('edit-user-department').innerHTML = optionsHtml;
+                document.getElementById('modalNewUserDept').innerHTML = optionsHtml;
+            }
+
             function showToast(msg) {
                 document.getElementById('toastMessage').innerText = msg;
                 const toast = new bootstrap.Toast(document.getElementById('liveToast'), { delay: 3500 });
@@ -1131,30 +1128,55 @@ def get_admin_dashboard():
                     const logs = await res.json();
                     if (markersGroup) markersGroup.clearLayers();
 
-                    rawActivePunchesList = logs.filter(p => p.punch_type === 'CLOCK_IN');
-                    renderLiveClockSidebar(rawActivePunchesList);
+                    const token = await getAdminAuthToken();
+                    let usersMap = {};
+                    try {
+                        const uRes = await fetch('/api/auth/users', { headers: { 'Authorization': 'Bearer ' + token } });
+                        if (uRes.ok) {
+                            const uList = await uRes.json();
+                            uList.forEach(u => { usersMap[u.employee_id] = u; });
+                        }
+                    } catch(err) {}
+
+                    let latestPunchByEmp = {};
+                    logs.forEach(log => {
+                        const empId = log.employee_id;
+                        if (!latestPunchByEmp[empId] || log.id > latestPunchByEmp[empId].id) {
+                            latestPunchByEmp[empId] = log;
+                        }
+                    });
+
+                    rawActivePunchesList = Object.values(latestPunchByEmp).filter(p => p.punch_type === 'CLOCK_IN');
+                    renderLiveClockSidebar(rawActivePunchesList, usersMap);
                 } catch(e) {}
             }
 
-            function renderLiveClockSidebar(activePunches) {
+            function renderLiveClockSidebar(activePunches, usersMap = {}) {
                 let sidebarHtml = '';
                 if (!activePunches || activePunches.length === 0) {
                     sidebarHtml = '<p class="text-muted fs-7 py-3">No employees currently clocked in.</p>';
                 } else {
                     activePunches.forEach(log => {
+                        const emp = usersMap[log.employee_id] || {};
+                        const fullName = emp.name || (emp.first_name ? `${emp.first_name} ${emp.last_name || ''}` : `Emp ID: ${log.employee_id}`);
+                        const jobTitle = emp.position || emp.role || 'Staff';
+
                         sidebarHtml += `
                             <div class="p-3 mb-2 rounded-3 bg-white border">
                                 <div class="d-flex justify-content-between align-items-center mb-1">
-                                    <span class="fw-semibold text-dark" style="font-size: 12px;">Emp ID: ${log.employee_id}</span>
+                                    <div>
+                                        <strong class="text-dark d-block" style="font-size: 13px;">${fullName}</strong>
+                                        <small class="text-muted" style="font-size: 11px;">${jobTitle} (${log.employee_id})</small>
+                                    </div>
                                     <span class="badge bg-success-subtle text-success" style="font-size: 10px;">CLOCK_IN</span>
                                 </div>
-                                <small class="text-muted d-block" style="font-size: 11px;">${log.timestamp}</small>
-                                <small class="text-secondary text-truncate d-block" style="font-size: 11px;">${log.address || 'Duty Shift'}</small>
+                                <small class="text-muted d-block mt-1" style="font-size: 11px;"><i class="bi bi-clock me-1"></i>${log.timestamp}</small>
+                                <small class="text-secondary text-truncate d-block" style="font-size: 11px;"><i class="bi bi-geo-alt me-1"></i>${log.address || 'Duty Shift'}</small>
                             </div>`;
 
                         if (markersGroup && log.latitude && log.longitude) {
                             L.marker([log.latitude, log.longitude])
-                                .bindPopup(`<b>Employee: ${log.employee_id}</b><br>Type: CLOCK_IN<br>Time: ${log.timestamp}`)
+                                .bindPopup(`<b>${fullName}</b><br>Job: ${jobTitle}<br>Time: ${log.timestamp}`)
                                 .addTo(markersGroup);
                         }
                     });
@@ -1230,8 +1252,9 @@ def get_admin_dashboard():
 
                     let rowsHtml = '';
                     brandGroups.forEach((g) => {
-                        const members = getGroupMembersStore(g.name) || [];
-                        const connectedStr = `${members.length} / ${members.length}`;
+                        // Dynamically compute Smart Group members based on user assigned department
+                        const groupMembers = globalUsersList.filter(u => u.department === g.name || u.department === g.dept);
+                        const connectedStr = `${groupMembers.length} / ${groupMembers.length}`;
 
                         rowsHtml += `
                             <tr style="cursor: pointer;" onclick="viewGroupDetails('${g.name}', '${brandName}', '${g.dept || 'General'}')">
@@ -1297,6 +1320,7 @@ def get_admin_dashboard():
                 });
 
                 document.getElementById('brands-container').innerHTML = panelsHtml;
+                populateDepartmentDropdownOptions();
             }
 
             function toggleBrandCollapse(bIdx) {
@@ -1386,11 +1410,8 @@ def get_admin_dashboard():
                     if (res.ok) globalUsersList = await res.json();
                 } catch(e) {}
 
-                let members = getGroupMembersStore(groupName);
-                if (!members) {
-                    members = [];
-                    setGroupMembersStore(groupName, members);
-                }
+                // Members dynamically populated from DB matching this group/department
+                const groupMembers = globalUsersList.filter(u => u.department === groupName || u.department === dept);
 
                 let clockedInCount = 0;
                 try {
@@ -1398,13 +1419,13 @@ def get_admin_dashboard():
                     if (activeRes.ok) {
                         const logs = await activeRes.json();
                         const activeEmpIds = logs.filter(p => p.punch_type === 'CLOCK_IN').map(p => p.employee_id);
-                        clockedInCount = members.filter(m => activeEmpIds.includes(m.employee_id || m.kiosk_code)).length;
+                        clockedInCount = groupMembers.filter(m => activeEmpIds.includes(m.employee_id || m.kiosk_code)).length;
                     }
                 } catch(e) {}
 
-                document.getElementById('detail-emp-count').innerText = members.length;
-                document.getElementById('detail-logged-count').innerText = `${clockedInCount} / ${members.length}`;
-                renderDetailMembers(members);
+                document.getElementById('detail-emp-count').innerText = groupMembers.length;
+                document.getElementById('detail-logged-count').innerText = `${clockedInCount} / ${groupMembers.length}`;
+                renderDetailMembers(groupMembers);
                 renderDepartmentJobsChips();
 
                 const drawerEl = document.getElementById('groupDetailDrawer');
@@ -1458,41 +1479,25 @@ def get_admin_dashboard():
             function renderDetailMembers(members) {
                 let html = '';
                 if (!members || members.length === 0) {
-                    html = '<tr><td colspan="6" class="text-center text-muted py-4">No members enrolled in this group.</td></tr>';
+                    html = '<tr><td colspan="5" class="text-center text-muted py-4">No members enrolled in this group.</td></tr>';
                 } else {
                     members.forEach((u, idx) => {
                         html += `
                             <tr>
                                 <td>${u.first_name || u.name}</td>
                                 <td>${u.last_name || ''}</td>
-                                <td>09/16/2026</td>
+                                <td>${u.created_at || '09/16/2026'}</td>
                                 <td>${u.department || 'Admin'}</td>
                                 <td><code>${u.employee_id || u.kiosk_code}</code></td>
-                                <td class="text-end">
-                                    <button class="btn btn-sm btn-outline-custom text-danger py-1 px-2" onclick="removeMemberFromGroup(${idx})">
-                                        <i class="bi bi-trash"></i> Remove
-                                    </button>
-                                </td>
                             </tr>`;
                     });
                 }
                 document.getElementById('detail-members-tbody').innerHTML = html;
             }
 
-            function removeMemberFromGroup(index) {
-                let members = getGroupMembersStore(activeGroupName) || [];
-                members.splice(index, 1);
-                setGroupMembersStore(activeGroupName, members);
-
-                document.getElementById('detail-emp-count').innerText = members.length;
-                renderDetailMembers(members);
-                renderConnecteamProvisioningTable();
-                showToast('Member removed from group.');
-            }
-
             function filterDetailMembers(query) {
                 const q = query.toLowerCase();
-                const members = getGroupMembersStore(activeGroupName) || [];
+                const members = globalUsersList.filter(u => u.department === activeGroupName || u.department === activeGroupName.replace('HO - ', ''));
                 const filtered = members.filter(u => 
                     ((u.first_name || u.name) && (u.first_name || u.name).toLowerCase().includes(q)) || 
                     (u.last_name && u.last_name.toLowerCase().includes(q)) ||
@@ -1529,7 +1534,7 @@ def get_admin_dashboard():
                 setGroupMembersStore(name, []);
 
                 renderConnecteamProvisioningTable();
-                showToast('Smart Group created as empty (0 members enrolled).');
+                showToast('Smart Group created.');
                 if (currentBsModal) currentBsModal.hide();
             }
 
@@ -1553,90 +1558,10 @@ def get_admin_dashboard():
                     setStoredGroups(groups);
                 }
 
-                const existingMembers = getGroupMembersStore(activeGroupName) || [];
-                setGroupMembersStore(newName, existingMembers);
-                localStorage.removeItem('smart_group_members_' + activeGroupName);
-
                 activeGroupName = newName;
                 document.getElementById('detail-group-title').innerText = newName;
                 renderConnecteamProvisioningTable();
                 showToast('Group renamed successfully.');
-                if (currentBsModal) currentBsModal.hide();
-            }
-
-            async function openEnrollMembersModal() {
-                const token = await getAdminAuthToken();
-                try {
-                    const res = await fetch('/api/auth/users', { 
-                        headers: { 'Authorization': 'Bearer ' + token }
-                    });
-                    if (res.ok) globalUsersList = await res.json();
-                } catch(e) {}
-
-                const list = globalUsersList;
-                let html = '';
-                if (!list || list.length === 0) {
-                    html = '<tr><td colspan="4" class="text-center text-muted py-4">No registered database users available to enroll.</td></tr>';
-                } else {
-                    list.forEach(u => {
-                        const empId = u.employee_id || u.kiosk_code;
-                        html += `
-                            <tr>
-                                <td><input type="checkbox" class="form-check-input enroll-cb" value="${empId}"></td>
-                                <td><strong>${u.first_name || u.name} ${u.last_name || ''}</strong></td>
-                                <td><code>${empId}</code></td>
-                                <td>${u.department || 'General'}</td>
-                            </tr>`;
-                    });
-                }
-                document.getElementById('enroll-modal-tbody').innerHTML = html;
-                currentBsModal = new bootstrap.Modal(document.getElementById('enrollMembersModal'));
-                currentBsModal.show();
-            }
-
-            function toggleSelectAllEnroll(source) {
-                const cbs = document.querySelectorAll('.enroll-cb');
-                cbs.forEach(cb => cb.checked = source.checked);
-            }
-
-            function confirmEnrollSelectedMembers() {
-                const selectedIds = Array.from(document.querySelectorAll('.enroll-cb:checked')).map(cb => cb.value);
-                if (selectedIds.length === 0) {
-                    showToast('Please select at least one member.');
-                    return;
-                }
-
-                const list = globalUsersList;
-                let members = getGroupMembersStore(activeGroupName) || [];
-                let duplicates = [];
-                let addedCount = 0;
-
-                selectedIds.forEach(id => {
-                    const found = list.find(u => (u.employee_id || u.kiosk_code) === id);
-                    if (found) {
-                        const isAlreadyMember = members.some(m => (m.employee_id || m.kiosk_code) === id);
-                        if (isAlreadyMember) {
-                            duplicates.push(`${found.first_name || found.name} ${found.last_name || ''} (${id})`);
-                        } else {
-                            members.push(found);
-                            addedCount++;
-                        }
-                    }
-                });
-
-                setGroupMembersStore(activeGroupName, members);
-                document.getElementById('detail-emp-count').innerText = members.length;
-                renderDetailMembers(members);
-                renderConnecteamProvisioningTable();
-
-                if (duplicates.length > 0 && selectedIds.length === 1) {
-                    showToast('member already in group');
-                } else if (duplicates.length > 0) {
-                    showToast(`Enrollment complete, members [${duplicates.join(', ')}] are already in the group`);
-                } else {
-                    showToast(`Successfully enrolled ${addedCount} members into ${activeGroupName}.`);
-                }
-
                 if (currentBsModal) currentBsModal.hide();
             }
 
@@ -1734,6 +1659,47 @@ def get_admin_dashboard():
                 loadConnecteamDirectory();
             }
 
+            function switchProfileTab(pTab) {
+                document.getElementById('profile-subtab-employment').style.display = 'none';
+                document.getElementById('profile-subtab-activity').style.display = 'none';
+                document.getElementById('profile-subtab-timeoff').style.display = 'none';
+                document.getElementById('profile-subtab-notes').style.display = 'none';
+
+                const links = document.querySelectorAll('#userProfileSubTabs .nav-link');
+                links.forEach(l => l.classList.remove('active'));
+
+                document.getElementById('profile-subtab-' + pTab).style.display = 'block';
+                event.target.classList.add('active');
+
+                if (pTab === 'activity' && currentActiveProfileUser) {
+                    loadUserActivityPunches(currentActiveProfileUser.empId);
+                }
+            }
+
+            async function loadUserActivityPunches(empId) {
+                try {
+                    const res = await fetch('/api/punch/logs');
+                    if (res.ok) {
+                        const logs = await res.json();
+                        const userLogs = logs.filter(p => p.employee_id === empId);
+                        let html = '';
+                        if (userLogs.length === 0) {
+                            html = '<tr><td colspan="3" class="text-center text-muted py-3">No punch activity logs found for this user.</td></tr>';
+                        } else {
+                            userLogs.forEach(p => {
+                                html += `
+                                    <tr>
+                                        <td><span class="badge ${p.punch_type === 'CLOCK_IN' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary'}">${p.punch_type}</span></td>
+                                        <td>${p.timestamp}</td>
+                                        <td><small class="text-secondary">${p.address || 'Standard Duty Location'}</small></td>
+                                    </tr>`;
+                            });
+                        }
+                        document.getElementById('profile-activity-tbody').innerHTML = html;
+                    }
+                } catch(e) {}
+            }
+
             function openPendingApprovalsModal() {
                 const pendingUsers = globalUsersList.filter(u => u.status === 'PENDING' || u.status === 'DENIED');
                 let html = '';
@@ -1775,6 +1741,7 @@ def get_admin_dashboard():
             }
 
             function openDirectAddUserModal() {
+                populateDepartmentDropdownOptions();
                 document.getElementById('modalNewUserFirstName').value = '';
                 document.getElementById('modalNewUserLastName').value = '';
                 document.getElementById('modalNewUserEmpId').value = '';
@@ -1834,12 +1801,14 @@ def get_admin_dashboard():
                 document.getElementById('profile-dashboard-role').innerText = role;
 
                 document.getElementById('edit-user-original-empid').value = empId;
+                document.getElementById('edit-user-original-dept').value = dept || 'Admin';
                 document.getElementById('edit-user-firstname').value = first;
                 document.getElementById('edit-user-lastname').value = last || '';
                 document.getElementById('edit-user-mobile').value = mobile || '';
                 document.getElementById('edit-user-email').value = email || '';
                 document.getElementById('edit-user-empid').value = empId;
-                document.getElementById('edit-user-department').value = dept || 'Admin';
+                
+                populateDepartmentDropdownOptions(dept);
                 document.getElementById('edit-user-role').value = role || 'Employee';
 
                 if (status === 'ARCHIVED') {
@@ -1850,6 +1819,7 @@ def get_admin_dashboard():
                     document.getElementById('archive-profile-btn').style.display = 'inline-block';
                 }
 
+                switchProfileTab('employment');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             }
 
@@ -1866,7 +1836,7 @@ def get_admin_dashboard():
                 const lastName = document.getElementById('edit-user-lastname').value.trim();
                 const email = document.getElementById('edit-user-email').value.trim();
                 const mobilePhone = document.getElementById('edit-user-mobile').value.trim();
-                const department = document.getElementById('edit-user-department').value;
+                const newDept = document.getElementById('edit-user-department').value;
                 const role = document.getElementById('edit-user-role').value;
 
                 if (!newEmpId || !firstName || !lastName) {
@@ -1885,14 +1855,14 @@ def get_admin_dashboard():
                             last_name: lastName,
                             email,
                             mobile_phone: mobilePhone,
-                            department,
+                            department: newDept,
                             role,
                             status: 'APPROVED'
                         })
                     });
 
                     if (res.ok) {
-                        showToast('Employee profile updated successfully in database.');
+                        showToast(`Employee profile updated to Department "${newDept}".`);
                         closeUserProfileDashboard();
                         loadConnecteamDirectory();
                     } else {
