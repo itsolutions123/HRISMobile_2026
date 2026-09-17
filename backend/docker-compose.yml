@@ -4,10 +4,8 @@ services:
     image: postgres:15-alpine
     container_name: hris-postgres-db
     restart: unless-stopped
-    environment:
-      POSTGRES_USER: hrisuser
-      POSTGRES_PASSWORD: hrispassword
-      POSTGRES_DB: hrisdb
+    env_file:
+      - .env
     volumes:
       - hris_pgdata:/var/lib/postgresql/data
     networks:
@@ -21,8 +19,8 @@ services:
     restart: unless-stopped
     ports:
       - "8089:8000"
-    environment:
-      - DATABASE_URL=postgresql://hrisuser:hrispassword@hris-db:5432/hrisdb
+    env_file:
+      - .env
     depends_on:
       - hris-db
     networks:

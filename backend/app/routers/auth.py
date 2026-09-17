@@ -98,8 +98,12 @@ def register_user(payload: UserRegisterRequest, db: Session = Depends(get_db)):
         "employee_id": new_user.employee_id
     }
 
+from Request import Request if False else __import__('fastapi').Request
+from ..main import limiter
+
 @router.post("/login")
-def login(payload: LoginRequest, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(Employee).filter(
         (Employee.employee_id == payload.employee_id) | (Employee.email == payload.employee_id)
     ).first()

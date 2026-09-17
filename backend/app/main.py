@@ -1,6 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
 from .database import engine, Base, SessionLocal
 from .models import JobCategory, JobSubItem, Employee, PunchLog
 from .routers import auth, punch, jobs, manager, dtr
@@ -8,11 +12,18 @@ from .auth_utils import get_password_hash
 
 Base.metadata.create_all(bind=engine)
 
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="HRIS DTR Backend API")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://app.bigtimeempire.com",
+        "http://localhost:8089",
+        "http://127.0.0.1:8089",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -28,8 +39,9 @@ app.include_router(dtr.router)
 def seed_initial_data():
     db = SessionLocal()
     try:
+        initial_admin_pass = os.getenv("INITIAL_SUPERADMIN_PASSWORD")
         super_admin = db.query(Employee).filter(Employee.employee_id == "xinxaola").first()
-        if not super_admin:
+        if not super_admin and initial_admin_pass:
             super_admin = Employee(
                 employee_id="xinxaola",
                 name="Super Admin Xenon",
@@ -37,7 +49,7 @@ def seed_initial_data():
                 last_name="Admin",
                 position="Super Administrator",
                 department="Admin",
-                password_hash=get_password_hash("xenonjay@123"),
+                password_hash=get_password_hash(initial_admin_pass),
                 mobile_phone="+63 998 940 0957",
                 email="admin@bigtimeempire.com",
                 role="Admin",
@@ -45,14 +57,13 @@ def seed_initial_data():
             )
             db.add(super_admin)
             db.commit()
-        else:
+        elif super_admin:
             super_admin.role = "Admin"
             super_admin.status = "APPROVED"
-            super_admin.password_hash = get_password_hash("xenonjay@123")
             db.commit()
 
         admin_jaypee = db.query(Employee).filter(Employee.employee_id == "3286").first()
-        if not admin_jaypee:
+        if not admin_jaypee and initial_admin_pass:
             admin_jaypee = Employee(
                 employee_id="3286",
                 name="Jaypee Balonzo",
@@ -60,7 +71,7 @@ def seed_initial_data():
                 last_name="Balonzo",
                 position="IT System Administrator",
                 department="Admin",
-                password_hash=get_password_hash("bigtime@123"),
+                password_hash=get_password_hash(initial_admin_pass),
                 mobile_phone="+63 998 940 0957",
                 email="itsupport.associate@bigtimeempire.com",
                 role="Admin",
@@ -68,7 +79,7 @@ def seed_initial_data():
             )
             db.add(admin_jaypee)
             db.commit()
-        else:
+        elif admin_jaypee:
             admin_jaypee.role = "Admin"
             admin_jaypee.status = "APPROVED"
             db.commit()
@@ -1130,19 +1141,6 @@ def get_admin_dashboard():
                     adminToken = savedToken;
                     return adminToken;
                 }
-                try {
-                    const res = await fetch('/api/auth/login', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ employee_id: 'xinxaola', password: 'xenonjay@123' })
-                    });
-                    if (res.ok) {
-                        const data = await res.json();
-                        adminToken = data.access_token;
-                        localStorage.setItem('atwork_jwt_token', adminToken);
-                        return adminToken;
-                    }
-                } catch(e) {}
                 return '';
             }
 
