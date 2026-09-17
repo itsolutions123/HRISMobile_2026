@@ -51,5 +51,8 @@ Last updated: September 16, 2026
 - [x] Fix Smart Group connected count reload on page load (pre-fetch directory on init/tab switch).
 - [x] Fix upper-right account header to dynamically reflect current logged-in user via `/api/auth/me`.
 
+## Done (do not rebuild these)
+- [x] Connecteam-style Custom Forms workspace with permission-based multi-smart-group assignment, active/archived sub-tabs, and submission detail views.
+
 ## In Progress / Ready for Next Steps
 - [ ] Manager Approval Dashboard view for reviewing team DTR shift revision requests on mobile/web.
