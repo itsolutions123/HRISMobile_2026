@@ -379,6 +379,11 @@ def get_admin_dashboard():
                         <span><i class="bi bi-people me-2"></i> Users & Directory</span>
                     </a>
 
+                    <div class="section-label">Forms</div>
+                    <a class="nav-link" id="nav-forms-it" onclick="switchTab('forms-it')"><i class="bi bi-file-earmark-text"></i> IT Forms</a>
+                    <a class="nav-link" id="nav-forms-admin" onclick="switchTab('forms-admin')"><i class="bi bi-file-earmark-richtext"></i> Admin Forms</a>
+                    <a class="nav-link" id="nav-forms-hr" onclick="switchTab('forms-hr')"><i class="bi bi-file-earmark-person"></i> HR Forms</a>
+
                     <div class="section-label">Management</div>
                     <a class="nav-link" onclick="showToast('Scheduling accessible via Mobile workspace.')"><i class="bi bi-calendar3"></i> Scheduling</a>
                     <a class="nav-link" onclick="window.open('/api/dtr/export', '_blank')"><i class="bi bi-download"></i> Export DTR</a>
@@ -677,6 +682,140 @@ def get_admin_dashboard():
                             </div>
                         </div>
 
+                        <!-- TAB FORMS: IT FORMS / ADMIN FORMS / HR FORMS -->
+                        <div id="tab-forms-view" style="display:none;">
+                            <!-- LIST VIEW -->
+                            <div id="forms-list-container">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <h4 class="fw-bold text-dark m-0 d-flex align-items-center gap-2">
+                                            <i class="bi bi-file-earmark-text text-primary"></i> <span id="forms-category-header-title">IT Forms</span>
+                                        </h4>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <small class="text-muted">Permissions</small>
+                                        <div class="avatar-circle bg-dark text-white" style="width:28px; height:28px; font-size:11px;">SA</div>
+                                    </div>
+                                </div>
+
+                                <div class="card-custom p-0 overflow-hidden mb-4">
+                                    <div class="p-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                        <ul class="nav nav-tabs nav-tabs-connecteam border-0 m-0">
+                                            <li class="nav-item">
+                                                <a class="nav-link active" id="form-tab-active" onclick="switchFormTabStatus('ACTIVE')"><i class="bi bi-check-circle me-1"></i> Active (<span id="count-active-forms">5</span>)</a>
+                                            </li>
+                                            <li class="nav-item">
+                                                <a class="nav-link" id="form-tab-archived" onclick="switchFormTabStatus('ARCHIVED')"><i class="bi bi-archive me-1"></i> Archived (<span id="count-archived-forms">16</span>)</a>
+                                            </li>
+                                        </ul>
+
+                                        <button class="btn btn-primary-custom" onclick="openCreateCustomFormModal()"><i class="bi bi-plus-lg me-1"></i> Add new</button>
+                                    </div>
+
+                                    <div class="p-3 border-bottom d-flex align-items-center gap-2">
+                                        <div class="input-group" style="width: 260px;">
+                                            <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                                            <input type="text" class="form-control border-start-0" id="searchFormsInput" placeholder="Search" onkeyup="filterCustomFormsList(this.value)">
+                                        </div>
+                                        <button class="btn btn-outline-custom p-2" title="Filter"><i class="bi bi-funnel"></i></button>
+                                    </div>
+
+                                    <div class="table-responsive">
+                                        <table class="table table-hover align-middle m-0">
+                                            <thead>
+                                                <tr>
+                                                    <th width="30"><input type="checkbox" class="form-check-input"></th>
+                                                    <th>Name</th>
+                                                    <th>Status</th>
+                                                    <th>Entries</th>
+                                                    <th>Views</th>
+                                                    <th>Assigned to</th>
+                                                    <th>Created by</th>
+                                                    <th>Administrated by</th>
+                                                    <th>Date Created</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="custom-forms-tbody">
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- FORM DETAIL / SUBMISSIONS VIEW -->
+                            <div id="form-detail-submissions-container" style="display:none;">
+                                <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <button class="btn btn-outline-custom btn-sm me-2" onclick="closeFormDetailSubmissions()"><i class="bi bi-arrow-left"></i></button>
+                                        <i class="bi bi-file-earmark-text text-primary fs-4"></i>
+                                        <h4 class="fw-bold text-dark m-0" id="selected-form-title">Email Requisition Form</h4>
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2 py-1 fs-7">Published</span>
+                                    </div>
+
+                                    <div class="d-flex align-items-center gap-2">
+                                        <small class="text-muted">Permissions</small>
+                                        <div class="avatar-circle bg-dark text-white" style="width:28px; height:28px; font-size:11px;">SA</div>
+                                        <button class="btn btn-outline-custom btn-sm"><i class="bi bi-phone me-1"></i> Preview</button>
+                                        <button class="btn btn-outline-custom btn-sm" onclick="showToast('Form Editor opened')"><i class="bi bi-pencil me-1"></i> Edit form</button>
+                                        <button class="btn btn-outline-custom btn-sm" onclick="showToast('Form Settings opened')"><i class="bi bi-gear me-1"></i> Settings</button>
+                                        <button class="btn btn-outline-custom btn-sm"><i class="bi bi-three-dots"></i></button>
+                                        <span class="badge bg-light text-dark border px-2 py-1 fs-7"><i class="bi bi-mortarboard me-1 text-primary"></i> 0 / 4</span>
+                                    </div>
+                                </div>
+
+                                <div class="card-custom p-0 overflow-hidden">
+                                    <div class="p-3 border-bottom">
+                                        <ul class="nav nav-tabs nav-tabs-connecteam border-0 m-0">
+                                            <li class="nav-item"><a class="nav-link active" id="form-detail-tab-sub">Submissions</a></li>
+                                            <li class="nav-item"><a class="nav-link" id="form-detail-tab-usr">Users</a></li>
+                                            <li class="nav-item"><a class="nav-link" id="form-detail-tab-sum">Summary</a></li>
+                                            <li class="nav-item"><a class="nav-link" id="form-detail-tab-act">Activity</a></li>
+                                        </ul>
+                                    </div>
+
+                                    <div class="p-3 border-bottom d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="btn-group" role="group">
+                                                <button class="btn btn-outline-custom btn-sm active fw-bold">Table</button>
+                                                <button class="btn btn-outline-custom btn-sm fw-bold">Inbox</button>
+                                            </div>
+                                            <div class="input-group input-group-sm" style="width: 200px;">
+                                                <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                                                <input type="text" class="form-control border-start-0" placeholder="Search">
+                                            </div>
+                                            <button class="btn btn-outline-custom btn-sm p-1 px-2"><i class="bi bi-funnel"></i></button>
+                                            <input type="text" class="form-control form-control-sm text-center" value="06/11/2024 - 09/18/2026" style="width: 170px;">
+                                            <small class="text-muted ms-2">Group by</small>
+                                            <select class="form-select form-select-sm" style="width:100px;">
+                                                <option>None</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="d-flex align-items-center gap-3">
+                                            <span class="fw-bold text-dark fs-7"><span id="form-submission-count-label">151</span> submissions</span>
+                                            <button class="btn btn-outline-custom btn-sm" onclick="showToast('Exporting submissions report...')"><i class="bi bi-box-arrow-up"></i></button>
+                                        </div>
+                                    </div>
+
+                                    <div class="table-responsive">
+                                        <table class="table table-hover align-middle m-0 fs-7">
+                                            <thead>
+                                                <tr>
+                                                    <th width="30"><input type="checkbox" class="form-check-input"></th>
+                                                    <th>Submitted By</th>
+                                                    <th>Date & Time</th>
+                                                    <th>Smart Group</th>
+                                                    <th>Status</th>
+                                                    <th class="text-end">Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="form-submissions-tbody">
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1171,10 +1310,30 @@ def get_admin_dashboard():
                 document.getElementById('tab-clock').style.display = 'none';
                 document.getElementById('tab-jobs').style.display = 'none';
                 document.getElementById('tab-users').style.display = 'none';
+                const formsView = document.getElementById('tab-forms-view');
+                if (formsView) formsView.style.display = 'none';
 
                 document.getElementById('nav-clock').classList.remove('active');
                 document.getElementById('nav-jobs').classList.remove('active');
                 document.getElementById('nav-users').classList.remove('active');
+                const navIt = document.getElementById('nav-forms-it');
+                const navAdmin = document.getElementById('nav-forms-admin');
+                const navHr = document.getElementById('nav-forms-hr');
+                if (navIt) navIt.classList.remove('active');
+                if (navAdmin) navAdmin.classList.remove('active');
+                if (navHr) navHr.classList.remove('active');
+
+                if (tab.startsWith('forms-')) {
+                    if (formsView) formsView.style.display = 'block';
+                    const navTarget = document.getElementById('nav-' + tab);
+                    if (navTarget) navTarget.classList.add('active');
+
+                    const catName = tab === 'forms-it' ? 'IT Forms' : (tab === 'forms-admin' ? 'Admin Forms' : 'HR Forms');
+                    document.getElementById('page-title').innerText = catName;
+                    closeFormDetailSubmissions();
+                    loadCustomForms(catName);
+                    return;
+                }
 
                 document.getElementById('tab-' + tab).style.display = 'block';
                 document.getElementById('nav-' + tab).classList.add('active');
@@ -2134,6 +2293,155 @@ def get_admin_dashboard():
             function closeUserProfileDashboard() {
                 document.getElementById('user-profile-dashboard-view').style.display = 'none';
                 document.getElementById('users-directory-list-view').style.display = 'block';
+            }
+
+            // CUSTOM FORMS STATE & HANDLERS
+            let currentFormCategory = 'IT Forms';
+            let currentFormTabStatus = 'ACTIVE';
+
+            const mockCustomFormsData = [
+                { id: 101, category: 'IT Forms', name: 'Email Requisition Form', status: 'Published', entries: 151, views: 70, assignedGroups: ['All users group'], createdBy: 'Drenzo Pornel', createdAvatar: 'DP', administratedBy: '+5', dateCreated: '06/11/2024', isArchived: false, isNew: false },
+                { id: 102, category: 'IT Forms', name: 'Asset Offsite Form', status: 'Published', entries: 1, views: 5, assignedGroups: ['All users group'], createdBy: 'Jaypee Balonzo', createdAvatar: 'JP', administratedBy: '+5', dateCreated: '06/25/2026', isArchived: false, isNew: false },
+                { id: 103, category: 'IT Forms', name: 'Internet Connection Survey', status: 'Published', entries: 7, views: 54, assignedGroups: ['8 groups'], createdBy: 'Jaypee Balonzo', createdAvatar: 'JP', administratedBy: '+5', dateCreated: '03/04/2025', isArchived: false, isNew: false },
+                { id: 104, category: 'IT Forms', name: 'Service Report', status: 'Published', entries: 67, views: 5, assignedGroups: ['HO - I.T.'], createdBy: 'Tonghie Sy Jr', createdAvatar: 'TS', administratedBy: '+5', dateCreated: '06/20/2024', isArchived: false, isNew: false },
+                { id: 105, category: 'IT Forms', name: 'Internet Speed Survey', status: 'Published', entries: 8, views: 108, assignedGroups: ['14 groups'], createdBy: 'Drenzo Pornel', createdAvatar: 'DP', administratedBy: '+5', dateCreated: '06/05/2024', isArchived: false, isNew: true },
+                { id: 201, category: 'Admin Forms', name: 'Office Supply Requisition', status: 'Published', entries: 42, views: 89, assignedGroups: ['All users group'], createdBy: 'Super Admin Xenon', createdAvatar: 'SA', administratedBy: '+3', dateCreated: '01/15/2026', isArchived: false, isNew: false },
+                { id: 301, category: 'HR Forms', name: 'Leave Application Form', status: 'Published', entries: 230, views: 512, assignedGroups: ['All users group'], createdBy: 'Super Admin Xenon', createdAvatar: 'SA', administratedBy: '+4', dateCreated: '02/10/2026', isArchived: false, isNew: false }
+            ];
+
+            function loadCustomForms(category = 'IT Forms') {
+                currentFormCategory = category;
+                document.getElementById('forms-category-header-title').innerText = category;
+
+                const filtered = mockCustomFormsData.filter(f => f.category === category);
+                const activeCount = filtered.filter(f => !f.isArchived).length;
+                const archivedCount = filtered.filter(f => f.isArchived).length;
+
+                document.getElementById('count-active-forms').innerText = activeCount;
+                document.getElementById('count-archived-forms').innerText = archivedCount;
+
+                renderCustomFormsTable();
+            }
+
+            function switchFormTabStatus(status) {
+                currentFormTabStatus = status;
+                document.getElementById('form-tab-active').classList.toggle('active', status === 'ACTIVE');
+                document.getElementById('form-tab-archived').classList.toggle('active', status === 'ARCHIVED');
+                renderCustomFormsTable();
+            }
+
+            function renderCustomFormsTable(searchFilter = '') {
+                const tbody = document.getElementById('custom-forms-tbody');
+                if (!tbody) return;
+
+                const isArchivedTarget = (currentFormTabStatus === 'ARCHIVED');
+                let items = mockCustomFormsData.filter(f => f.category === currentFormCategory && f.isArchived === isArchivedTarget);
+
+                if (searchFilter.trim() !== '') {
+                    const term = searchFilter.toLowerCase();
+                    items = items.filter(f => f.name.toLowerCase().includes(term) || f.createdBy.toLowerCase().includes(term));
+                }
+
+                if (items.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="9" class="text-center py-4 text-muted fs-7">No forms found for ${currentFormCategory} (${currentFormTabStatus.toLowerCase()}).</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = items.map(f => {
+                    const newBadge = f.isNew ? `<span class="badge bg-primary ms-2 rounded-pill" style="font-size:10px;">1 new</span>` : '';
+                    const assignedBadge = f.assignedGroups.join(', ');
+                    return `
+                        <tr>
+                            <td><input type="checkbox" class="form-check-input"></td>
+                            <td>
+                                <a class="fw-bold text-dark text-decoration-none cursor-pointer" onclick="openFormDetailSubmissions(${f.id})">
+                                    ${f.name}
+                                </a>
+                            </td>
+                            <td><span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2 py-1 fs-7">${f.status}</span></td>
+                            <td><span class="fw-bold text-dark">${f.entries}</span> ${newBadge}</td>
+                            <td class="text-muted">${f.views}</td>
+                            <td><span class="badge bg-light text-dark border fw-normal fs-7">${assignedBadge}</span></td>
+                            <td>
+                                <div class="d-flex align-items-center gap-1">
+                                    <div class="avatar-circle bg-danger text-white" style="width:24px; height:24px; font-size:10px;">${f.createdAvatar}</div>
+                                    <span class="fs-7 text-dark">${f.createdBy}</span>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center gap-1">
+                                    <div class="avatar-circle bg-info text-white" style="width:24px; height:24px; font-size:10px;">DI</div>
+                                    <span class="badge bg-light text-secondary border rounded-pill fs-7">${f.administratedBy}</span>
+                                </div>
+                            </td>
+                            <td class="text-muted fs-7">${f.dateCreated}</td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+            function filterCustomFormsList(query) {
+                renderCustomFormsTable(query);
+            }
+
+            function openFormDetailSubmissions(formId) {
+                const formObj = mockCustomFormsData.find(f => f.id === formId) || mockCustomFormsData[0];
+                document.getElementById('selected-form-title').innerText = formObj.name;
+                document.getElementById('form-submission-count-label').innerText = formObj.entries;
+                document.getElementById('forms-list-container').style.display = 'none';
+                document.getElementById('form-detail-submissions-container').style.display = 'block';
+
+                const tbody = document.getElementById('form-submissions-tbody');
+                if (tbody) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td><input type="checkbox" class="form-check-input"></td>
+                            <td><span class="fw-bold text-dark">Alejandro Luanzon Jr.</span></td>
+                            <td>09/18/2026, 08:30 AM</td>
+                            <td><span class="badge bg-light text-dark border fw-normal fs-7">HO - I.T.</span></td>
+                            <td><span class="badge bg-success-subtle text-success">Submitted</span></td>
+                            <td class="text-end"><button class="btn btn-outline-custom btn-sm" onclick="showToast('Viewing submission response details...')"><i class="bi bi-eye"></i> View</button></td>
+                        </tr>
+                        <tr>
+                            <td><input type="checkbox" class="form-check-input"></td>
+                            <td><span class="fw-bold text-dark">Drenzo Pornel</span></td>
+                            <td>09/17/2026, 04:15 PM</td>
+                            <td><span class="badge bg-light text-dark border fw-normal fs-7">Management Group</span></td>
+                            <td><span class="badge bg-success-subtle text-success">Submitted</span></td>
+                            <td class="text-end"><button class="btn btn-outline-custom btn-sm" onclick="showToast('Viewing submission response details...')"><i class="bi bi-eye"></i> View</button></td>
+                        </tr>
+                    `;
+                }
+            }
+
+            function closeFormDetailSubmissions() {
+                document.getElementById('form-detail-submissions-container').style.display = 'none';
+                document.getElementById('forms-list-container').style.display = 'block';
+            }
+
+            function openCreateCustomFormModal() {
+                const formTitle = prompt(`Create new ${currentFormCategory} Form Name:`);
+                if (!formTitle || formTitle.trim() === '') return;
+
+                const newFormObj = {
+                    id: Date.now(),
+                    category: currentFormCategory,
+                    name: formTitle.trim(),
+                    status: 'Published',
+                    entries: 0,
+                    views: 1,
+                    assignedGroups: ['All users group'],
+                    createdBy: 'Super Admin Xenon',
+                    createdAvatar: 'SA',
+                    administratedBy: '+1',
+                    dateCreated: '09/18/2026',
+                    isArchived: false,
+                    isNew: true
+                };
+
+                mockCustomFormsData.unshift(newFormObj);
+                showToast(`Form '${formTitle}' created successfully!`);
+                loadCustomForms(currentFormCategory);
             }
 
             document.addEventListener("DOMContentLoaded", async function() {
