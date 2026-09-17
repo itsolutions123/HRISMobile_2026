@@ -47,5 +47,9 @@ Last updated: September 16, 2026
 - [x] Fix Smart Group connected count reload on page load (pre-fetch directory on init/tab switch).
 - [x] Fix upper-right account header to dynamically reflect current logged-in user via `/api/auth/me`.
 
+## Done (do not rebuild these)
+- [x] Fix Smart Group connected count reload on page load (pre-fetch directory on init/tab switch).
+- [x] Fix upper-right account header to dynamically reflect current logged-in user via `/api/auth/me`.
+
 ## In Progress / Ready for Next Steps
 - [ ] Manager Approval Dashboard view for reviewing team DTR shift revision requests on mobile/web.
