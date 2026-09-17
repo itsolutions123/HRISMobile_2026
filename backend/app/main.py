@@ -1,18 +1,17 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from .database import engine, Base, SessionLocal
 from .models import JobCategory, JobSubItem, Employee, PunchLog
+from .limiter import limiter
 from .routers import auth, punch, jobs, manager, dtr
 from .auth_utils import get_password_hash
 
 Base.metadata.create_all(bind=engine)
 
-limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="HRIS DTR Backend API")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -1018,6 +1017,29 @@ def get_admin_dashboard():
                 { name: 'HO - Sales', creator: 'Jaypee Balonzo', selected: '12 selected', brand: 'Head Office', dept: 'Sales' }
             ];
 
+            async function updateTopBarUserHeader() {
+                const token = await getAdminAuthToken();
+                if (!token) return;
+                try {
+                    const res = await fetch('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + token } });
+                    if (res.ok) {
+                        const me = await res.json();
+                        const name = me.name || (me.first_name ? `${me.first_name} ${me.last_name || ''}` : me.employee_id);
+                        const role = me.role || me.position || 'User';
+                        const empId = me.employee_id || '';
+                        const initials = name.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase();
+
+                        const avatarEl = document.querySelector('.top-bar .avatar-circle');
+                        const nameEl = document.getElementById('topbar-user-name');
+                        const subEl = document.querySelector('.top-bar .text-start small');
+
+                        if (avatarEl) avatarEl.innerText = initials || 'U';
+                        if (nameEl) nameEl.innerText = name;
+                        if (subEl) subEl.innerText = `${role} (${empId})`;
+                    }
+                } catch(e) {}
+            }
+
             function checkAuthentication() {
                 const session = localStorage.getItem('atwork_session_active');
                 if (!session) {
@@ -1026,6 +1048,7 @@ def get_admin_dashboard():
                 } else {
                     document.getElementById('login-overlay-page').style.display = 'none';
                     document.getElementById('portal-main-view').style.display = 'block';
+                    updateTopBarUserHeader();
                 }
             }
 
@@ -1163,8 +1186,10 @@ def get_admin_dashboard():
                     loadTimeClockHistory();
                 } else if (tab === 'jobs') {
                     document.getElementById('page-title').innerText = 'Smart Groups';
-                    renderBrandSelectorOptions();
-                    renderConnecteamProvisioningTable();
+                    loadConnecteamDirectory().then(() => {
+                        renderBrandSelectorOptions();
+                        renderConnecteamProvisioningTable();
+                    });
                 } else if (tab === 'users') {
                     document.getElementById('page-title').innerText = 'Users Directory';
                     loadConnecteamDirectory();
@@ -2114,6 +2139,7 @@ def get_admin_dashboard():
             document.addEventListener("DOMContentLoaded", async function() {
                 checkAuthentication();
                 await getAdminAuthToken();
+                await loadConnecteamDirectory();
                 switchTab('clock');
             });
         </script>
