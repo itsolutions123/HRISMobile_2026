@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
@@ -98,8 +98,7 @@ def register_user(payload: UserRegisterRequest, db: Session = Depends(get_db)):
         "employee_id": new_user.employee_id
     }
 
-from Request import Request if False else __import__('fastapi').Request
-from ..main import limiter
+from ..limiter import limiter
 
 @router.post("/login")
 @limiter.limit("5/minute")
