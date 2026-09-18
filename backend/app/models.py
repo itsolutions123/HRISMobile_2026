@@ -110,3 +110,54 @@ class LeaveRequest(Base):
     end_date = Column(DateTime, nullable=False)
     status = Column(String, default="PENDING", nullable=False)  # PENDING, APPROVED, REJECTED
     approved_by = Column(String, ForeignKey("employees.employee_id"), nullable=True)
+
+class FormCategory(Base):
+    __tablename__ = "form_categories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class CustomForm(Base):
+    __tablename__ = "custom_forms"
+
+    id = Column(Integer, primary_key=True, index=True)
+    category_id = Column(Integer, ForeignKey("form_categories.id"), nullable=False)
+    name = Column(String, nullable=False)
+    status = Column(String, default="Published", nullable=False)
+    assigned_groups = Column(String, nullable=True) # JSON list or string
+    created_by = Column(String, nullable=False)
+    created_avatar = Column(String, default="SA")
+    administrated_by = Column(String, default="+1")
+    date_created = Column(String, nullable=False)
+    is_archived = Column(Boolean, default=False, nullable=False)
+    is_new = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class FormSubmission(Base):
+    __tablename__ = "form_submissions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    form_id = Column(Integer, ForeignKey("custom_forms.id"), nullable=False)
+    submitted_by = Column(String, nullable=False)
+    smart_group = Column(String, nullable=True)
+    status = Column(String, default="Submitted", nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class BrandLocation(Base):
+    __tablename__ = "brand_locations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class SmartGroup(Base):
+    __tablename__ = "smart_groups"
+
+    id = Column(Integer, primary_key=True, index=True)
+    brand_id = Column(Integer, ForeignKey("brand_locations.id"), nullable=True)
+    name = Column(String, unique=True, index=True, nullable=False)
+    dept = Column(String, nullable=True)
+    creator = Column(String, default="Super Admin")
+    selected = Column(String, default="15 selected")
+    created_at = Column(DateTime, default=datetime.utcnow)

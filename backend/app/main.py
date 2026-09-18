@@ -7,7 +7,7 @@ from slowapi.errors import RateLimitExceeded
 from .database import engine, Base, SessionLocal
 from .models import JobCategory, JobSubItem, Employee, PunchLog
 from .limiter import limiter
-from .routers import auth, punch, jobs, manager, dtr
+from .routers import auth, punch, jobs, manager, dtr, forms
 from .auth_utils import get_password_hash
 
 Base.metadata.create_all(bind=engine)
@@ -33,6 +33,7 @@ app.include_router(punch.router)
 app.include_router(jobs.router)
 app.include_router(manager.router)
 app.include_router(dtr.router)
+app.include_router(forms.router)
 
 @app.on_event("startup")
 def seed_initial_data():
@@ -1239,30 +1240,22 @@ def get_admin_dashboard():
                 }
             }
 
-            function getStoredBrands() {
-                const stored = localStorage.getItem('smart_brands_list');
-                if (stored) {
-                    try { return JSON.parse(stored); } catch(e) {}
-                }
-                localStorage.setItem('smart_brands_list', JSON.stringify(defaultBrandsInitial));
-                return defaultBrandsInitial;
+            async function getStoredBrands() {
+                const token = await getAdminAuthToken();
+                try {
+                    const res = await fetch('/api/jobs/brands', { headers: { 'Authorization': 'Bearer ' + token } });
+                    if (res.ok) return await res.json();
+                } catch(e) {}
+                return ['Head Office', 'Stores', 'Commissary'];
             }
 
-            function setStoredBrands(brands) {
-                localStorage.setItem('smart_brands_list', JSON.stringify(brands));
-            }
-
-            function getStoredGroups() {
-                const stored = localStorage.getItem('smart_groups_list');
-                if (stored) {
-                    try { return JSON.parse(stored); } catch(e) {}
-                }
-                localStorage.setItem('smart_groups_list', JSON.stringify(defaultGroupsInitial));
-                return defaultGroupsInitial;
-            }
-
-            function setStoredGroups(groups) {
-                localStorage.setItem('smart_groups_list', JSON.stringify(groups));
+            async function getStoredGroups() {
+                const token = await getAdminAuthToken();
+                try {
+                    const res = await fetch('/api/jobs/groups', { headers: { 'Authorization': 'Bearer ' + token } });
+                    if (res.ok) return await res.json();
+                } catch(e) {}
+                return [];
             }
 
             function getDeptJobsStore(groupName) {
@@ -2298,29 +2291,32 @@ def get_admin_dashboard():
             // CUSTOM FORMS STATE & HANDLERS
             let currentFormCategory = 'IT Forms';
             let currentFormTabStatus = 'ACTIVE';
+            let mockCustomFormsData = [];
 
-            const mockCustomFormsData = [
-                { id: 101, category: 'IT Forms', name: 'Email Requisition Form', status: 'Published', entries: 151, views: 70, assignedGroups: ['All users group'], createdBy: 'Drenzo Pornel', createdAvatar: 'DP', administratedBy: '+5', dateCreated: '06/11/2024', isArchived: false, isNew: false },
-                { id: 102, category: 'IT Forms', name: 'Asset Offsite Form', status: 'Published', entries: 1, views: 5, assignedGroups: ['All users group'], createdBy: 'Jaypee Balonzo', createdAvatar: 'JP', administratedBy: '+5', dateCreated: '06/25/2026', isArchived: false, isNew: false },
-                { id: 103, category: 'IT Forms', name: 'Internet Connection Survey', status: 'Published', entries: 7, views: 54, assignedGroups: ['8 groups'], createdBy: 'Jaypee Balonzo', createdAvatar: 'JP', administratedBy: '+5', dateCreated: '03/04/2025', isArchived: false, isNew: false },
-                { id: 104, category: 'IT Forms', name: 'Service Report', status: 'Published', entries: 67, views: 5, assignedGroups: ['HO - I.T.'], createdBy: 'Tonghie Sy Jr', createdAvatar: 'TS', administratedBy: '+5', dateCreated: '06/20/2024', isArchived: false, isNew: false },
-                { id: 105, category: 'IT Forms', name: 'Internet Speed Survey', status: 'Published', entries: 8, views: 108, assignedGroups: ['14 groups'], createdBy: 'Drenzo Pornel', createdAvatar: 'DP', administratedBy: '+5', dateCreated: '06/05/2024', isArchived: false, isNew: true },
-                { id: 201, category: 'Admin Forms', name: 'Office Supply Requisition', status: 'Published', entries: 42, views: 89, assignedGroups: ['All users group'], createdBy: 'Super Admin Xenon', createdAvatar: 'SA', administratedBy: '+3', dateCreated: '01/15/2026', isArchived: false, isNew: false },
-                { id: 301, category: 'HR Forms', name: 'Leave Application Form', status: 'Published', entries: 230, views: 512, assignedGroups: ['All users group'], createdBy: 'Super Admin Xenon', createdAvatar: 'SA', administratedBy: '+4', dateCreated: '02/10/2026', isArchived: false, isNew: false }
-            ];
-
-            function loadCustomForms(category = 'IT Forms') {
+            async function loadCustomForms(category = 'IT Forms') {
                 currentFormCategory = category;
                 document.getElementById('forms-category-header-title').innerText = category;
+                const token = await getAdminAuthToken();
 
-                const filtered = mockCustomFormsData.filter(f => f.category === category);
-                const activeCount = filtered.filter(f => !f.isArchived).length;
-                const archivedCount = filtered.filter(f => f.isArchived).length;
+                try {
+                    const resActive = await fetch(`/api/forms?category=${encodeURIComponent(category)}&is_archived=false`, {
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
+                    const resArchived = await fetch(`/api/forms?category=${encodeURIComponent(category)}&is_archived=true`, {
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
 
-                document.getElementById('count-active-forms').innerText = activeCount;
-                document.getElementById('count-archived-forms').innerText = archivedCount;
+                    const activeList = resActive.ok ? await resActive.json() : [];
+                    const archivedList = resArchived.ok ? await resArchived.json() : [];
 
-                renderCustomFormsTable();
+                    document.getElementById('count-active-forms').innerText = activeList.length;
+                    document.getElementById('count-archived-forms').innerText = archivedList.length;
+
+                    mockCustomFormsData = (currentFormTabStatus === 'ARCHIVED') ? archivedList : activeList;
+                    renderCustomFormsTable();
+                } catch(err) {
+                    console.error("Error loading forms API:", err);
+                }
             }
 
             function switchFormTabStatus(status) {
