@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
@@ -381,9 +382,8 @@ def get_admin_dashboard():
                     </a>
 
                     <div class="section-label">Forms</div>
-                    <a class="nav-link" id="nav-forms-it" onclick="switchTab('forms-it')"><i class="bi bi-file-earmark-text"></i> IT Forms</a>
-                    <a class="nav-link" id="nav-forms-admin" onclick="switchTab('forms-admin')"><i class="bi bi-file-earmark-richtext"></i> Admin Forms</a>
-                    <a class="nav-link" id="nav-forms-hr" onclick="switchTab('forms-hr')"><i class="bi bi-file-earmark-person"></i> HR Forms</a>
+                    <div id="sidebar-forms-categories-list"></div>
+                    <a class="nav-link text-primary mt-1 fw-semibold fs-7" onclick="openCreateCategoryModal()"><i class="bi bi-plus-circle me-2"></i> Add new</a>
 
                     <div class="section-label">Management</div>
                     <a class="nav-link" onclick="showToast('Scheduling accessible via Mobile workspace.')"><i class="bi bi-calendar3"></i> Scheduling</a>
@@ -2507,6 +2507,10 @@ def get_admin_dashboard():
             let availableCategoriesList = [];
 
             async function loadCategoryTabsBar() {
+                await renderSidebarFormsCategories();
+            }
+
+            async function renderSidebarFormsCategories() {
                 const token = await getAdminAuthToken();
                 try {
                     const res = await fetch('/api/forms/categories', {
@@ -2525,29 +2529,39 @@ def get_admin_dashboard():
                     ];
                 }
 
-                const tabsContainer = document.getElementById('formsCategoryTabsBar');
-                if (!tabsContainer) return;
-
-                let tabsHtml = '';
-                availableCategoriesList.forEach(c => {
-                    const isActive = (c.name === currentFormCategory);
-                    tabsHtml += `
-                        <li class="nav-item dropdown">
-                            <div class="d-flex align-items-center">
-                                <a class="nav-link ${isActive ? 'active' : ''}" onclick="selectFormCategoryTab('${c.name}')">${c.name}</a>
-                                <button class="btn btn-link btn-sm text-secondary p-0 px-1 dropdown-toggle border-0" type="button" data-bs-toggle="dropdown">
-                                    <i class="bi bi-three-dots-vertical"></i>
-                                </button>
-                                <ul class="dropdown-menu shadow-sm border-0 fs-7">
-                                    <li><a class="dropdown-item" onclick="openEditCategoryModal('${c.name}')"><i class="bi bi-pencil me-2 text-primary"></i> Edit (Rename)</a></li>
-                                    <li><a class="dropdown-item" onclick="archiveCategoryForms('${c.name}')"><i class="bi bi-archive me-2 text-warning"></i> Archive All Forms</a></li>
-                                    <li><hr class="dropdown-divider"></li>
-                                    <li><a class="dropdown-item text-danger" onclick="openConfirmDeleteCategoryModal('${c.name}')"><i class="bi bi-trash me-2"></i> Delete Category</a></li>
-                                </ul>
-                            </div>
-                        </li>`;
-                });
-                tabsContainer.innerHTML = tabsHtml;
+                const sidebarContainer = document.getElementById('sidebar-forms-categories-list');
+                if (sidebarContainer) {
+                    let catHtml = '';
+                    const colorVariants = ['#3b82f6', '#ec4899', '#a855f7', '#eab308', '#06b6d4', '#10b981'];
+                    
+                    availableCategoriesList.forEach((c, idx) => {
+                        const isActive = (c.name === currentFormCategory);
+                        const iconBg = colorVariants[idx % colorVariants.length];
+                        
+                        catHtml += `
+                            <div class="d-flex align-items-center justify-content-between nav-link-sidebar-item ${isActive ? 'active' : ''}" style="padding: 6px 10px; border-radius: 8px; margin-bottom: 2px; cursor: pointer; ${isActive ? 'background: rgba(255, 255, 255, 0.1); color: #fff;' : 'color: #94a3b8;'}" onclick="selectFormCategoryTab('${c.name}')">
+                                <div class="d-flex align-items-center gap-2 overflow-hidden me-1">
+                                    <span class="text-muted" style="cursor: grab; font-size: 11px;"><i class="bi bi-grip-vertical"></i></span>
+                                    <div class="d-flex align-items-center justify-content-center rounded-3 text-white flex-shrink-0" style="width: 26px; height: 26px; background-color: ${iconBg}; font-size: 13px;">
+                                        <i class="bi bi-file-earmark-text-fill"></i>
+                                    </div>
+                                    <span class="text-truncate fs-7 fw-medium">${c.name}</span>
+                                </div>
+                                <div class="dropdown" onclick="event.stopPropagation()">
+                                    <button class="btn btn-link btn-sm text-muted p-0 border-0" type="button" data-bs-toggle="dropdown" style="line-height: 1;">
+                                        <i class="bi bi-three-dots-vertical fs-7"></i>
+                                    </button>
+                                    <ul class="dropdown-menu shadow-sm border-0 fs-7">
+                                        <li><a class="dropdown-item" onclick="openEditCategoryModal('${c.name}')"><i class="bi bi-pencil me-2 text-primary"></i> Edit (Rename)</a></li>
+                                        <li><a class="dropdown-item" onclick="archiveCategoryForms('${c.name}')"><i class="bi bi-archive me-2 text-warning"></i> Archive Category</a></li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li><a class="dropdown-item text-danger" onclick="openConfirmDeleteCategoryModal('${c.name}')"><i class="bi bi-trash me-2"></i> Delete Category</a></li>
+                                    </ul>
+                                </div>
+                            </div>`;
+                    });
+                    sidebarContainer.innerHTML = catHtml;
+                }
 
                 const selectEl = document.getElementById('builderFormCategory');
                 if (selectEl) {
@@ -2557,7 +2571,8 @@ def get_admin_dashboard():
 
             function selectFormCategoryTab(catName) {
                 currentFormCategory = catName;
-                loadCategoryTabsBar();
+                switchTab('forms-view');
+                renderSidebarFormsCategories();
                 loadCustomForms(catName);
             }
 
@@ -2584,11 +2599,15 @@ def get_admin_dashboard():
                     if (res.ok) {
                         showToast(`Category '${name}' created.`);
                         if (currentBsModal) currentBsModal.hide();
+                        await renderSidebarFormsCategories();
                         selectFormCategoryTab(name);
                     } else {
-                        showToast('Failed to create category.');
+                        const errData = await res.json().catch(() => ({}));
+                        showToast(errData.detail || 'Failed to create category.');
                     }
-                } catch(e) { showToast('Error creating category.'); }
+                } catch(e) {
+                    showToast('Network error while creating category.');
+                }
             }
 
             async function archiveCategoryForms(catName) {

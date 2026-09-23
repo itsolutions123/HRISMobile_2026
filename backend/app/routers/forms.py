@@ -43,16 +43,16 @@ class FormSubmissionCreate(BaseModel):
 
 # CATEGORY ENDPOINTS
 @router.get("/categories")
-def list_categories(db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
-    categories = db.query(FormCategory).all()
-    if not categories:
+def list_categories(is_archived: bool = False, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
+    categories = db.query(FormCategory).filter(FormCategory.is_archived == is_archived).all()
+    if not categories and not is_archived:
         defaults = ["IT Forms", "Admin Forms", "HR Forms"]
         for d in defaults:
-            cat = FormCategory(name=d)
+            cat = FormCategory(name=d, is_archived=False)
             db.add(cat)
         db.commit()
-        categories = db.query(FormCategory).all()
-    return [{"id": c.id, "name": c.name} for c in categories]
+        categories = db.query(FormCategory).filter(FormCategory.is_archived == False).all()
+    return [{"id": c.id, "name": c.name, "isArchived": c.is_archived} for c in categories]
 
 @router.post("/categories")
 def create_category(cat: FormCategoryCreate, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
@@ -60,36 +60,55 @@ def create_category(cat: FormCategoryCreate, db: Session = Depends(get_db), curr
         raise HTTPException(status_code=403, detail="Not authorized")
     existing = db.query(FormCategory).filter(FormCategory.name == cat.name).first()
     if existing:
+        if existing.is_archived:
+            existing.is_archived = False
+            db.commit()
+            return {"id": existing.id, "name": existing.name, "isArchived": False}
         raise HTTPException(status_code=400, detail="Category already exists")
-    new_cat = FormCategory(name=cat.name)
+    new_cat = FormCategory(name=cat.name, is_archived=False)
     db.add(new_cat)
     db.commit()
     db.refresh(new_cat)
-    return {"id": new_cat.id, "name": new_cat.name}
+    return {"id": new_cat.id, "name": new_cat.name, "isArchived": False}
 
-@router.put("/categories/{old_name}")
-def update_category(old_name: str, cat: FormCategoryCreate, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
+@router.put("/categories/{cat_id}")
+def update_category(cat_id: int, cat: FormCategoryCreate, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
     if current_user.role not in ["Admin", "Superadmin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
-    category = db.query(FormCategory).filter(FormCategory.name == old_name).first()
+    category = db.query(FormCategory).filter(FormCategory.id == cat_id).first()
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
     category.name = cat.name
     db.commit()
-    return {"status": "success", "new_name": cat.name}
+    return {"status": "success", "id": category.id, "name": cat.name}
 
-@router.delete("/categories/{cat_name}")
-def delete_category(cat_name: str, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
+@router.patch("/categories/{cat_id}/archive")
+def archive_category(cat_id: int, is_archived: bool = True, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
     if current_user.role not in ["Admin", "Superadmin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
-    category = db.query(FormCategory).filter(FormCategory.name == cat_name).first()
+    category = db.query(FormCategory).filter(FormCategory.id == cat_id).first()
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+    category.is_archived = is_archived
+    db.commit()
+    return {"status": "success", "id": category.id, "isArchived": is_archived}
+
+@router.delete("/categories/{cat_id}")
+def delete_category(cat_id: int, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
+    if current_user.role not in ["Admin", "Superadmin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    category = db.query(FormCategory).filter(FormCategory.id == cat_id).first()
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
 
+    forms = db.query(CustomForm).filter(CustomForm.category_id == category.id).all()
+    for f in forms:
+        db.query(FormSubmission).filter(FormSubmission.form_id == f.id).delete()
     db.query(CustomForm).filter(CustomForm.category_id == category.id).delete()
+    
     db.delete(category)
     db.commit()
-    return {"status": "success", "message": f"Category '{cat_name}' deleted"}
+    return {"status": "success", "message": f"Category deleted successfully"}
 
 
 # CUSTOM FORM ENDPOINTS
@@ -136,7 +155,7 @@ def create_form(form_in: CustomFormCreate, db: Session = Depends(get_db), curren
 
     cat_obj = db.query(FormCategory).filter(FormCategory.name == form_in.category).first()
     if not cat_obj:
-        cat_obj = FormCategory(name=form_in.category)
+        cat_obj = FormCategory(name=form_in.category, is_archived=False)
         db.add(cat_obj)
         db.commit()
         db.refresh(cat_obj)
@@ -236,7 +255,7 @@ def list_submissions(form_id: int, db: Session = Depends(get_db), current_user: 
         {
             "id": s.id,
             "submittedBy": s.submitted_by,
-            "dateTime": s.created_at.strftime("%m/%d/%Y, %I:%M %p"),
+            "dateTime": s.created_at.strftime("%m/%d/%Y, %I:%M %p") if s.created_at else "",
             "smartGroup": s.smart_group or "HO - I.T.",
             "status": s.status
         }
