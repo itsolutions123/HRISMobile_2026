@@ -710,7 +710,7 @@ def get_admin_dashboard():
                                             </li>
                                         </ul>
 
-                                        <button class="btn btn-primary-custom" onclick="openCreateCustomFormModal()"><i class="bi bi-plus-lg me-1"></i> Add new</button>
+                                        <button class="btn btn-primary-custom" onclick="openFormSourceModal()"><i class="bi bi-plus-lg me-1"></i> Add new</button>
                                     </div>
 
                                     <div class="p-3 border-bottom d-flex align-items-center gap-2">
@@ -1050,6 +1050,120 @@ def get_admin_dashboard():
                         <button type="button" class="btn btn-primary-custom" onclick="saveNewDeptJobTitle()">Save Job Title</button>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- FORM SOURCE SELECTION MODAL (#formSourceModal) -->
+        <div class="modal fade" id="formSourceModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-lg">
+                <div class="modal-content border-0 shadow">
+                    <div class="modal-header border-bottom p-4">
+                        <h6 class="modal-title fw-bold text-dark m-0"><i class="bi bi-file-earmark-plus me-2 text-primary"></i>Add New Form — Choose Source</h6>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="card p-3 border text-center h-100 feed-card-hover" onclick="selectFormSource('scratch')">
+                                    <i class="bi bi-file-earmark-plus-fill fs-1 text-primary mb-2"></i>
+                                    <h6 class="fw-bold text-dark">Start from Scratch</h6>
+                                    <small class="text-muted">Build a custom form field-by-field</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card p-3 border text-center h-100 feed-card-hover" onclick="selectFormSource('template')">
+                                    <i class="bi bi-journal-bookmark-fill fs-1 text-warning mb-2"></i>
+                                    <h6 class="fw-bold text-dark">Use a Template</h6>
+                                    <small class="text-muted">Pre-load standard HR/IT schema fields</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card p-3 border text-center h-100 feed-card-hover" onclick="selectFormSource('file')">
+                                    <i class="bi bi-file-earmark-arrow-up-fill fs-1 text-success mb-2"></i>
+                                    <h6 class="fw-bold text-dark">Create from File</h6>
+                                    <small class="text-muted">Upload CSV or JSON schema file</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- EDIT CATEGORY MODAL (#editCategoryModal) -->
+        <div class="modal fade" id="editCategoryModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 shadow">
+                    <div class="modal-header border-bottom p-4">
+                        <h6 class="modal-title fw-bold text-dark m-0">Rename Form Category</h6>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <input type="hidden" id="editCategoryOldName">
+                        <label class="form-label fw-semibold text-secondary" style="font-size: 12px;">CATEGORY NAME</label>
+                        <input type="text" class="form-control" id="editCategoryNewName" placeholder="e.g. IT Support Forms">
+                    </div>
+                    <div class="modal-footer border-top p-3">
+                        <button type="button" class="btn btn-outline-custom" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary-custom" onclick="submitEditCategory()">Update Category Name</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CONFIRM DELETE CATEGORY MODAL (#confirmDeleteCategoryModal) -->
+        <div class="modal fade" id="confirmDeleteCategoryModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 shadow">
+                    <div class="modal-header border-bottom p-4">
+                        <h6 class="modal-title fw-bold text-dark m-0">Confirm Delete Category</h6>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <input type="hidden" id="deleteCategoryName">
+                        <p class="m-0 text-dark">Are you sure you want to delete category <strong id="deleteCategoryLabel"></strong> and all associated forms?</p>
+                    </div>
+                    <div class="modal-footer border-top p-3">
+                        <button type="button" class="btn btn-outline-custom" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-danger" onclick="submitDeleteCategory()">Delete Category</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- EDIT ASSIGNMENTS DRAWER (#editAssignmentsModal) -->
+        <div class="offcanvas offcanvas-end offcanvas-group-drawer" tabindex="-1" id="editAssignmentsModal">
+            <div class="offcanvas-header border-bottom p-4 d-flex justify-content-between align-items-center bg-light">
+                <h5 class="offcanvas-title fw-bold text-dark m-0">Edit Form Assignments</h5>
+                <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas"></button>
+            </div>
+            <div class="offcanvas-body p-4">
+                <input type="hidden" id="assignmentFormId">
+                <div class="mb-4">
+                    <label class="form-label fw-semibold text-secondary fs-7">TARGET SMART GROUPS</label>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input assignment-group-check" type="checkbox" value="All users group" id="assign_group_all">
+                        <label class="form-check-label fw-semibold" for="assign_group_all">All users group</label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input assignment-group-check" type="checkbox" value="HO - I.T." id="assign_group_it">
+                        <label class="form-check-label fw-semibold" for="assign_group_it">HO - I.T.</label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input assignment-group-check" type="checkbox" value="Management Group" id="assign_group_mgmt">
+                        <label class="form-check-label fw-semibold" for="assign_group_mgmt">Management Group</label>
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label class="form-label fw-semibold text-secondary fs-7">MEMBERSHIP TYPE</label>
+                    <div class="btn-group w-100" role="group">
+                        <input type="radio" class="btn-check" name="membershipType" id="memDynamic" checked>
+                        <label class="btn btn-outline-secondary" for="memDynamic">Dynamic</label>
+                        <input type="radio" class="btn-check" name="membershipType" id="memFixed">
+                        <label class="btn btn-outline-secondary" for="memFixed">Fixed</label>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-primary-custom w-100 py-2" onclick="submitAssignmentsDrawer()">Save Assignments</button>
             </div>
         </div>
 
@@ -2490,6 +2604,113 @@ def get_admin_dashboard():
             function closeFormDetailSubmissions() {
                 document.getElementById('form-detail-submissions-container').style.display = 'none';
                 document.getElementById('forms-list-container').style.display = 'block';
+            }
+
+            function openFormSourceModal() {
+                currentBsModal = new bootstrap.Modal(document.getElementById('formSourceModal'));
+                currentBsModal.show();
+            }
+
+            function selectFormSource(sourceType) {
+                if (currentBsModal) currentBsModal.hide();
+                openCreateCustomFormModal();
+                if (sourceType === 'template') {
+                    setTimeout(() => {
+                        addBuilderField();
+                        const card = document.querySelectorAll('.builder-field-card')[0];
+                        if (card) {
+                            card.querySelector('.field-label-input').value = 'Employee Request Details';
+                            card.querySelector('.field-type-select').value = 'textarea';
+                        }
+                    }, 300);
+                }
+            }
+
+            function openEditAssignmentsDrawer(formId) {
+                document.getElementById('assignmentFormId').value = formId;
+                const drawer = new bootstrap.Offcanvas(document.getElementById('editAssignmentsModal'));
+                drawer.show();
+            }
+
+            async function submitAssignmentsDrawer() {
+                const formId = document.getElementById('assignmentFormId').value;
+                const checkedGroups = [];
+                document.querySelectorAll('.assignment-group-check:checked').forEach(c => checkedGroups.push(c.value));
+                const token = await getAdminAuthToken();
+
+                try {
+                    const res = await fetch(`/api/forms/${formId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                        body: JSON.stringify({ assigned_groups: checkedGroups })
+                    });
+                    if (res.ok) {
+                        showToast('Form assignments updated.');
+                        const el = document.getElementById('editAssignmentsModal');
+                        const inst = bootstrap.Offcanvas.getInstance(el);
+                        if (inst) inst.hide();
+                        loadCustomForms(currentFormCategory);
+                    } else {
+                        showToast('Failed to update form assignments.');
+                    }
+                } catch(e) {
+                    showToast('Error updating form assignments.');
+                }
+            }
+
+            function openEditCategoryModal(oldName) {
+                document.getElementById('editCategoryOldName').value = oldName;
+                document.getElementById('editCategoryNewName').value = oldName;
+                currentBsModal = new bootstrap.Modal(document.getElementById('editCategoryModal'));
+                currentBsModal.show();
+            }
+
+            async function submitEditCategory() {
+                const oldName = document.getElementById('editCategoryOldName').value;
+                const newName = document.getElementById('editCategoryNewName').value.trim();
+                if (!newName) return;
+
+                const token = await getAdminAuthToken();
+                try {
+                    const res = await fetch(`/api/forms/categories/${encodeURIComponent(oldName)}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                        body: JSON.stringify({ name: newName })
+                    });
+                    if (res.ok) {
+                        showToast(`Category renamed to '${newName}'.`);
+                        if (currentBsModal) currentBsModal.hide();
+                        loadCustomForms(newName);
+                    } else {
+                        showToast('Failed to rename category.');
+                    }
+                } catch(e) { showToast('Error renaming category.'); }
+            }
+
+            function openConfirmDeleteCategoryModal(catName) {
+                document.getElementById('deleteCategoryName').value = catName;
+                document.getElementById('deleteCategoryLabel').innerText = catName;
+                currentBsModal = new bootstrap.Modal(document.getElementById('confirmDeleteCategoryModal'));
+                currentBsModal.show();
+            }
+
+            async function submitDeleteCategory() {
+                const catName = document.getElementById('deleteCategoryName').value;
+                const token = await getAdminAuthToken();
+
+                try {
+                    const res = await fetch(`/api/forms/categories/${encodeURIComponent(catName)}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
+                    if (res.ok) {
+                        showToast(`Category '${catName}' deleted.`);
+                        if (currentBsModal) currentBsModal.hide();
+                        loadCustomForms('IT Forms');
+                    } else {
+                        showToast('Failed to delete category.');
+                    }
+                } catch(e) { showToast('Error deleting category.'); }
             }
 
             let builderFieldIndex = 0;
