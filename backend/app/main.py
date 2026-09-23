@@ -2501,13 +2501,20 @@ def get_admin_dashboard():
             }
 
             // CUSTOM FORMS DYNAMIC STATE & HANDLERS
-            let currentFormCategory = 'IT Forms';
+            let currentFormCategory = localStorage.getItem('lastSelectedFormCategory') || 'IT Forms';
             let currentFormTabStatus = 'ACTIVE';
             let fetchedCustomFormsList = [];
             let availableCategoriesList = [];
 
             async function loadCategoryTabsBar() {
                 await renderSidebarFormsCategories();
+                if (availableCategoriesList.length > 0) {
+                    const exists = availableCategoriesList.some(c => c.name === currentFormCategory);
+                    if (!exists) {
+                        currentFormCategory = availableCategoriesList[0].name;
+                    }
+                }
+                await loadCustomForms(currentFormCategory);
             }
 
             async function renderSidebarFormsCategories() {
@@ -2555,7 +2562,7 @@ def get_admin_dashboard():
                                         <li><a class="dropdown-item" onclick="openEditCategoryModal('${c.name}')"><i class="bi bi-pencil me-2 text-primary"></i> Edit (Rename)</a></li>
                                         <li><a class="dropdown-item" onclick="archiveCategoryForms('${c.name}')"><i class="bi bi-archive me-2 text-warning"></i> Archive Category</a></li>
                                         <li><hr class="dropdown-divider"></li>
-                                        <li><a class="dropdown-item text-danger" onclick="openConfirmDeleteCategoryModal('${c.name}')"><i class="bi bi-trash me-2"></i> Delete Category</a></li>
+                                        <li><a class="dropdown-item text-danger" onclick="openConfirmDeleteCategoryModal(${c.id}, '${c.name}')"><i class="bi bi-trash me-2"></i> Delete Category</a></li>
                                     </ul>
                                 </div>
                             </div>`;
@@ -2571,6 +2578,7 @@ def get_admin_dashboard():
 
             function selectFormCategoryTab(catName) {
                 currentFormCategory = catName;
+                localStorage.setItem('lastSelectedFormCategory', catName);
                 switchTab('forms-view');
                 renderSidebarFormsCategories();
                 loadCustomForms(catName);
@@ -2819,7 +2827,10 @@ def get_admin_dashboard():
                 } catch(e) { showToast('Error renaming category.'); }
             }
 
-            function openConfirmDeleteCategoryModal(catName) {
+            let pendingDeleteCatId = null;
+
+            function openConfirmDeleteCategoryModal(catId, catName) {
+                pendingDeleteCatId = catId;
                 document.getElementById('deleteCategoryName').value = catName;
                 document.getElementById('deleteCategoryLabel').innerText = catName;
                 currentBsModal = new bootstrap.Modal(document.getElementById('confirmDeleteCategoryModal'));
@@ -2827,20 +2838,24 @@ def get_admin_dashboard():
             }
 
             async function submitDeleteCategory() {
+                if (!pendingDeleteCatId) return;
                 const catName = document.getElementById('deleteCategoryName').value;
                 const token = await getAdminAuthToken();
 
                 try {
-                    const res = await fetch(`/api/forms/categories/${encodeURIComponent(catName)}`, {
+                    const res = await fetch(`/api/forms/categories/${pendingDeleteCatId}`, {
                         method: 'DELETE',
                         headers: { 'Authorization': 'Bearer ' + token }
                     });
                     if (res.ok) {
                         showToast(`Category '${catName}' deleted.`);
                         if (currentBsModal) currentBsModal.hide();
-                        loadCustomForms('IT Forms');
+                        await renderSidebarFormsCategories();
+                        const nextCat = availableCategoriesList.length > 0 ? availableCategoriesList[0].name : 'IT Forms';
+                        selectFormCategoryTab(nextCat);
                     } else {
-                        showToast('Failed to delete category.');
+                        const errData = await res.json().catch(() => ({}));
+                        showToast(errData.detail || 'Failed to delete category.');
                     }
                 } catch(e) { showToast('Error deleting category.'); }
             }
@@ -2954,6 +2969,7 @@ def get_admin_dashboard():
                 checkAuthentication();
                 await getAdminAuthToken();
                 await loadConnecteamDirectory();
+                await loadCategoryTabsBar();
                 switchTab('clock');
             });
         </script>
