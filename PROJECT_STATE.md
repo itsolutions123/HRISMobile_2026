@@ -1,5 +1,5 @@
 # DTR App — Project State
-Last updated: September 16, 2026
+Last updated: September 18, 2026
 
 ## Stack (confirmed, do not change without discussion)
 - Backend: FastAPI (Python 3.11, Uvicorn)
@@ -12,7 +12,7 @@ Last updated: September 16, 2026
   - `/src`: React Native mobile application screens (`LoginScreen.js`, `DashboardScreen.js`, `HomeScreen.js`, `ManagerScreen.js`, `TimesheetScreen.js`), state context (`AuthContext.js`)
 
 ## STRICT ARCHITECTURE & DATA DIRECTIVES
-- NEVER hardcode sample user records in JavaScript or fallback lists. All employee, user directory, and group enrollment data MUST strictly come from the PostgreSQL database via backend endpoints (`/api/auth/users`, `/api/jobs`, `/api/punch/logs`).
+- NEVER hardcode sample user records in JavaScript or fallback lists. All employee, user directory, custom form, and group enrollment data MUST strictly come from the PostgreSQL database via backend endpoints (`/api/auth/users`, `/api/jobs`, `/api/forms`, `/api/punch/logs`).
 
 ## Infra (fixed facts — never re-derive or guess these)
 - App runs in Docker on Proxmox VM `ansible-srv` (10.0.10.37), accessed via SSH
@@ -23,8 +23,8 @@ Last updated: September 16, 2026
 - System Administrator: ID `3286` | Password `bigtime@123` | Name `Jaypee Balonzo`
 
 ## Done (do not rebuild these)
-- [x] Backend REST API (`/api/auth/login`, `/api/auth/users`, `/api/jobs`)
-- [x] Database baseline ORM models (`Employee`, `JobCategory`, `JobSubItem`, `PunchLog`, `Schedule`, `ScheduleGroup`, `ScheduleGroupAssignment`, `DtrRevision`, `LeaveRequest`)
+- [x] Backend REST API (`/api/auth/login`, `/api/auth/users`, `/api/jobs`, `/api/forms`)
+- [x] Database baseline ORM models (`Employee`, `JobCategory`, `JobSubItem`, `PunchLog`, `Schedule`, `ScheduleGroup`, `ScheduleGroupAssignment`, `DtrRevision`, `LeaveRequest`, `FormCategory`, `CustomForm`, `FormSubmission`, `BrandLocation`, `SmartGroup`)
 - [x] React Native Mobile App scaffolding (`LoginScreen`, `DashboardScreen`, `HomeScreen`, `ManagerScreen`, `TimesheetScreen`)
 - [x] Web Admin UI (`/admin`) Connecteam layout: Job datatables, OpenStreetMap Leaflet GPS map integration, User profile editor drawer
 - [x] GPS Clock In/Out Core Backend (`POST /api/punch`, `GET /api/punch/active/{employee_id}`, duplicate rejection validation, mock location detection flags, PST timestamping)
@@ -35,24 +35,13 @@ Last updated: September 16, 2026
 - [x] Web Admin Users & Directory: Connecteam-aligned user directory datatable and read-only User Profile dashboard drilldown view.
 - [x] Mobile DTR Shift Review modal on Clock Out with "Edit Shift" revision requests sent to the user's manager for approval.
 - [x] Mobile Timesheet Screen calendar date filtering, 12-hour AM/PM time formatting, and direct shift edit request action.
-- [x] Web Admin Smart Groups: Collapsible & editable main Brands (`Head Office`, `Stores`, `Commissary`), `+ Add Brand` creation, removable sub-groups, animated Pop-out Offcanvas detail drawer with close button, dynamic Clocked In metric, group admin assigner, and duplicate enrollment warnings.
+- [x] Web Admin Smart Groups & Brands Decoupling: Database persistence for Brands (`/api/jobs/brands`) and Smart Groups (`/api/jobs/groups`), removing `localStorage` fallback.
 - [x] Superadmin Auto-Seeding (`xinxaola` / `xenonjay@123`) & Automated Web Admin Token Acquisition.
 - [x] Dynamic User Department Dropdown & Smart Group Membership Migration on Web Admin Profile Edit.
 - [x] Mobile Duty Role Modal Sync & Comprehensive Punch Metadata Payload (Full Name, Employee ID, Department, Brand/Sub-Group, Timestamp, Date).
-- [x] Cleaned Smart Groups Member Drawer UI (Removed redundant `+ Add Member` and `Remove` row actions).
 - [x] Live Clock Feed Auto-Zoom on Map Marker & Interactive Time Clock History Table with Leaflet Popup Modal.
-- [x] Mobile Clock Out Shift Review Modal with Location Verification, Map Refresh, Inline `| Edit` Revision Requests, and Fixed Navigation Tab Bar.
-
-## Done (do not rebuild these)
-- [x] Fix Smart Group connected count reload on page load (pre-fetch directory on init/tab switch).
-- [x] Fix upper-right account header to dynamically reflect current logged-in user via `/api/auth/me`.
-
-## Done (do not rebuild these)
-- [x] Fix Smart Group connected count reload on page load (pre-fetch directory on init/tab switch).
-- [x] Fix upper-right account header to dynamically reflect current logged-in user via `/api/auth/me`.
-
-## Done (do not rebuild these)
-- [x] Connecteam-style Custom Forms workspace with permission-based multi-smart-group assignment, active/archived sub-tabs, and submission detail views.
+- [x] Connecteam Custom Forms Module Decoupling: Persistent ORM models (`FormCategory`, `CustomForm`, `FormSubmission`), REST endpoint router (`/api/forms`), and live UI synchronization replacing `localStorage`.
 
 ## In Progress / Ready for Next Steps
+- [ ] Mobile/Tablet Web View Responsive Layout Fix for `/admin` web portal.
 - [ ] Manager Approval Dashboard view for reviewing team DTR shift revision requests on mobile/web.

@@ -25,6 +25,7 @@ class CustomFormCreate(BaseModel):
     category: str
     name: str
     assigned_groups: Optional[List[str]] = []
+    schema_fields: Optional[List[dict]] = None
 
 class CustomFormUpdate(BaseModel):
     name: Optional[str] = None
@@ -135,6 +136,7 @@ def create_form(form_in: CustomFormCreate, db: Session = Depends(get_db), curren
     user_name = current_user.name or f"{current_user.first_name} {current_user.last_name}"
     user_initials = "".join([n[0] for n in user_name.split()]).upper()[:2] if user_name else "SA"
     
+    import json
     new_form = CustomForm(
         category_id=cat_obj.id,
         name=form_in.name,
@@ -145,7 +147,8 @@ def create_form(form_in: CustomFormCreate, db: Session = Depends(get_db), curren
         administrated_by="+1",
         date_created=datetime.now().strftime("%m/%d/%Y"),
         is_archived=False,
-        is_new=True
+        is_new=True,
+        schema_fields=json.dumps(form_in.schema_fields) if form_in.schema_fields else "[]"
     )
     db.add(new_form)
     db.commit()

@@ -1053,6 +1053,49 @@ def get_admin_dashboard():
             </div>
         </div>
 
+        <!-- CREATE CUSTOM FORM MODAL BUILDER -->
+        <div class="modal fade" id="createCustomFormModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content border-0 shadow">
+                    <div class="modal-header border-bottom p-4">
+                        <h6 class="modal-title fw-bold text-dark m-0"><i class="bi bi-file-earmark-plus me-2 text-primary"></i>Create Custom Form</h6>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold text-secondary fs-7">FORM NAME</label>
+                                <input type="text" class="form-control" id="builderFormName" placeholder="e.g. Equipment Request Form">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold text-secondary fs-7">CATEGORY</label>
+                                <select class="form-select" id="builderFormCategory">
+                                    <option value="IT Forms">IT Forms</option>
+                                    <option value="Admin Forms">Admin Forms</option>
+                                    <option value="HR Forms">HR Forms</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <h6 class="fw-bold text-dark m-0 fs-7">FORM FIELDS</h6>
+                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="addBuilderField()">
+                                <i class="bi bi-plus-lg me-1"></i>Add Field
+                            </button>
+                        </div>
+
+                        <div id="builderFieldsContainer" class="d-flex flex-column gap-3 mb-3" style="max-height: 380px; overflow-y: auto;">
+                            <!-- Dynamic fields inserted here -->
+                        </div>
+                    </div>
+                    <div class="modal-footer border-top p-3">
+                        <button type="button" class="btn btn-outline-custom" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary-custom" onclick="submitCustomFormBuilder()">Save & Publish Form</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- ADD / EDIT GROUP FORM MODAL -->
         <div class="modal fade" id="groupModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered">
@@ -1210,8 +1253,8 @@ def get_admin_dashboard():
                         localStorage.setItem('atwork_session_active', 'true');
                         showToast('Successfully authenticated into atWork.');
                         checkAuthentication();
-                        renderBrandSelectorOptions();
-                        renderConnecteamProvisioningTable();
+                        await renderBrandSelectorOptions();
+                        await renderConnecteamProvisioningTable();
                     } else {
                         showToast('Invalid Employee ID or Password.');
                     }
@@ -1272,13 +1315,15 @@ def get_admin_dashboard():
                 localStorage.setItem(key, JSON.stringify(jobs));
             }
 
-            function populateDepartmentDropdownOptions(selectedVal) {
-                const allGroups = getStoredGroups();
+            async function populateDepartmentDropdownOptions(selectedVal) {
+                const allGroups = await getStoredGroups();
                 let optionsHtml = '';
-                allGroups.forEach(g => {
-                    const isSel = (g.name === selectedVal || g.dept === selectedVal) ? 'selected' : '';
-                    optionsHtml += `<option value="${g.name}" ${isSel}>${g.name}</option>`;
-                });
+                if (Array.isArray(allGroups)) {
+                    allGroups.forEach(g => {
+                        const isSel = (g.name === selectedVal || g.dept === selectedVal) ? 'selected' : '';
+                        optionsHtml += `<option value="${g.name}" ${isSel}>${g.name}</option>`;
+                    });
+                }
                 document.getElementById('edit-user-department').innerHTML = optionsHtml;
                 document.getElementById('modalNewUserDept').innerHTML = optionsHtml;
             }
@@ -1594,16 +1639,18 @@ def get_admin_dashboard():
                 renderHistoryRows(filtered);
             }
 
-            function renderBrandSelectorOptions() {
-                const brands = getStoredBrands();
+            async function renderBrandSelectorOptions() {
+                const brands = await getStoredBrands();
                 let filterHtml = '<option value="ALL">All Brands</option>';
                 let modalHtml = '';
 
-                brands.forEach(b => {
-                    const sel = (b === selectedBrandView) ? 'selected' : '';
-                    filterHtml += `<option value="${b}" ${sel}>${b}</option>`;
-                    modalHtml += `<option value="${b}">${b}</option>`;
-                });
+                if (Array.isArray(brands)) {
+                    brands.forEach(b => {
+                        const sel = (b === selectedBrandView) ? 'selected' : '';
+                        filterHtml += `<option value="${b}" ${sel}>${b}</option>`;
+                        modalHtml += `<option value="${b}">${b}</option>`;
+                    });
+                }
 
                 document.getElementById('selectedBrandFilter').innerHTML = filterHtml;
                 document.getElementById('modalBrandSelect').innerHTML = modalHtml;
@@ -1615,23 +1662,34 @@ def get_admin_dashboard():
                 currentBsModal.show();
             }
 
-            function saveNewBrandModal() {
+            async function saveNewBrandModal() {
                 const bName = document.getElementById('modalNewBrandName').value.trim();
                 if (!bName) {
                     showToast('Please enter a brand name.');
                     return;
                 }
 
-                let brands = getStoredBrands();
-                if (!brands.includes(bName)) {
-                    brands.push(bName);
-                    setStoredBrands(brands);
+                const token = await getAdminAuthToken();
+                try {
+                    const res = await fetch('/api/jobs/brands', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + token
+                        },
+                        body: JSON.stringify({ name: bName })
+                    });
+                    if (res.ok) {
+                        await renderBrandSelectorOptions();
+                        await renderConnecteamProvisioningTable();
+                        showToast(`New Brand "${bName}" created.`);
+                        if (currentBsModal) currentBsModal.hide();
+                    } else {
+                        showToast('Failed to create brand.');
+                    }
+                } catch(e) {
+                    showToast('Error saving brand.');
                 }
-
-                renderBrandSelectorOptions();
-                renderConnecteamProvisioningTable();
-                showToast(`New Brand "${bName}" created.`);
-                if (currentBsModal) currentBsModal.hide();
             }
 
             function filterGroupByBrand(brandVal) {
@@ -1639,9 +1697,9 @@ def get_admin_dashboard():
                 renderConnecteamProvisioningTable();
             }
 
-            function renderConnecteamProvisioningTable() {
-                const brands = getStoredBrands();
-                const allGroups = getStoredGroups();
+            async function renderConnecteamProvisioningTable() {
+                const brands = await getStoredBrands();
+                const allGroups = await getStoredGroups();
 
                 let visibleBrands = (selectedBrandView === 'ALL') ? brands : brands.filter(b => b === selectedBrandView);
                 document.getElementById('groups-count-label').innerText = `${allGroups.length} groups total`;
@@ -1653,7 +1711,7 @@ def get_admin_dashboard():
 
                     let rowsHtml = '';
                     brandGroups.forEach((g) => {
-                        const groupMembers = globalUsersList.filter(u => u.department === g.name || u.department === g.dept);
+                        const groupMembers = globalUsersList.filter(u => (u.department === g.name || u.department === g.dept) && u.status !== 'ARCHIVED');
                         const connectedStr = `${groupMembers.length} / ${groupMembers.length}`;
 
                         rowsHtml += `
@@ -1742,58 +1800,77 @@ def get_admin_dashboard():
                 currentBsModal.show();
             }
 
-            function saveRenameBrand() {
+            async function saveRenameBrand() {
                 const newBrandName = document.getElementById('modalRenameBrandName').value.trim();
                 if (!newBrandName) {
                     showToast('Please enter a valid brand name.');
                     return;
                 }
 
-                let brands = getStoredBrands();
-                const idx = brands.indexOf(editingBrandNameTarget);
-                if (idx !== -1) brands[idx] = newBrandName;
-                setStoredBrands(brands);
-
-                let groups = getStoredGroups();
-                groups.forEach(g => {
-                    if (g.brand === editingBrandNameTarget) g.brand = newBrandName;
-                });
-                setStoredGroups(groups);
-
-                if (selectedBrandView === editingBrandNameTarget) selectedBrandView = newBrandName;
-
-                renderBrandSelectorOptions();
-                renderConnecteamProvisioningTable();
-                showToast('Brand name updated.');
-                if (currentBsModal) currentBsModal.hide();
+                const token = await getAdminAuthToken();
+                try {
+                    const res = await fetch('/api/jobs/brands/' + encodeURIComponent(editingBrandNameTarget), {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + token
+                        },
+                        body: JSON.stringify({ name: newBrandName })
+                    });
+                    if (res.ok) {
+                        if (selectedBrandView === editingBrandNameTarget) selectedBrandView = newBrandName;
+                        await renderBrandSelectorOptions();
+                        await renderConnecteamProvisioningTable();
+                        showToast('Brand name updated.');
+                        if (currentBsModal) currentBsModal.hide();
+                    } else {
+                        showToast('Failed to update brand name.');
+                    }
+                } catch(e) {
+                    showToast('Error updating brand name.');
+                }
             }
 
-            function deleteBrandLocation(brandName) {
+            async function deleteBrandLocation(brandName) {
                 if (!confirm(`Are you sure you want to delete Brand "${brandName}" and all its assigned groups?`)) return;
 
-                let brands = getStoredBrands().filter(b => b !== brandName);
-                setStoredBrands(brands);
-
-                let groups = getStoredGroups().filter(g => g.brand !== brandName);
-                setStoredGroups(groups);
-
-                if (selectedBrandView === brandName) selectedBrandView = 'ALL';
-
-                renderBrandSelectorOptions();
-                renderConnecteamProvisioningTable();
-                showToast(`Brand ${brandName} deleted.`);
+                const token = await getAdminAuthToken();
+                try {
+                    const res = await fetch('/api/jobs/brands/' + encodeURIComponent(brandName), {
+                        method: 'DELETE',
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
+                    if (res.ok) {
+                        if (selectedBrandView === brandName) selectedBrandView = 'ALL';
+                        await renderBrandSelectorOptions();
+                        await renderConnecteamProvisioningTable();
+                        showToast(`Brand ${brandName} deleted.`);
+                    } else {
+                        showToast('Failed to delete brand.');
+                    }
+                } catch(e) {
+                    showToast('Error deleting brand.');
+                }
             }
 
-            function deleteSubGroup(groupName) {
+            async function deleteSubGroup(groupName) {
                 if (!confirm(`Are you sure you want to remove group "${groupName}"?`)) return;
 
-                let groups = getStoredGroups().filter(g => g.name !== groupName);
-                setStoredGroups(groups);
-
-                localStorage.removeItem('smart_group_members_' + groupName);
-
-                renderConnecteamProvisioningTable();
-                showToast(`Group "${groupName}" removed.`);
+                const token = await getAdminAuthToken();
+                try {
+                    const res = await fetch('/api/jobs/groups/' + encodeURIComponent(groupName), {
+                        method: 'DELETE',
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
+                    if (res.ok) {
+                        await renderConnecteamProvisioningTable();
+                        showToast(`Group "${groupName}" removed.`);
+                    } else {
+                        showToast('Failed to delete group.');
+                    }
+                } catch(e) {
+                    showToast('Error deleting group.');
+                }
             }
 
             async function viewGroupDetails(groupName, brand, dept) {
@@ -2415,29 +2492,109 @@ def get_admin_dashboard():
                 document.getElementById('forms-list-container').style.display = 'block';
             }
 
+            let builderFieldIndex = 0;
+
             function openCreateCustomFormModal() {
-                const formTitle = prompt(`Create new ${currentFormCategory} Form Name:`);
-                if (!formTitle || formTitle.trim() === '') return;
+                document.getElementById('builderFormName').value = '';
+                document.getElementById('builderFormCategory').value = currentFormCategory || 'IT Forms';
+                const container = document.getElementById('builderFieldsContainer');
+                if (container) {
+                    container.innerHTML = '';
+                    builderFieldIndex = 0;
+                    addBuilderField(); // Add initial default text field
+                }
+                currentBsModal = new bootstrap.Modal(document.getElementById('createCustomFormModal'));
+                currentBsModal.show();
+            }
 
-                const newFormObj = {
-                    id: Date.now(),
-                    category: currentFormCategory,
-                    name: formTitle.trim(),
-                    status: 'Published',
-                    entries: 0,
-                    views: 1,
-                    assignedGroups: ['All users group'],
-                    createdBy: 'Super Admin Xenon',
-                    createdAvatar: 'SA',
-                    administratedBy: '+1',
-                    dateCreated: '09/18/2026',
-                    isArchived: false,
-                    isNew: true
-                };
+            function addBuilderField() {
+                const container = document.getElementById('builderFieldsContainer');
+                if (!container) return;
+                builderFieldIndex++;
+                const fieldId = `field_${builderFieldIndex}`;
+                const cardHtml = `
+                    <div class="card p-3 border shadow-sm builder-field-card" id="${fieldId}">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <span class="badge bg-light text-dark border fw-semibold fs-7">Field #${builderFieldIndex}</span>
+                            <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2" onclick="removeBuilderField('${fieldId}')" title="Remove Field">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-md-7">
+                                <label class="form-label fw-semibold text-secondary fs-7 mb-1">FIELD LABEL</label>
+                                <input type="text" class="form-control form-control-sm field-label-input" placeholder="e.g. Serial Number">
+                            </div>
+                            <div class="col-md-5">
+                                <label class="form-label fw-semibold text-secondary fs-7 mb-1">FIELD TYPE</label>
+                                <select class="form-select form-select-sm field-type-select">
+                                    <option value="text">Short Text Input</option>
+                                    <option value="textarea">Paragraph / Textarea</option>
+                                    <option value="dropdown">Dropdown / Select</option>
+                                    <option value="checkbox">Checkbox</option>
+                                    <option value="date">Date Picker</option>
+                                    <option value="file">File Upload</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-check mt-2">
+                            <input class="form-check-input field-required-check" type="checkbox" id="req_${fieldId}">
+                            <label class="form-check-label fs-7 text-muted" for="req_${fieldId}">Required field</label>
+                        </div>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', cardHtml);
+            }
 
-                mockCustomFormsData.unshift(newFormObj);
-                showToast(`Form '${formTitle}' created successfully!`);
-                loadCustomForms(currentFormCategory);
+            function removeBuilderField(fieldId) {
+                const el = document.getElementById(fieldId);
+                if (el) el.remove();
+            }
+
+            async function submitCustomFormBuilder() {
+                const name = document.getElementById('builderFormName').value.trim();
+                const category = document.getElementById('builderFormCategory').value;
+
+                if (!name) {
+                    showToast('Please enter a form name.');
+                    return;
+                }
+
+                const fieldCards = document.querySelectorAll('.builder-field-card');
+                const fields = [];
+                fieldCards.forEach(card => {
+                    const label = card.querySelector('.field-label-input').value.trim() || 'Untitled Field';
+                    const type = card.querySelector('.field-type-select').value;
+                    const required = card.querySelector('.field-required-check').checked;
+                    fields.push({ label, type, required });
+                });
+
+                const token = await getAdminAuthToken();
+                try {
+                    const res = await fetch('/api/forms', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + token
+                        },
+                        body: JSON.stringify({
+                            category: category,
+                            name: name,
+                            assigned_groups: ['All users group'],
+                            schema_fields: fields
+                        })
+                    });
+
+                    if (res.ok) {
+                        showToast(`Form '${name}' created and published successfully!`);
+                        if (currentBsModal) currentBsModal.hide();
+                        await loadCustomForms(category);
+                    } else {
+                        showToast('Failed to save custom form.');
+                    }
+                } catch(err) {
+                    showToast('Error saving custom form.');
+                }
             }
 
             document.addEventListener("DOMContentLoaded", async function() {

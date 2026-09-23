@@ -167,7 +167,7 @@ def get_me(current_user: Employee = Depends(get_current_user)):
 @router.get("/users")
 def get_all_users(
     db: Session = Depends(get_db),
-    current_user: Employee = Depends(require_roles(["Admin", "Manager"]))
+    current_user: Employee = Depends(require_roles(["Admin", "Manager", "Superadmin"]))
 ):
     users = db.query(Employee).all()
     results = []

@@ -98,6 +98,8 @@ class DtrRevision(Base):
     status = Column(String, default="PENDING", nullable=False)  # PENDING, APPROVED, REJECTED
     reviewed_by = Column(String, ForeignKey("employees.employee_id"), nullable=True)
     reviewed_at = Column(DateTime, nullable=True)
+    manager_signature = Column(String, nullable=True)
+    manager_note = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class LeaveRequest(Base):

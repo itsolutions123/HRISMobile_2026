@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from datetime import datetime
 
 from ..database import get_db
-from ..models import Employee, PunchLog, Schedule, ScheduleGroup, ScheduleGroupAssignment, DtrRevision
+from ..models import Employee, PunchLog, Schedule, ScheduleGroup, ScheduleGroupAssignment, DtrRevision, SmartGroup
 from .auth import get_current_user
 
 router = APIRouter(prefix="/api/manager", tags=["Manager & Scheduling"])
@@ -13,6 +13,8 @@ router = APIRouter(prefix="/api/manager", tags=["Manager & Scheduling"])
 # Pydantic Schemas
 class DtrRevisionAction(BaseModel):
     action: str  # APPROVED or REJECTED
+    manager_signature: Optional[str] = None
+    manager_note: Optional[str] = None
 
 class CreateRevisionRequest(BaseModel):
     punch_log_id: Optional[int] = None
@@ -47,12 +49,14 @@ def get_team_members(
     current_user: Employee = Depends(get_current_user)
 ):
     verify_manager_or_admin(current_user)
-    
+
     if current_user.role == "Admin":
         team = db.query(Employee).all()
     else:
-        team = db.query(Employee).filter(Employee.manager_id == current_user.employee_id).all()
-        
+        team = db.query(Employee).filter(
+            (Employee.manager_id == current_user.employee_id) | (Employee.department == current_user.department)
+        ).all()
+
     return [
         {
             "employee_id": emp.employee_id,
@@ -86,25 +90,53 @@ def submit_dtr_revision(
     db.refresh(revision)
     return {"message": "DTR revision submitted successfully", "revision_id": revision.id}
 
-# List Pending Revisions for Manager's Team
+# List Employee's Own Shift Requests (View-Only for Mobile App "My Requests")
+@router.get("/revisions/my-requests")
+def list_my_revisions(
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(get_current_user)
+):
+    revisions = db.query(DtrRevision).filter(DtrRevision.employee_id == current_user.employee_id).order_by(DtrRevision.created_at.desc()).all()
+    result = []
+    for rev in revisions:
+        result.append({
+            "id": rev.id,
+            "employee_id": rev.employee_id,
+            "punch_log_id": rev.punch_log_id,
+            "requested_punch_type": rev.requested_punch_type,
+            "requested_timestamp": rev.requested_timestamp.isoformat(),
+            "reason": rev.reason,
+            "status": rev.status,
+            "manager_signature": rev.manager_signature,
+            "manager_note": rev.manager_note,
+            "reviewed_by": rev.reviewed_by,
+            "reviewed_at": rev.reviewed_at.isoformat() if rev.reviewed_at else None,
+            "created_at": rev.created_at.isoformat()
+        })
+    return result
+
+# List Pending Revisions for Manager's Assigned Smart Group Members
 @router.get("/revisions")
 def list_pending_revisions(
     db: Session = Depends(get_db),
     current_user: Employee = Depends(get_current_user)
 ):
     verify_manager_or_admin(current_user)
-    
+
     if current_user.role == "Admin":
         revisions = db.query(DtrRevision).filter(DtrRevision.status == "PENDING").all()
     else:
+        # Filter employees belonging to manager's assigned department/smart-group or reporting directly
         team_emp_ids = [
-            emp.employee_id for emp in db.query(Employee).filter(Employee.manager_id == current_user.employee_id).all()
+            emp.employee_id for emp in db.query(Employee).filter(
+                (Employee.manager_id == current_user.employee_id) | (Employee.department == current_user.department)
+            ).all()
         ]
         revisions = db.query(DtrRevision).filter(
             DtrRevision.employee_id.in_(team_emp_ids),
             DtrRevision.status == "PENDING"
         ).all()
-        
+
     result = []
     for rev in revisions:
         emp = db.query(Employee).filter(Employee.employee_id == rev.employee_id).first()
@@ -112,6 +144,7 @@ def list_pending_revisions(
             "id": rev.id,
             "employee_id": rev.employee_id,
             "employee_name": emp.name if emp else rev.employee_id,
+            "smart_group": emp.department if emp else "General",
             "punch_log_id": rev.punch_log_id,
             "requested_punch_type": rev.requested_punch_type,
             "requested_timestamp": rev.requested_timestamp.isoformat(),
@@ -121,7 +154,7 @@ def list_pending_revisions(
         })
     return result
 
-# Manager Approve or Reject Revision
+# Manager Approve or Reject Revision with Signature & Note
 @router.post("/revisions/{revision_id}/action")
 def review_dtr_revision(
     revision_id: int,
@@ -130,18 +163,22 @@ def review_dtr_revision(
     current_user: Employee = Depends(get_current_user)
 ):
     verify_manager_or_admin(current_user)
-    
+
     revision = db.query(DtrRevision).filter(DtrRevision.id == revision_id).first()
     if not revision:
         raise HTTPException(status_code=404, detail="Revision request not found")
-        
+
     if action_req.action not in ["APPROVED", "REJECTED"]:
         raise HTTPException(status_code=400, detail="Action must be APPROVED or REJECTED")
-        
+
     revision.status = action_req.action
     revision.reviewed_by = current_user.employee_id
     revision.reviewed_at = datetime.utcnow()
-    
+    if action_req.manager_signature:
+        revision.manager_signature = action_req.manager_signature
+    if action_req.manager_note:
+        revision.manager_note = action_req.manager_note
+
     # If approved, update existing punch log or insert new punch log
     if action_req.action == "APPROVED":
         if revision.punch_log_id:
@@ -156,7 +193,7 @@ def review_dtr_revision(
                 timestamp=revision.requested_timestamp
             )
             db.add(new_punch)
-            
+
     db.commit()
     return {"message": f"DTR revision {action_req.action.lower()} successfully"}
 
@@ -192,12 +229,12 @@ def create_schedule_group(
     db.add(group)
     db.commit()
     db.refresh(group)
-    
+
     for emp_id in req.employee_ids:
         assignment = ScheduleGroupAssignment(group_id=group.id, employee_id=emp_id)
         db.add(assignment)
     db.commit()
-    
+
     return {"message": "Schedule group created successfully", "group_id": group.id}
 
 # Shift Schedules
@@ -213,7 +250,7 @@ def list_schedules(
         query = query.filter(Schedule.employee_id == employee_id)
     if group_id:
         query = query.filter(Schedule.group_id == group_id)
-        
+
     schedules = query.all()
     return [
         {
