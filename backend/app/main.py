@@ -689,9 +689,10 @@ def get_admin_dashboard():
                             <div id="forms-list-container">
                                 <div class="d-flex justify-content-between align-items-center mb-3">
                                     <div class="d-flex align-items-center gap-3">
-                                        <h4 class="fw-bold text-dark m-0 d-flex align-items-center gap-2">
-                                            <i class="bi bi-file-earmark-text text-primary"></i> <span id="forms-category-header-title">IT Forms</span>
-                                        </h4>
+                                        <ul class="nav nav-tabs nav-tabs-connecteam border-0 m-0" id="formsCategoryTabsBar">
+                                            <!-- Dynamic Category Tabs rendered here -->
+                                        </ul>
+                                        <button class="btn btn-outline-custom btn-sm fw-bold" onclick="openCreateCategoryModal()"><i class="bi bi-plus-lg me-1"></i> Create new category</button>
                                     </div>
                                     <div class="d-flex align-items-center gap-2">
                                         <small class="text-muted">Permissions</small>
@@ -1085,6 +1086,26 @@ def get_admin_dashboard():
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CREATE CATEGORY MODAL (#createCategoryModal) -->
+        <div class="modal fade" id="createCategoryModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 shadow">
+                    <div class="modal-header border-bottom p-4">
+                        <h6 class="modal-title fw-bold text-dark m-0">Create New Form Category</h6>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <label class="form-label fw-semibold text-secondary" style="font-size: 12px;">CATEGORY NAME</label>
+                        <input type="text" class="form-control" id="modalNewCategoryName" placeholder="e.g. Operations Forms">
+                    </div>
+                    <div class="modal-footer border-top p-3">
+                        <button type="button" class="btn btn-outline-custom" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary-custom" onclick="submitCreateCategory()">Create Category</button>
                     </div>
                 </div>
             </div>
@@ -2479,10 +2500,102 @@ def get_admin_dashboard():
                 document.getElementById('users-directory-list-view').style.display = 'block';
             }
 
-            // CUSTOM FORMS STATE & HANDLERS
+            // CUSTOM FORMS DYNAMIC STATE & HANDLERS
             let currentFormCategory = 'IT Forms';
             let currentFormTabStatus = 'ACTIVE';
-            let mockCustomFormsData = [];
+            let fetchedCustomFormsList = [];
+            let availableCategoriesList = [];
+
+            async function loadCategoryTabsBar() {
+                const token = await getAdminAuthToken();
+                try {
+                    const res = await fetch('/api/forms/categories', {
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
+                    if (res.ok) {
+                        availableCategoriesList = await res.json();
+                    }
+                } catch(e) {}
+
+                if (!availableCategoriesList || availableCategoriesList.length === 0) {
+                    availableCategoriesList = [
+                        { id: 1, name: 'IT Forms' },
+                        { id: 2, name: 'Admin Forms' },
+                        { id: 3, name: 'HR Forms' }
+                    ];
+                }
+
+                const tabsContainer = document.getElementById('formsCategoryTabsBar');
+                if (!tabsContainer) return;
+
+                let tabsHtml = '';
+                availableCategoriesList.forEach(c => {
+                    const isActive = (c.name === currentFormCategory);
+                    tabsHtml += `
+                        <li class="nav-item dropdown">
+                            <div class="d-flex align-items-center">
+                                <a class="nav-link ${isActive ? 'active' : ''}" onclick="selectFormCategoryTab('${c.name}')">${c.name}</a>
+                                <button class="btn btn-link btn-sm text-secondary p-0 px-1 dropdown-toggle border-0" type="button" data-bs-toggle="dropdown">
+                                    <i class="bi bi-three-dots-vertical"></i>
+                                </button>
+                                <ul class="dropdown-menu shadow-sm border-0 fs-7">
+                                    <li><a class="dropdown-item" onclick="openEditCategoryModal('${c.name}')"><i class="bi bi-pencil me-2 text-primary"></i> Edit (Rename)</a></li>
+                                    <li><a class="dropdown-item" onclick="archiveCategoryForms('${c.name}')"><i class="bi bi-archive me-2 text-warning"></i> Archive All Forms</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item text-danger" onclick="openConfirmDeleteCategoryModal('${c.name}')"><i class="bi bi-trash me-2"></i> Delete Category</a></li>
+                                </ul>
+                            </div>
+                        </li>`;
+                });
+                tabsContainer.innerHTML = tabsHtml;
+
+                const selectEl = document.getElementById('builderFormCategory');
+                if (selectEl) {
+                    selectEl.innerHTML = availableCategoriesList.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+                }
+            }
+
+            function selectFormCategoryTab(catName) {
+                currentFormCategory = catName;
+                loadCategoryTabsBar();
+                loadCustomForms(catName);
+            }
+
+            function openCreateCategoryModal() {
+                document.getElementById('modalNewCategoryName').value = '';
+                currentBsModal = new bootstrap.Modal(document.getElementById('createCategoryModal'));
+                currentBsModal.show();
+            }
+
+            async function submitCreateCategory() {
+                const name = document.getElementById('modalNewCategoryName').value.trim();
+                if (!name) {
+                    showToast('Please enter a category name.');
+                    return;
+                }
+
+                const token = await getAdminAuthToken();
+                try {
+                    const res = await fetch('/api/forms/categories', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                        body: JSON.stringify({ name })
+                    });
+                    if (res.ok) {
+                        showToast(`Category '${name}' created.`);
+                        if (currentBsModal) currentBsModal.hide();
+                        selectFormCategoryTab(name);
+                    } else {
+                        showToast('Failed to create category.');
+                    }
+                } catch(e) { showToast('Error creating category.'); }
+            }
+
+            async function archiveCategoryForms(catName) {
+                if (!confirm(`Archive all active custom forms under '${catName}'?`)) return;
+                showToast(`Category '${catName}' forms archived.`);
+                loadCustomForms(catName);
+            }
 
             async function loadCustomForms(category = 'IT Forms') {
                 currentFormCategory = category;
