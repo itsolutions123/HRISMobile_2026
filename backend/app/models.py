@@ -128,12 +128,14 @@ class CustomForm(Base):
     name = Column(String, nullable=False)
     status = Column(String, default="Published", nullable=False)
     assigned_groups = Column(String, nullable=True) # JSON list or string
+    assignment_type = Column(String, default="Dynamic") # 'Dynamic' or 'Fixed'
     created_by = Column(String, nullable=False)
     created_avatar = Column(String, default="SA")
     administrated_by = Column(String, default="+1")
     date_created = Column(String, nullable=False)
     is_archived = Column(Boolean, default=False, nullable=False)
     is_new = Column(Boolean, default=True, nullable=False)
+    schema_fields = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class FormSubmission(Base):
