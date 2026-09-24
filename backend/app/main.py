@@ -1532,7 +1532,7 @@ def get_admin_dashboard(path: str = ""):
                 }
             }
 
-            function handleUrlRoutingOnLoad() {
+            async function handleUrlRoutingOnLoad() {
                 const path = window.location.pathname;
                 if (path.includes('/admin/smart-groups')) {
                     switchTab('jobs', false);
@@ -1542,7 +1542,7 @@ def get_admin_dashboard(path: str = ""):
                     const slug = path.split('/admin/forms/category/modules/')[1];
                     if (slug) {
                         const catName = slug.replace(/-/g, ' ');
-                        selectFormCategoryTabBySlug(catName);
+                        await selectFormCategoryTabBySlug(catName);
                     } else {
                         switchTab('clock', false);
                     }
@@ -1551,14 +1551,17 @@ def get_admin_dashboard(path: str = ""):
                 }
             }
 
-            function selectFormCategoryTabBySlug(catSlug) {
+            async function selectFormCategoryTabBySlug(catSlug) {
+                if (!availableCategoriesList || availableCategoriesList.length === 0) {
+                    await renderSidebarFormsCategories();
+                }
                 const matched = availableCategoriesList.find(c => c.name.toLowerCase() === catSlug.toLowerCase());
-                const targetCat = matched ? matched.name : catSlug;
+                const targetCat = matched ? matched.name : (catSlug ? catSlug.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'IT Forms');
                 currentFormCategory = targetCat;
                 localStorage.setItem('lastSelectedFormCategory', targetCat);
                 switchTab('forms-' + targetCat.toLowerCase().replace(/\s+/g, '-'), false);
-                renderSidebarFormsCategories();
-                loadCustomForms(targetCat);
+                await renderSidebarFormsCategories();
+                await loadCustomForms(targetCat);
             }
 
             window.addEventListener('popstate', function() {
@@ -2551,7 +2554,6 @@ def get_admin_dashboard(path: str = ""):
                         currentFormCategory = availableCategoriesList[0].name;
                     }
                 }
-                await loadCustomForms(currentFormCategory);
             }
 
             async function renderSidebarFormsCategories() {
@@ -3007,7 +3009,7 @@ def get_admin_dashboard(path: str = ""):
                 await getAdminAuthToken();
                 await loadConnecteamDirectory();
                 await loadCategoryTabsBar();
-                handleUrlRoutingOnLoad();
+                await handleUrlRoutingOnLoad();
             });
         </script>
     </body>
