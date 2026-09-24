@@ -948,11 +948,18 @@ def get_admin_dashboard(path: str = ""):
             </div>
             <div class="offcanvas-body p-4">
                 <div class="mb-4">
-                    <label class="form-label fw-semibold text-secondary" style="font-size: 12px;">ASSIGN GROUP ADMINS</label>
-                    <select class="form-select" id="groupAdminAssignSelect" onchange="showToast('Group admin assigned.')">
-                        <option value="xinxaola" selected>Super Admin Xenon (xinxaola)</option>
-                        <option value="3286">Jaypee Balonzo (System Admin - 3286)</option>
-                    </select>
+                    <label class="form-label fw-semibold text-secondary" style="font-size: 12px;">ASSIGN GROUP ADMINS / MANAGERS</label>
+                    <div class="dropdown" id="groupAdminDropdownWrapper">
+                        <button class="btn btn-outline-custom w-100 text-start d-flex justify-content-between align-items-center py-2" type="button" id="groupAdminDropdownBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                            <span id="groupAdminDropdownLabel" class="text-truncate fw-medium fs-7">Select Group Admins / Managers...</span>
+                            <i class="bi bi-chevron-down text-muted fs-7"></i>
+                        </button>
+                        <div class="dropdown-menu p-3 w-100 shadow border-0" aria-labelledby="groupAdminDropdownBtn" style="max-height: 320px; overflow-y: auto;">
+                            <input type="text" class="form-control form-control-sm mb-2" id="searchGroupAdminInput" placeholder="Search managers & admins..." onkeyup="filterGroupAdminDropdownList(this.value)">
+                            <div id="groupAdminCheckboxesContainer" class="d-flex flex-column gap-2 mt-2">
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="row g-3 mb-4">
@@ -1889,6 +1896,28 @@ def get_admin_dashboard(path: str = ""):
                         const groupMembers = globalUsersList.filter(u => (u.department === g.name || u.department === g.dept) && u.status !== 'ARCHIVED');
                         const connectedStr = `${groupMembers.length} / ${groupMembers.length}`;
 
+                        // Render dynamic admin bubbles
+                        const assignedAdmins = Array.isArray(g.admins) ? g.admins : [];
+                        let adminBubblesHtml = '';
+                        if (assignedAdmins.length === 0) {
+                            adminBubblesHtml = '<small class="text-muted fs-7">None assigned</small>';
+                        } else if (assignedAdmins.length <= 2) {
+                            assignedAdmins.forEach(empId => {
+                                const u = globalUsersList.find(usr => usr.employee_id === empId) || {};
+                                const init = `${(u.first_name||u.name||empId).charAt(0)}${(u.last_name || '').charAt(0)}`.toUpperCase();
+                                adminBubblesHtml += `<span class="avatar-chip bg-primary text-white" title="${u.name||empId}">${init}</span>`;
+                            });
+                        } else {
+                            const firstTwo = assignedAdmins.slice(0, 2);
+                            const remaining = assignedAdmins.length - 2;
+                            firstTwo.forEach(empId => {
+                                const u = globalUsersList.find(usr => usr.employee_id === empId) || {};
+                                const init = `${(u.first_name||u.name||empId).charAt(0)}${(u.last_name || '').charAt(0)}`.toUpperCase();
+                                adminBubblesHtml += `<span class="avatar-chip bg-primary text-white" title="${u.name||empId}">${init}</span>`;
+                            });
+                            adminBubblesHtml += `<span class="avatar-chip bg-dark text-white">+${remaining}</span>`;
+                        }
+
                         rowsHtml += `
                             <tr style="cursor: pointer;" onclick="viewGroupDetails('${g.name}', '${brandName}', '${g.dept || 'General'}')">
                                 <td><input type="checkbox" class="form-check-input" onclick="event.stopPropagation()"></td>
@@ -1909,10 +1938,8 @@ def get_admin_dashboard(path: str = ""):
                                 </td>
                                 <td>
                                     <div class="d-flex align-items-center justify-content-between">
-                                        <div class="d-flex align-items-center">
-                                            <span class="avatar-chip bg-primary text-white">SA</span>
-                                            <span class="avatar-chip bg-secondary text-white">JB</span>
-                                            <span class="avatar-chip bg-dark text-white">+10</span>
+                                        <div class="d-flex align-items-center gap-1">
+                                            ${adminBubblesHtml}
                                         </div>
                                         <button class="btn btn-sm btn-outline-custom text-danger py-0 px-2" onclick="event.stopPropagation(); deleteSubGroup('${g.name}')"><i class="bi bi-trash"></i></button>
                                     </div>
