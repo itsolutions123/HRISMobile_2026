@@ -384,7 +384,7 @@ def get_admin_dashboard(path: str = ""):
 
                     <div class="section-label">Forms</div>
                     <div id="sidebar-forms-categories-list"></div>
-                    <a class="nav-link text-primary mt-1 fw-semibold fs-7" onclick="openCreateCategoryModal()"><i class="bi bi-plus-circle me-2"></i> Add new</a>
+                    <a class="nav-link text-primary mt-1 fw-semibold fs-7" onclick="openWorkspaceToolsFlyout(event)"><i class="bi bi-plus-circle me-2"></i> Add new</a>
 
                     <div class="section-label">Management</div>
                     <a class="nav-link" onclick="showToast('Scheduling accessible via Mobile workspace.')"><i class="bi bi-calendar3"></i> Scheduling</a>
@@ -1575,8 +1575,12 @@ def get_admin_dashboard(path: str = ""):
                 if (!availableCategoriesList || availableCategoriesList.length === 0) {
                     await renderSidebarFormsCategories();
                 }
-                const matched = availableCategoriesList.find(c => c.name.toLowerCase() === catSlug.toLowerCase());
-                const targetCat = matched ? matched.name : (catSlug ? catSlug.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'IT Forms');
+                if (!availableCategoriesList || availableCategoriesList.length === 0) {
+                    renderFormsBlankLandingPage();
+                    return;
+                }
+                const matched = availableCategoriesList.find(c => catSlug && c.name.toLowerCase() === catSlug.toLowerCase());
+                const targetCat = matched ? matched.name : availableCategoriesList[0].name;
                 currentFormCategory = targetCat;
                 localStorage.setItem('lastSelectedFormCategory', targetCat);
                 switchTab('forms-' + targetCat.toLowerCase().replace(/\s+/g, '-'), false);
@@ -2650,12 +2654,8 @@ def get_admin_dashboard(path: str = ""):
                     }
                 } catch(e) {}
 
-                if (!availableCategoriesList || availableCategoriesList.length === 0) {
-                    availableCategoriesList = [
-                        { id: 1, name: 'IT Forms' },
-                        { id: 2, name: 'Admin Forms' },
-                        { id: 3, name: 'HR Forms' }
-                    ];
+                if (!availableCategoriesList) {
+                    availableCategoriesList = [];
                 }
 
                 const sidebarContainer = document.getElementById('sidebar-forms-categories-list');
@@ -2696,6 +2696,28 @@ def get_admin_dashboard(path: str = ""):
                 if (selectEl) {
                     selectEl.innerHTML = availableCategoriesList.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
                 }
+
+                if (availableCategoriesList.length === 0) {
+                    renderFormsBlankLandingPage();
+                }
+            }
+
+            function renderFormsBlankLandingPage() {
+                history.pushState(null, '', '/admin/forms');
+                const pageTitle = document.getElementById('page-title');
+                if (pageTitle) pageTitle.innerText = 'Forms';
+                const formsView = document.getElementById('tab-forms-view');
+                if (formsView) {
+                    formsView.innerHTML = `
+                        <div class="d-flex flex-column align-items-center justify-content-center p-5 text-center" style="min-height: 400px;">
+                            <i class="bi bi-folder2-open text-muted mb-3" style="font-size: 3rem;"></i>
+                            <h5 class="fw-bold mb-2">No Form Categories</h5>
+                            <p class="text-muted fs-7 mb-4">Get started by creating your first form category.</p>
+                            <button class="btn btn-primary rounded-pill px-4" onclick="openCreateCategoryModal()">
+                                <i class="bi bi-plus-lg me-1"></i> Create new category
+                            </button>
+                        </div>`;
+                }
             }
 
             function selectFormCategoryTab(catName) {
@@ -2708,6 +2730,18 @@ def get_admin_dashboard(path: str = ""):
                 switchTab('forms-view');
                 renderSidebarFormsCategories();
                 loadCustomForms(catName);
+            }
+
+            
+            function openWorkspaceToolsFlyout(e) {
+                if (e) e.preventDefault();
+                currentBsModal = new bootstrap.Modal(document.getElementById('workspaceToolsFlyoutModal'));
+                currentBsModal.show();
+            }
+
+            function openCreateCategoryModalFromFlyout() {
+                if (currentBsModal) currentBsModal.hide();
+                openCreateCategoryModal();
             }
 
             function openCreateCategoryModal() {
@@ -3146,6 +3180,46 @@ def get_admin_dashboard(path: str = ""):
             </div>
         </div>
     </div>
+
+        <!-- WORKSPACE TOOLS FLYOUT MODAL -->
+        <div class="modal fade" id="workspaceToolsFlyoutModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-scrollable modal-lg" style="max-width: 700px; margin-left: 260px; margin-top: 60px;">
+                <div class="modal-content border-0 shadow-lg rounded-4">
+                    <div class="modal-header border-bottom p-3">
+                        <h6 class="modal-title fw-bold text-dark m-0"><i class="bi bi-grid-3x3-gap-fill text-primary me-2"></i>Explore tools for your workspace</h6>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <div class="row g-3">
+                            <div class="col-md-4 border-end pe-3">
+                                <div class="list-group list-group-flush fs-7 fw-medium">
+                                    <a class="list-group-item list-group-item-action border-0 rounded-3 active"><i class="bi bi-star-fill text-warning me-2"></i>Recommended</a>
+                                    <a class="list-group-item list-group-item-action border-0 rounded-3">All</a>
+                                    <a class="list-group-item list-group-item-action border-0 rounded-3">Operations</a>
+                                    <a class="list-group-item list-group-item-action border-0 rounded-3">Communications</a>
+                                    <a class="list-group-item list-group-item-action border-0 rounded-3">HR & Skills</a>
+                                </div>
+                            </div>
+                            <div class="col-md-8 ps-3">
+                                <div class="p-3 border rounded-3 bg-light d-flex align-items-center justify-content-between mb-3 shadow-sm">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="rounded-3 bg-primary text-white d-flex align-items-center justify-content-center" style="width: 42px; height: 42px; font-size: 20px;">
+                                            <i class="bi bi-file-earmark-text"></i>
+                                        </div>
+                                        <div>
+                                            <h6 class="fw-bold mb-0 text-dark">Forms <span class="badge bg-success-subtle text-success fs-8 ms-1"><i class="bi bi-check-lg"></i> Added</span></h6>
+                                            <small class="text-muted fs-8">Digitize processes, collect data, and automate work</small>
+                                        </div>
+                                    </div>
+                                    <button class="btn btn-outline-primary btn-sm rounded-pill px-3" onclick="openCreateCategoryModalFromFlyout()">+ Add Category</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
 </body>
     </html>
     """

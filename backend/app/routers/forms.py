@@ -45,13 +45,6 @@ class FormSubmissionCreate(BaseModel):
 @router.get("/categories")
 def list_categories(is_archived: bool = False, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
     categories = db.query(FormCategory).filter(FormCategory.is_archived == is_archived).all()
-    if not categories and not is_archived:
-        defaults = ["IT Forms", "Admin Forms", "HR Forms"]
-        for d in defaults:
-            cat = FormCategory(name=d, is_archived=False)
-            db.add(cat)
-        db.commit()
-        categories = db.query(FormCategory).filter(FormCategory.is_archived == False).all()
     return [{"id": c.id, "name": c.name, "isArchived": c.is_archived} for c in categories]
 
 @router.post("/categories")
