@@ -33,11 +33,27 @@ function MainTabNavigator() {
   );
 }
 
+const linking = {
+  prefixes: ['https://app.bigtimeempire.com', 'http://localhost:19006', 'http://localhost:8087'],
+  config: {
+    screens: {
+      Login: 'login',
+      Main: {
+        screens: {
+          Dashboard: 'admin/timeclock',
+          Timesheet: 'admin/timesheet',
+          Manager: 'admin/forms/category/modules/:identifier',
+        },
+      },
+    },
+  },
+};
+
 function NavigationRoot() {
   const { user } = useContext(AuthContext);
 
   return (
-    <NavigationContainer>
+    <NavigationContainer linking={linking}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!user ? (
           <Stack.Screen name="Login" component={LoginScreen} />

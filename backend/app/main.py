@@ -105,7 +105,8 @@ def health_check():
     return {"status": "online", "service": "HRIS Backend", "admin_panel": "/admin"}
 
 @app.get("/admin", response_class=HTMLResponse)
-def get_admin_dashboard():
+@app.get("/admin/{path:path}", response_class=HTMLResponse)
+def get_admin_dashboard(path: str = ""):
     return """
     <!DOCTYPE html>
     <html lang="en">
@@ -1479,7 +1480,7 @@ def get_admin_dashboard():
                 return '';
             }
 
-            function switchTab(tab) {
+            function switchTab(tab, updateUrl = true) {
                 document.getElementById('tab-clock').style.display = 'none';
                 document.getElementById('tab-jobs').style.display = 'none';
                 document.getElementById('tab-users').style.display = 'none';
@@ -1489,44 +1490,80 @@ def get_admin_dashboard():
                 document.getElementById('nav-clock').classList.remove('active');
                 document.getElementById('nav-jobs').classList.remove('active');
                 document.getElementById('nav-users').classList.remove('active');
-                const navIt = document.getElementById('nav-forms-it');
-                const navAdmin = document.getElementById('nav-forms-admin');
-                const navHr = document.getElementById('nav-forms-hr');
-                if (navIt) navIt.classList.remove('active');
-                if (navAdmin) navAdmin.classList.remove('active');
-                if (navHr) navHr.classList.remove('active');
 
                 if (tab.startsWith('forms-')) {
                     if (formsView) formsView.style.display = 'block';
-                    const navTarget = document.getElementById('nav-' + tab);
-                    if (navTarget) navTarget.classList.add('active');
 
-                    const catName = tab === 'forms-it' ? 'IT Forms' : (tab === 'forms-admin' ? 'Admin Forms' : 'HR Forms');
-                    document.getElementById('page-title').innerText = catName;
+                    const catName = tab.replace('forms-', '').replace(/-/g, ' ');
+                    const matchedCat = availableCategoriesList.find(c => c.name.toLowerCase() === catName.toLowerCase());
+                    const finalCatName = matchedCat ? matchedCat.name : (tab === 'forms-it' ? 'IT Forms' : 'Admin Forms');
+
+                    document.getElementById('page-title').innerText = finalCatName;
+                    if (updateUrl) {
+                        const urlSlug = finalCatName.toLowerCase().replace(/\s+/g, '-');
+                        history.pushState(null, '', '/admin/forms/category/modules/' + urlSlug);
+                    }
                     closeFormDetailSubmissions();
-                    loadCustomForms(catName);
+                    loadCustomForms(finalCatName);
                     return;
                 }
 
                 document.getElementById('tab-' + tab).style.display = 'block';
-                document.getElementById('nav-' + tab).classList.add('active');
+                const navBtn = document.getElementById('nav-' + tab);
+                if (navBtn) navBtn.classList.add('active');
 
                 if (tab === 'clock') {
+                    if (updateUrl) history.pushState(null, '', '/admin/timeclock');
                     document.getElementById('page-title').innerText = 'Time Clock';
                     setTimeout(() => { if (map) map.invalidateSize(); else initMap(); }, 200);
                     loadPunchMap();
                     loadTimeClockHistory();
                 } else if (tab === 'jobs') {
+                    if (updateUrl) history.pushState(null, '', '/admin/smart-groups');
                     document.getElementById('page-title').innerText = 'Smart Groups';
                     loadConnecteamDirectory().then(() => {
                         renderBrandSelectorOptions();
                         renderConnecteamProvisioningTable();
                     });
                 } else if (tab === 'users') {
+                    if (updateUrl) history.pushState(null, '', '/admin/users');
                     document.getElementById('page-title').innerText = 'Users Directory';
                     loadConnecteamDirectory();
                 }
             }
+
+            function handleUrlRoutingOnLoad() {
+                const path = window.location.pathname;
+                if (path.includes('/admin/smart-groups')) {
+                    switchTab('jobs', false);
+                } else if (path.includes('/admin/users')) {
+                    switchTab('users', false);
+                } else if (path.includes('/admin/forms/category/modules/')) {
+                    const slug = path.split('/admin/forms/category/modules/')[1];
+                    if (slug) {
+                        const catName = slug.replace(/-/g, ' ');
+                        selectFormCategoryTabBySlug(catName);
+                    } else {
+                        switchTab('clock', false);
+                    }
+                } else {
+                    switchTab('clock', false);
+                }
+            }
+
+            function selectFormCategoryTabBySlug(catSlug) {
+                const matched = availableCategoriesList.find(c => c.name.toLowerCase() === catSlug.toLowerCase());
+                const targetCat = matched ? matched.name : catSlug;
+                currentFormCategory = targetCat;
+                localStorage.setItem('lastSelectedFormCategory', targetCat);
+                switchTab('forms-' + targetCat.toLowerCase().replace(/\s+/g, '-'), false);
+                renderSidebarFormsCategories();
+                loadCustomForms(targetCat);
+            }
+
+            window.addEventListener('popstate', function() {
+                handleUrlRoutingOnLoad();
+            });
 
             function initMap() {
                 if (map) return;
@@ -2970,7 +3007,7 @@ def get_admin_dashboard():
                 await getAdminAuthToken();
                 await loadConnecteamDirectory();
                 await loadCategoryTabsBar();
-                switchTab('clock');
+                handleUrlRoutingOnLoad();
             });
         </script>
     </body>
