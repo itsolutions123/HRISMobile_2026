@@ -2830,7 +2830,8 @@ def get_admin_dashboard(path: str = ""):
 
             async function loadCustomForms(category = 'IT Forms') {
                 currentFormCategory = category;
-                document.getElementById('forms-category-header-title').innerText = category;
+                const titleEl = document.getElementById('forms-category-header-title');
+                if (titleEl) titleEl.innerText = category;
                 const token = await getAdminAuthToken();
 
                 try {
@@ -2844,8 +2845,10 @@ def get_admin_dashboard(path: str = ""):
                     const activeList = resActive.ok ? await resActive.json() : [];
                     const archivedList = resArchived.ok ? await resArchived.json() : [];
 
-                    document.getElementById('count-active-forms').innerText = activeList.length;
-                    document.getElementById('count-archived-forms').innerText = archivedList.length;
+                    const countActiveEl = document.getElementById('count-active-forms');
+                    if (countActiveEl) countActiveEl.innerText = activeList.length;
+                    const countArchivedEl = document.getElementById('count-archived-forms');
+                    if (countArchivedEl) countArchivedEl.innerText = archivedList.length;
 
                     mockCustomFormsData = (currentFormTabStatus === 'ARCHIVED') ? archivedList : activeList;
                     renderCustomFormsTable();
@@ -3156,9 +3159,14 @@ def get_admin_dashboard(path: str = ""):
             }
 
             async function submitCustomFormBuilder() {
+                const submitBtn = document.querySelector("#formBuilderModal .btn-primary-custom") || document.querySelector("#customFormModal .btn-primary-custom");
                 const name = document.getElementById('builderFormName').value.trim();
-                const catEl = document.getElementById('builderFormCategory') || document.getElementById('newFormCategorySelect');
-                const category = catEl ? catEl.value : currentFormCategory;
+                const catEl = document.getElementById('customFormCategory') || document.getElementById('builderFormCategory') || document.getElementById('newFormCategorySelect');
+                let category = (catEl && catEl.value.trim()) ? catEl.value.trim() : currentFormCategory;
+                if (catEl && catEl.options && catEl.selectedIndex >= 0) {
+                    const selectedOpt = catEl.options[catEl.selectedIndex];
+                    if (selectedOpt && selectedOpt.text) category = selectedOpt.text.trim();
+                }
 
                 if (!name) {
                     showToast('Please enter a form name.');
@@ -3173,6 +3181,8 @@ def get_admin_dashboard(path: str = ""):
                     const required = card.querySelector('.field-required-check').checked;
                     fields.push({ label, type, required });
                 });
+
+                if (submitBtn) submitBtn.disabled = true;
 
                 const token = await getAdminAuthToken();
                 try {
@@ -3192,13 +3202,27 @@ def get_admin_dashboard(path: str = ""):
 
                     if (res.ok) {
                         showToast(`Form '${name}' created and published successfully!`);
-                        if (currentBsModal) currentBsModal.hide();
+                        const modalEl = document.getElementById('formBuilderModal') || document.getElementById('customFormModal');
+                        if (modalEl) {
+                            const modal = bootstrap.Modal.getInstance(modalEl) || bootstrap.Modal.getOrCreateInstance(modalEl);
+                            if (modal) modal.hide();
+                        }
                         await loadCustomForms(category);
                     } else {
-                        showToast('Failed to save custom form.');
+                        const errData = await res.json().catch(() => ({}));
+                        const detailMsg = errData.detail ? (typeof errData.detail === 'string' ? errData.detail : JSON.stringify(errData.detail)) : 'Failed to save custom form.';
+                        console.error("Save form error detail:", res.status, errData);
+                        if (detailMsg.toLowerCase().includes('already exist')) {
+                            alert(`Form name '${name}' already exists in '${category}'!`);
+                        } else {
+                            showToast('Error: ' + detailMsg);
+                        }
                     }
                 } catch(err) {
-                    showToast('Error saving custom form.');
+                    console.error("submitCustomFormBuilder exception:", err);
+                    showToast('Error saving custom form: ' + err.message);
+                } finally {
+                    if (submitBtn) submitBtn.disabled = false;
                 }
             }
 

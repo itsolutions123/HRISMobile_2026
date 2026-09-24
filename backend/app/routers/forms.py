@@ -153,6 +153,14 @@ def create_form(form_in: CustomFormCreate, db: Session = Depends(get_db), curren
         db.commit()
         db.refresh(cat_obj)
 
+    existing_form = db.query(CustomForm).filter(
+        CustomForm.category_id == cat_obj.id,
+        CustomForm.name.ilike(form_in.name.strip()),
+        CustomForm.is_archived == False
+    ).first()
+    if existing_form:
+        raise HTTPException(status_code=400, detail="form name already exist")
+
     user_name = current_user.name or f"{current_user.first_name or ''} {current_user.last_name or ''}".strip() or "Admin"
     user_initials = "".join([n[0] for n in user_name.split() if n]).upper()[:2] if user_name else "SA"
 
