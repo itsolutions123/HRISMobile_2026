@@ -2706,9 +2706,9 @@ def get_admin_dashboard(path: str = ""):
                 history.pushState(null, '', '/admin/forms');
                 const pageTitle = document.getElementById('page-title');
                 if (pageTitle) pageTitle.innerText = 'Forms';
-                const formsView = document.getElementById('tab-forms-view');
-                if (formsView) {
-                    formsView.innerHTML = `
+                const container = document.getElementById('forms-list-container');
+                if (container) {
+                    container.innerHTML = `
                         <div class="d-flex flex-column align-items-center justify-content-center p-5 text-center" style="min-height: 400px;">
                             <i class="bi bi-folder2-open text-muted mb-3" style="font-size: 3rem;"></i>
                             <h5 class="fw-bold mb-2">No Form Categories</h5>
@@ -2727,6 +2727,40 @@ def get_admin_dashboard(path: str = ""):
                 if (pageTitle) pageTitle.innerText = catName;
                 const catHeaderTitle = document.getElementById('forms-category-header-title');
                 if (catHeaderTitle) catHeaderTitle.innerText = catName;
+                
+                const container = document.getElementById('forms-list-container');
+                if (container && !document.getElementById('customFormsTableBody')) {
+                    container.innerHTML = `
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div class="d-flex align-items-center gap-3">
+                                <ul class="nav nav-tabs nav-tabs-connecteam border-0 m-0" id="formsCategoryTabsBar"></ul>
+                                <button class="btn btn-outline-custom btn-sm fw-bold" onclick="openCreateCategoryModal()"><i class="bi bi-plus-lg me-1"></i> Create new category</button>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <small class="text-muted">Permissions</small>
+                                <div class="avatar-circle bg-dark text-white" style="width:28px; height:28px; font-size:11px;">SA</div>
+                            </div>
+                        </div>
+                        <div class="card border-0 shadow-sm rounded-3">
+                            <div class="card-body p-0">
+                                <table class="table align-middle mb-0">
+                                    <thead class="bg-light text-muted fs-7">
+                                        <tr>
+                                            <th class="ps-3" style="width: 30px;"><input type="checkbox" class="form-check-input"></th>
+                                            <th>NAME</th>
+                                            <th>STATUS</th>
+                                            <th>ASSIGNED TO</th>
+                                            <th>CREATOR</th>
+                                            <th>ADMINISTRATED BY</th>
+                                            <th>DATE CREATED</th>
+                                            <th class="text-end pe-3">ACTIONS</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="customFormsTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>`;
+                }
                 switchTab('forms-view');
                 renderSidebarFormsCategories();
                 loadCustomForms(catName);
@@ -3113,7 +3147,8 @@ def get_admin_dashboard(path: str = ""):
 
             async function submitCustomFormBuilder() {
                 const name = document.getElementById('builderFormName').value.trim();
-                const category = document.getElementById('builderFormCategory').value;
+                const catEl = document.getElementById('builderFormCategory') || document.getElementById('newFormCategorySelect');
+                const category = catEl ? catEl.value : currentFormCategory;
 
                 if (!name) {
                     showToast('Please enter a form name.');
