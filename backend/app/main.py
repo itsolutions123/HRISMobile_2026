@@ -761,8 +761,6 @@ def get_admin_dashboard(path: str = ""):
                                         <button class="btn btn-outline-custom btn-sm"><i class="bi bi-phone me-1"></i> Preview</button>
                                         <button class="btn btn-outline-custom btn-sm" onclick="showToast('Form Editor opened')"><i class="bi bi-pencil me-1"></i> Edit form</button>
                                         <button class="btn btn-outline-custom btn-sm" onclick="showToast('Form Settings opened')"><i class="bi bi-gear me-1"></i> Settings</button>
-                                        <button class="btn btn-outline-custom btn-sm"><i class="bi bi-three-dots"></i></button>
-                                        <span class="badge bg-light text-dark border px-2 py-1 fs-7"><i class="bi bi-mortarboard me-1 text-primary"></i> 0 / 4</span>
                                     </div>
                                 </div>
 
@@ -2361,7 +2359,7 @@ def get_admin_dashboard(path: str = ""):
                                 <td><code>${empId}</code></td>
                                 <td><small class="text-muted">${u.date_added || '05/20/2025'}</small></td>
                                 <td><small class="text-muted">${u.added_by || 'Admin'}</small></td>
-                                <td class="text-end">${actionBtn}</td>
+                                <td class="text-end" onclick="event.stopPropagation()">${actionBtn}</td>
                             </tr>`;
                     });
                 }
@@ -2885,12 +2883,12 @@ def get_admin_dashboard(path: str = ""):
                     const newBadge = f.isNew ? `<span class="badge bg-primary ms-2 rounded-pill" style="font-size:10px;">1 new</span>` : '';
                     const assignedBadge = f.assignedGroups.join(', ');
                     return `
-                        <tr>
-                            <td><input type="checkbox" class="form-check-input"></td>
+                        <tr style="cursor: pointer;" onclick="openFormDetailSubmissions(${f.id})">
+                            <td onclick="event.stopPropagation()"><input type="checkbox" class="form-check-input"></td>
                             <td>
-                                <a class="fw-bold text-dark text-decoration-none cursor-pointer" onclick="openFormDetailSubmissions(${f.id})">
+                                <span class="fw-bold text-dark">
                                     ${f.name}
-                                </a>
+                                </span>
                             </td>
                             <td><span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2 py-1 fs-7">${f.status}</span></td>
                             <td><span class="fw-bold text-dark">${f.entries}</span> ${newBadge}</td>
@@ -2909,9 +2907,85 @@ def get_admin_dashboard(path: str = ""):
                                 </div>
                             </td>
                             <td class="text-muted fs-7">${f.dateCreated}</td>
+                            <td class="text-end">
+                                <div class="d-flex align-items-center justify-content-end gap-1">
+                                    <button class="btn btn-sm btn-outline-secondary p-1 border-0" title="Archive Form" onclick="archiveCustomForm(${f.id}, '${f.name.replace(/'/g, "\'")}')">
+                                        <i class="bi bi-archive fs-6"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger p-1 border-0" title="Delete Form" onclick="deleteCustomForm(${f.id}, '${f.name.replace(/'/g, "\'")}')">
+                                        <i class="bi bi-trash fs-6"></i>
+                                    </button>
+                                </div>
+                            </td>
                         </tr>
                     `;
                 }).join('');
+            }
+
+            function showCustomModalAlert(title, message) {
+                let modalEl = document.getElementById('customAlertModal');
+                if (!modalEl) {
+                    const div = document.createElement('div');
+                    div.id = 'customAlertModal';
+                    div.className = 'modal fade';
+                    div.tabIndex = -1;
+                    div.innerHTML = `
+                        <div class="modal-dialog modal-dialog-centered modal-sm">
+                            <div class="modal-content text-center p-3 rounded-4 shadow">
+                                <div class="modal-body p-2">
+                                    <h6 class="fw-bold mb-2" id="customAlertModalTitle">Notice</h6>
+                                    <p class="text-secondary fs-7 mb-3" id="customAlertModalBody"></p>
+                                    <button type="button" class="btn btn-primary-custom w-100 rounded-pill fs-7 py-2" data-bs-dismiss="modal">OK</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    document.body.appendChild(div);
+                    modalEl = div;
+                }
+                document.getElementById('customAlertModalTitle').innerHTML = title;
+                document.getElementById('customAlertModalBody').innerHTML = message;
+                const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                modal.show();
+            }
+
+            async function deleteCustomForm(formId, formName) {
+                if (!confirm(`Are you sure you want to permanently delete form '${formName}'?`)) return;
+                const token = await getAdminAuthToken();
+                try {
+                    const res = await fetch('/api/forms/' + formId, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
+                    if (res.ok) {
+                        showToast(`Form '${formName}' deleted.`);
+                        await loadCustomForms(currentFormCategory);
+                    } else {
+                        const err = await res.json().catch(() => ({}));
+                        showCustomModalAlert('Delete Failed', err.detail || 'Could not delete form.');
+                    }
+                } catch(e) {
+                    showCustomModalAlert('Error', 'Network error deleting form: ' + e.message);
+                }
+            }
+
+            async function archiveCustomForm(formId, formName) {
+                const token = await getAdminAuthToken();
+                try {
+                    const res = await fetch('/api/forms/' + formId + '/archive', {
+                        method: 'PUT',
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
+                    if (res.ok) {
+                        showToast(`Form '${formName}' archived.`);
+                        await loadCustomForms(currentFormCategory);
+                    } else {
+                        const err = await res.json().catch(() => ({}));
+                        showCustomModalAlert('Archive Failed', err.detail || 'Could not archive form.');
+                    }
+                } catch(e) {
+                    showCustomModalAlert('Error', 'Network error archiving form: ' + e.message);
+                }
             }
 
             function filterCustomFormsList(query) {
@@ -3213,9 +3287,9 @@ def get_admin_dashboard(path: str = ""):
                         const detailMsg = errData.detail ? (typeof errData.detail === 'string' ? errData.detail : JSON.stringify(errData.detail)) : 'Failed to save custom form.';
                         console.error("Save form error detail:", res.status, errData);
                         if (detailMsg.toLowerCase().includes('already exist')) {
-                            alert(`Form name '${name}' already exists in '${category}'!`);
+                            showCustomModalAlert('Duplicate Form Name', `Form name '<b>${name}</b>' already exists in category '<b>${category}</b>'.`);
                         } else {
-                            showToast('Error: ' + detailMsg);
+                            showCustomModalAlert('Error Saving Form', detailMsg);
                         }
                     }
                 } catch(err) {
