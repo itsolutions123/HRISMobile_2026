@@ -2909,10 +2909,10 @@ def get_admin_dashboard(path: str = ""):
                             <td class="text-muted fs-7">${f.dateCreated}</td>
                             <td class="text-end">
                                 <div class="d-flex align-items-center justify-content-end gap-1">
-                                    <button class="btn btn-sm btn-outline-secondary p-1 border-0" title="Archive Form" onclick="archiveCustomForm(${f.id}, '${f.name.replace(/'/g, "\'")}')">
+                                    <button class="btn btn-sm btn-outline-secondary p-1 border-0" title="Archive Form" onclick="event.stopPropagation(); archiveCustomForm(${f.id}, '${f.name.replace(/'/g, "\'")}')">
                                         <i class="bi bi-archive fs-6"></i>
                                     </button>
-                                    <button class="btn btn-sm btn-outline-danger p-1 border-0" title="Delete Form" onclick="deleteCustomForm(${f.id}, '${f.name.replace(/'/g, "\'")}')">
+                                    <button class="btn btn-sm btn-outline-danger p-1 border-0" title="Delete Form" onclick="event.stopPropagation(); deleteCustomForm(${f.id}, '${f.name.replace(/'/g, "\'")}')">
                                         <i class="bi bi-trash fs-6"></i>
                                     </button>
                                 </div>
@@ -2949,24 +2949,68 @@ def get_admin_dashboard(path: str = ""):
                 modal.show();
             }
 
-            async function deleteCustomForm(formId, formName) {
-                if (!confirm(`Are you sure you want to permanently delete form '${formName}'?`)) return;
-                const token = await getAdminAuthToken();
-                try {
-                    const res = await fetch('/api/forms/' + formId, {
-                        method: 'DELETE',
-                        headers: { 'Authorization': 'Bearer ' + token }
-                    });
-                    if (res.ok) {
-                        showToast(`Form '${formName}' deleted.`);
-                        await loadCustomForms(currentFormCategory);
-                    } else {
-                        const err = await res.json().catch(() => ({}));
-                        showCustomModalAlert('Delete Failed', err.detail || 'Could not delete form.');
-                    }
-                } catch(e) {
-                    showCustomModalAlert('Error', 'Network error deleting form: ' + e.message);
+            function showConfirmDeleteModal(title, bodyHtml, confirmBtnText, onConfirm) {
+                let modalEl = document.getElementById('customConfirmDeleteModal');
+                if (!modalEl) {
+                    const div = document.createElement('div');
+                    div.id = 'customConfirmDeleteModal';
+                    div.className = 'modal fade';
+                    div.tabIndex = -1;
+                    div.innerHTML = `
+                        <div class="modal-dialog modal-dialog-centered" style="max-width: 420px;">
+                            <div class="modal-content border-0 p-4 rounded-4 shadow-lg">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h5 class="fw-bold mb-0 text-dark" id="confirmDeleteModalTitle"></h5>
+                                    <button type="button" class="btn-close rounded-circle bg-light p-2 fs-7" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <p class="text-secondary fs-7 mb-4" id="confirmDeleteModalBody"></p>
+                                <div class="d-flex justify-content-end gap-2">
+                                    <button type="button" class="btn btn-outline-secondary rounded-3 px-4 py-2 fs-7 fw-semibold border" data-bs-dismiss="modal">Cancel</button>
+                                    <button type="button" id="confirmDeleteModalBtn" class="btn btn-danger rounded-3 px-4 py-2 fs-7 fw-semibold bg-danger border-0"></button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    document.body.appendChild(div);
+                    modalEl = div;
                 }
+                document.getElementById('confirmDeleteModalTitle').innerText = title;
+                document.getElementById('confirmDeleteModalBody').innerHTML = bodyHtml;
+                const actionBtn = document.getElementById('confirmDeleteModalBtn');
+                actionBtn.innerText = confirmBtnText;
+                actionBtn.onclick = async () => {
+                    const modal = bootstrap.Modal.getInstance(modalEl);
+                    if (modal) modal.hide();
+                    await onConfirm();
+                };
+                const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                modal.show();
+            }
+
+            async function deleteCustomForm(formId, formName) {
+                showConfirmDeleteModal(
+                    'Delete form?',
+                    `This will permanently delete form <b>${formName}</b> and all associated submissions. This action cannot be undone.`,
+                    'Delete form',
+                    async () => {
+                        const token = await getAdminAuthToken();
+                        try {
+                            const res = await fetch('/api/forms/' + formId, {
+                                method: 'DELETE',
+                                headers: { 'Authorization': 'Bearer ' + token }
+                            });
+                            if (res.ok) {
+                                showToast(`Form '${formName}' deleted.`);
+                                await loadCustomForms(currentFormCategory);
+                            } else {
+                                const err = await res.json().catch(() => ({}));
+                                showCustomModalAlert('Delete Failed', err.detail || 'Could not delete form.');
+                            }
+                        } catch(e) {
+                            showCustomModalAlert('Error', 'Network error deleting form: ' + e.message);
+                        }
+                    }
+                );
             }
 
             async function archiveCustomForm(formId, formName) {
@@ -2993,7 +3037,10 @@ def get_admin_dashboard(path: str = ""):
             }
 
             function openFormDetailSubmissions(formId) {
-                const formObj = mockCustomFormsData.find(f => f.id === formId) || mockCustomFormsData[0];
+                const formObj = (typeof customFormsList !== 'undefined' && customFormsList.find(f => f.id === formId)) || (typeof mockCustomFormsData !== 'undefined' && mockCustomFormsData.find(f => f.id === formId)) || { name: 'Form #' + formId, entries: 0, category: currentFormCategory };
+                const catSlug = encodeURIComponent(formObj.category || currentFormCategory || 'Admin');
+                const formSlug = encodeURIComponent(formObj.id);
+                history.pushState({ formId: formId }, '', `/admin/Forms/${catSlug}/${formSlug}`);
                 document.getElementById('selected-form-title').innerText = formObj.name;
                 document.getElementById('form-submission-count-label').innerText = formObj.entries;
                 document.getElementById('forms-list-container').style.display = 'none';
@@ -3276,11 +3323,12 @@ def get_admin_dashboard(path: str = ""):
 
                     if (res.ok) {
                         showToast(`Form '${name}' created and published successfully!`);
-                        const modalEl = document.getElementById('formBuilderModal') || document.getElementById('customFormModal');
+                        const modalEl = document.getElementById('createCustomFormModal') || document.getElementById('newCustomFormModal') || document.getElementById('formBuilderModal') || document.getElementById('customFormModal');
                         if (modalEl) {
                             const modal = bootstrap.Modal.getInstance(modalEl) || bootstrap.Modal.getOrCreateInstance(modalEl);
                             if (modal) modal.hide();
                         }
+                        if (typeof resetCustomFormBuilder === 'function') resetCustomFormBuilder();
                         await loadCustomForms(category);
                     } else {
                         const errData = await res.json().catch(() => ({}));
