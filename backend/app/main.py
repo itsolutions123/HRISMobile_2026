@@ -2729,17 +2729,27 @@ def get_admin_dashboard(path: str = ""):
                 if (catHeaderTitle) catHeaderTitle.innerText = catName;
                 
                 const container = document.getElementById('forms-list-container');
-                if (container && !document.getElementById('customFormsTableBody')) {
+                if (container && !document.getElementById('custom-forms-tbody')) {
                     container.innerHTML = `
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <div class="d-flex align-items-center gap-3">
-                                <ul class="nav nav-tabs nav-tabs-connecteam border-0 m-0" id="formsCategoryTabsBar"></ul>
                                 <button class="btn btn-outline-custom btn-sm fw-bold" onclick="openCreateCategoryModal()"><i class="bi bi-plus-lg me-1"></i> Create new category</button>
                             </div>
                             <div class="d-flex align-items-center gap-2">
                                 <small class="text-muted">Permissions</small>
                                 <div class="avatar-circle bg-dark text-white" style="width:28px; height:28px; font-size:11px;">SA</div>
                             </div>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <ul class="nav nav-tabs border-bottom-0">
+                                <li class="nav-item">
+                                    <a class="nav-link active fw-bold text-dark" id="form-tab-active" href="#" onclick="switchFormTabStatus('ACTIVE'); return false;">Active (<span id="count-active-forms">0</span>)</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link fw-bold text-muted" id="form-tab-archived" href="#" onclick="switchFormTabStatus('ARCHIVED'); return false;">Archived (<span id="count-archived-forms">0</span>)</a>
+                                </li>
+                            </ul>
+                            <button class="btn btn-warning text-white fw-bold px-3 rounded-2" onclick="openFormBuilderModal()"><i class="bi bi-plus-lg me-1"></i> Add new</button>
                         </div>
                         <div class="card border-0 shadow-sm rounded-3">
                             <div class="card-body p-0">
@@ -2756,7 +2766,7 @@ def get_admin_dashboard(path: str = ""):
                                             <th class="text-end pe-3">ACTIONS</th>
                                         </tr>
                                     </thead>
-                                    <tbody id="customFormsTableBody"></tbody>
+                                    <tbody id="custom-forms-tbody"></tbody>
                                 </table>
                             </div>
                         </div>`;
@@ -2856,7 +2866,7 @@ def get_admin_dashboard(path: str = ""):
                 if (!tbody) return;
 
                 const isArchivedTarget = (currentFormTabStatus === 'ARCHIVED');
-                let items = mockCustomFormsData.filter(f => f.category === currentFormCategory && f.isArchived === isArchivedTarget);
+                let items = mockCustomFormsData.filter(f => (f.category === currentFormCategory || f.category_id === currentFormCategory) && ((f.isArchived !== undefined ? f.isArchived : f.is_archived) === isArchivedTarget));
 
                 if (searchFilter.trim() !== '') {
                     const term = searchFilter.toLowerCase();
