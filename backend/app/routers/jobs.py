@@ -27,6 +27,10 @@ class GroupCreate(BaseModel):
     name: str
     brand_name: Optional[str] = "Head Office"
     creator: Optional[str] = "Super Admin"
+    admins: Optional[List[str]] = []
+
+class GroupAdminUpdate(BaseModel):
+    admins: List[str]
 
 class GroupRename(BaseModel):
     new_name: str
@@ -163,13 +167,21 @@ def get_smart_groups(brand: Optional[str] = None, db: Session = Depends(get_db),
             b_obj = db.query(BrandLocation).filter(BrandLocation.id == g.brand_id).first()
             if b_obj:
                 b_name = b_obj.name
+        import json
+        admins_list = []
+        if getattr(g, "admins", None):
+            try:
+                admins_list = json.loads(g.admins)
+            except Exception:
+                admins_list = []
         result.append({
             "id": g.id,
             "name": g.name,
             "dept": g.dept or g.name.replace("HO - ", ""),
             "brand": b_name,
             "creator": g.creator,
-            "selected": g.selected
+            "selected": g.selected,
+            "admins": admins_list
         })
     return result
 
@@ -185,11 +197,13 @@ def create_smart_group(payload: GroupCreate, db: Session = Depends(get_db), curr
     if existing:
         return {"status": "exists", "id": existing.id}
 
+    import json
     group = SmartGroup(
         name=payload.name,
         dept=payload.name.replace("HO - ", ""),
         brand_id=b_id,
-        creator=current_user.name or "Super Admin"
+        creator=current_user.name or "Super Admin",
+        admins=json.dumps(payload.admins or [])
     )
     db.add(group)
     db.commit()
@@ -222,3 +236,17 @@ def delete_smart_group(group_name: str, db: Session = Depends(get_db), current_u
     db.delete(group)
     db.commit()
     return {"status": "success", "message": f"Group '{group_name}' removed"}
+
+@router.put("/groups/{group_name}/admins")
+def update_group_admins(group_name: str, payload: GroupAdminUpdate, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
+    if current_user.role not in ["Admin", "Superadmin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    group = db.query(SmartGroup).filter(SmartGroup.name == group_name).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Smart group not found")
+
+    import json
+    group.admins = json.dumps(payload.admins)
+    db.commit()
+    return {"status": "success", "admins": payload.admins}

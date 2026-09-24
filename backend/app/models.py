@@ -164,5 +164,6 @@ class SmartGroup(Base):
     name = Column(String, unique=True, index=True, nullable=False)
     dept = Column(String, nullable=True)
     creator = Column(String, default="Super Admin")
+    admins = Column(String, default="[]") # JSON list of employee IDs
     selected = Column(String, default="15 selected")
     created_at = Column(DateTime, default=datetime.utcnow)

@@ -1121,20 +1121,20 @@ def get_admin_dashboard(path: str = ""):
 
         <!-- EDIT CATEGORY MODAL (#editCategoryModal) -->
         <div class="modal fade" id="editCategoryModal" tabindex="-1" aria-hidden="true">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content border-0 shadow">
-                    <div class="modal-header border-bottom p-4">
-                        <h6 class="modal-title fw-bold text-dark m-0">Rename Form Category</h6>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
+                <div class="modal-content border-0 shadow-lg p-3" style="border-radius: 18px;">
+                    <div class="modal-header border-0 pb-0 pt-2 px-3 align-items-center">
+                        <h5 class="modal-title fw-bold text-dark m-0" style="font-size: 20px;">Rename Form Category</h5>
+                        <button type="button" class="btn-close text-muted" data-bs-dismiss="modal" aria-label="Close" style="font-size: 12px; background-color: #f1f3f5; border-radius: 50%; padding: 8px;"></button>
                     </div>
-                    <div class="modal-body p-4">
-                        <input type="hidden" id="editCategoryOldName">
-                        <label class="form-label fw-semibold text-secondary" style="font-size: 12px;">CATEGORY NAME</label>
-                        <input type="text" class="form-control" id="editCategoryNewName" placeholder="e.g. IT Support Forms">
+                    <div class="modal-body px-3 py-3">
+                        <input type="hidden" id="editCategoryId">
+                        <label class="form-label fw-semibold text-secondary" style="font-size: 11px; letter-spacing: 0.5px;">CATEGORY NAME</label>
+                        <input type="text" class="form-control" id="editCategoryNewName" placeholder="e.g. IT Support Forms" style="border-radius: 8px; padding: 10px 12px;">
                     </div>
-                    <div class="modal-footer border-top p-3">
-                        <button type="button" class="btn btn-outline-custom" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-primary-custom" onclick="submitEditCategory()">Update Category Name</button>
+                    <div class="modal-footer border-0 pt-0 pb-2 px-3 d-flex justify-content-end gap-2">
+                        <button type="button" class="btn btn-light fw-medium border" data-bs-dismiss="modal" style="border-radius: 10px; padding: 8px 18px; color: #333; background: #fff;">Cancel</button>
+                        <button type="button" class="btn btn-primary fw-medium" onclick="submitEditCategory()" style="border-radius: 10px; padding: 8px 18px; background-color: #007bff; border: none;">Save changes</button>
                     </div>
                 </div>
             </div>
@@ -1142,19 +1142,19 @@ def get_admin_dashboard(path: str = ""):
 
         <!-- CONFIRM DELETE CATEGORY MODAL (#confirmDeleteCategoryModal) -->
         <div class="modal fade" id="confirmDeleteCategoryModal" tabindex="-1" aria-hidden="true">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content border-0 shadow">
-                    <div class="modal-header border-bottom p-4">
-                        <h6 class="modal-title fw-bold text-dark m-0">Confirm Delete Category</h6>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
+                <div class="modal-content border-0 shadow-lg p-3" style="border-radius: 18px;">
+                    <div class="modal-header border-0 pb-0 pt-2 px-3 align-items-center">
+                        <h5 class="modal-title fw-bold text-dark m-0" style="font-size: 20px;">Delete category?</h5>
+                        <button type="button" class="btn-close text-muted" data-bs-dismiss="modal" aria-label="Close" style="font-size: 12px; background-color: #f1f3f5; border-radius: 50%; padding: 8px;"></button>
                     </div>
-                    <div class="modal-body p-4">
+                    <div class="modal-body px-3 py-3">
                         <input type="hidden" id="deleteCategoryName">
-                        <p class="m-0 text-dark">Are you sure you want to delete category <strong id="deleteCategoryLabel"></strong> and all associated forms?</p>
+                        <p class="m-0 text-muted" style="font-size: 14px; line-height: 1.5;">This will permanently delete category <strong id="deleteCategoryLabel" class="text-dark"></strong> and all associated forms. This action cannot be undone.</p>
                     </div>
-                    <div class="modal-footer border-top p-3">
-                        <button type="button" class="btn btn-outline-custom" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-danger" onclick="submitDeleteCategory()">Delete Category</button>
+                    <div class="modal-footer border-0 pt-0 pb-2 px-3 d-flex justify-content-end gap-2">
+                        <button type="button" class="btn btn-light fw-medium border" data-bs-dismiss="modal" style="border-radius: 10px; padding: 8px 18px; color: #333; background: #fff;">Cancel</button>
+                        <button type="button" class="btn btn-danger fw-medium" onclick="submitDeleteCategory()" style="border-radius: 10px; padding: 8px 18px; background-color: #f02849; border: none;">Delete category</button>
                     </div>
                 </div>
             </div>
@@ -1498,15 +1498,28 @@ def get_admin_dashboard(path: str = ""):
                 document.getElementById('nav-jobs').classList.remove('active');
                 document.getElementById('nav-users').classList.remove('active');
 
-                if (tab.startsWith('forms-')) {
+                if (tab === 'forms-view' || tab.startsWith('forms-')) {
                     if (formsView) formsView.style.display = 'block';
 
-                    const catName = tab.replace('forms-', '').replace(/-/g, ' ');
-                    const matchedCat = availableCategoriesList.find(c => c.name.toLowerCase() === catName.toLowerCase());
-                    const finalCatName = matchedCat ? matchedCat.name : (tab === 'forms-it' ? 'IT Forms' : 'Admin Forms');
+                    let finalCatName = currentFormCategory;
+                    if (!finalCatName) {
+                        const catName = tab.replace('forms-', '').replace(/-/g, ' ');
+                        const matchedCat = availableCategoriesList.find(c => c.name.toLowerCase() === catName.toLowerCase());
+                        if (matchedCat) {
+                            finalCatName = matchedCat.name;
+                        } else if (availableCategoriesList.length > 0) {
+                            finalCatName = availableCategoriesList[0].name;
+                        } else {
+                            finalCatName = 'Forms';
+                        }
+                    }
 
+                    currentFormCategory = finalCatName;
                     document.getElementById('page-title').innerText = finalCatName;
-                    if (updateUrl) {
+                    const headerTitleEl = document.getElementById('forms-category-header-title');
+                    if (headerTitleEl) headerTitleEl.innerText = finalCatName;
+
+                    if (updateUrl && finalCatName !== 'Forms') {
                         const urlSlug = finalCatName.toLowerCase().replace(/\s+/g, '-');
                         history.pushState(null, '', '/admin/forms/category/modules/' + urlSlug);
                     }
@@ -1948,15 +1961,15 @@ def get_admin_dashboard(path: str = ""):
                     });
 
                     panelsHtml += `
-                        <div class="card-custom p-0 overflow-hidden mb-4">
-                            <div class="p-3 bg-light border-bottom d-flex align-items-center justify-content-between">
+                        <div class="card-custom p-0 overflow-hidden mb-3 shadow-sm border-0">
+                            <div class="p-2 bg-light border-bottom d-flex align-items-center justify-content-between">
                                 <div class="d-flex align-items-center gap-2">
-                                    <i class="bi bi-chevron-right text-warning fs-6" style="cursor:pointer;" id="chevron-brand-${bIdx}" onclick="toggleBrandCollapse('${bIdx}')"></i>
+                                    <i class="bi bi-chevron-right text-warning fs-6" style="cursor:pointer; width:20px; text-align:center;" id="chevron-brand-${bIdx}" onclick="toggleBrandCollapse('${bIdx}')"></i>
                                     <span class="fw-bold text-dark fs-6" style="cursor:pointer;" onclick="toggleBrandCollapse('${bIdx}')">${brandName}</span>
-                                    <button class="btn btn-sm btn-outline-custom ms-2 py-0 px-2" onclick="openRenameBrandModal('${brandName}')"><i class="bi bi-pencil"></i> Edit</button>
-                                    <button class="btn btn-sm btn-outline-custom text-danger py-0 px-2" onclick="deleteBrandLocation('${brandName}')"><i class="bi bi-trash"></i> Delete Brand</button>
+                                    <button class="btn btn-sm btn-light border-0 ms-2 py-0 px-1 text-muted hover-primary" title="Rename Brand" onclick="openRenameBrandModal('${brandName}')"><i class="bi bi-pencil fs-7"></i></button>
+                                    <button class="btn btn-sm btn-light border-0 py-0 px-1 text-muted hover-danger" title="Delete Brand" onclick="deleteBrandLocation('${brandName}')"><i class="bi bi-trash fs-7"></i></button>
                                 </div>
-                                <button class="btn btn-sm btn-outline-custom" onclick="openAddGroupModal('${brandName}')"><i class="bi bi-plus-lg me-1"></i> Add Group to ${brandName}</button>
+                                <button class="btn btn-sm btn-outline-primary py-1 px-2 fw-medium fs-7" onclick="openAddGroupModal('${brandName}')"><i class="bi bi-plus-lg me-1"></i> Add Group</button>
                             </div>
 
                             <div class="table-responsive" id="brand-body-${bIdx}" style="display: none;">
@@ -2033,46 +2046,68 @@ def get_admin_dashboard(path: str = ""):
                 }
             }
 
-            async function deleteBrandLocation(brandName) {
-                if (!confirm(`Are you sure you want to delete Brand "${brandName}" and all its assigned groups?`)) return;
-
-                const token = await getAdminAuthToken();
-                try {
-                    const res = await fetch('/api/jobs/brands/' + encodeURIComponent(brandName), {
-                        method: 'DELETE',
-                        headers: { 'Authorization': 'Bearer ' + token }
-                    });
-                    if (res.ok) {
-                        if (selectedBrandView === brandName) selectedBrandView = 'ALL';
-                        await renderBrandSelectorOptions();
-                        await renderConnecteamProvisioningTable();
-                        showToast(`Brand ${brandName} deleted.`);
-                    } else {
-                        showToast('Failed to delete brand.');
+            function deleteBrandLocation(brandName) {
+                document.getElementById('confirmModalTitle').innerText = 'Delete Brand';
+                document.getElementById('confirmModalMessage').innerHTML = `Are you sure you want to delete <b>${brandName}</b>?<br><small class="text-danger">All assigned groups will also be deleted.</small>`;
+                
+                const btn = document.getElementById('confirmModalBtn');
+                const newBtn = btn.cloneNode(true);
+                btn.parentNode.replaceChild(newBtn, btn);
+                
+                const confirmModal = new bootstrap.Modal(document.getElementById('genericConfirmModal'));
+                
+                newBtn.onclick = async () => {
+                    confirmModal.hide();
+                    const token = await getAdminAuthToken();
+                    try {
+                        const res = await fetch('/api/jobs/brands/' + encodeURIComponent(brandName), {
+                            method: 'DELETE',
+                            headers: { 'Authorization': 'Bearer ' + token }
+                        });
+                        if (res.ok) {
+                            if (selectedBrandView === brandName) selectedBrandView = 'ALL';
+                            await renderBrandSelectorOptions();
+                            await renderConnecteamProvisioningTable();
+                            showToast(`Brand ${brandName} deleted.`);
+                        } else {
+                            showToast('Failed to delete brand.');
+                        }
+                    } catch(e) {
+                        showToast('Error deleting brand.');
                     }
-                } catch(e) {
-                    showToast('Error deleting brand.');
-                }
+                };
+                confirmModal.show();
             }
 
-            async function deleteSubGroup(groupName) {
-                if (!confirm(`Are you sure you want to remove group "${groupName}"?`)) return;
-
-                const token = await getAdminAuthToken();
-                try {
-                    const res = await fetch('/api/jobs/groups/' + encodeURIComponent(groupName), {
-                        method: 'DELETE',
-                        headers: { 'Authorization': 'Bearer ' + token }
-                    });
-                    if (res.ok) {
-                        await renderConnecteamProvisioningTable();
-                        showToast(`Group "${groupName}" removed.`);
-                    } else {
-                        showToast('Failed to delete group.');
+            function deleteSubGroup(groupName) {
+                document.getElementById('confirmModalTitle').innerText = 'Delete Group';
+                document.getElementById('confirmModalMessage').innerHTML = `Are you sure you want to remove group <b>${groupName}</b>?`;
+                
+                const btn = document.getElementById('confirmModalBtn');
+                const newBtn = btn.cloneNode(true);
+                btn.parentNode.replaceChild(newBtn, btn);
+                
+                const confirmModal = new bootstrap.Modal(document.getElementById('genericConfirmModal'));
+                
+                newBtn.onclick = async () => {
+                    confirmModal.hide();
+                    const token = await getAdminAuthToken();
+                    try {
+                        const res = await fetch('/api/jobs/groups/' + encodeURIComponent(groupName), {
+                            method: 'DELETE',
+                            headers: { 'Authorization': 'Bearer ' + token }
+                        });
+                        if (res.ok) {
+                            await renderConnecteamProvisioningTable();
+                            showToast(`Group "${groupName}" removed.`);
+                        } else {
+                            showToast('Failed to delete group.');
+                        }
+                    } catch(e) {
+                        showToast('Error deleting group.');
                     }
-                } catch(e) {
-                    showToast('Error deleting group.');
-                }
+                };
+                confirmModal.show();
             }
 
             async function viewGroupDetails(groupName, brand, dept) {
@@ -2184,15 +2219,18 @@ def get_admin_dashboard(path: str = ""):
                 renderDetailMembers(filtered);
             }
 
-            function openAddGroupModal(defaultBrand = 'Head Office') {
-                renderBrandSelectorOptions();
+            async function openAddGroupModal(defaultBrand = 'Head Office') {
+                await renderBrandSelectorOptions();
                 document.getElementById('modalGroupName').value = '';
-                document.getElementById('modalBrandSelect').value = defaultBrand;
+                const brandSelect = document.getElementById('modalBrandSelect');
+                if (brandSelect) {
+                    brandSelect.value = defaultBrand;
+                }
                 currentBsModal = new bootstrap.Modal(document.getElementById('groupModal'));
                 currentBsModal.show();
             }
 
-            function saveSmartGroup() {
+            async function saveSmartGroup() {
                 const name = document.getElementById('modalGroupName').value.trim();
                 const brand = document.getElementById('modalBrandSelect').value;
                 if (!name) {
@@ -2200,19 +2238,37 @@ def get_admin_dashboard(path: str = ""):
                     return;
                 }
 
-                let groups = getStoredGroups();
-                groups.push({
-                    name: name,
-                    creator: 'Super Admin',
-                    selected: '10 selected',
-                    brand: brand,
-                    dept: name.replace('HO - ', '')
-                });
-                setStoredGroups(groups);
+                const token = await getAdminAuthToken();
+                try {
+                    const res = await fetch('/api/jobs/groups', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + token
+                        },
+                        body: JSON.stringify({
+                            name: name,
+                            brand_name: brand
+                        })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                        showToast(data.detail || 'Failed to create group.');
+                        return;
+                    }
 
-                renderConnecteamProvisioningTable();
-                showToast('Smart Group created.');
-                if (currentBsModal) currentBsModal.hide();
+                    if (typeof loadSmartGroups === 'function') {
+                        await loadSmartGroups();
+                    } else if (typeof renderConnecteamProvisioningTable === 'function') {
+                        renderConnecteamProvisioningTable();
+                    }
+
+                    showToast('Smart Group created successfully.');
+                    if (currentBsModal) currentBsModal.hide();
+                } catch (err) {
+                    console.error('Error saving smart group:', err);
+                    showToast('Error saving group.');
+                }
             }
 
             function openRenameGroupModal() {
@@ -2625,7 +2681,7 @@ def get_admin_dashboard(path: str = ""):
                                         <i class="bi bi-three-dots-vertical fs-7"></i>
                                     </button>
                                     <ul class="dropdown-menu shadow-sm border-0 fs-7">
-                                        <li><a class="dropdown-item" onclick="openEditCategoryModal('${c.name}')"><i class="bi bi-pencil me-2 text-primary"></i> Edit (Rename)</a></li>
+                                        <li><a class="dropdown-item" onclick="openEditCategoryModal(${c.id}, '${c.name}')"><i class="bi bi-pencil me-2 text-primary"></i> Edit (Rename)</a></li>
                                         <li><a class="dropdown-item" onclick="archiveCategoryForms('${c.name}')"><i class="bi bi-archive me-2 text-warning"></i> Archive Category</a></li>
                                         <li><hr class="dropdown-divider"></li>
                                         <li><a class="dropdown-item text-danger" onclick="openConfirmDeleteCategoryModal(${c.id}, '${c.name}')"><i class="bi bi-trash me-2"></i> Delete Category</a></li>
@@ -2645,6 +2701,10 @@ def get_admin_dashboard(path: str = ""):
             function selectFormCategoryTab(catName) {
                 currentFormCategory = catName;
                 localStorage.setItem('lastSelectedFormCategory', catName);
+                const pageTitle = document.getElementById('page-title');
+                if (pageTitle) pageTitle.innerText = catName;
+                const catHeaderTitle = document.getElementById('forms-category-header-title');
+                if (catHeaderTitle) catHeaderTitle.innerText = catName;
                 switchTab('forms-view');
                 renderSidebarFormsCategories();
                 loadCustomForms(catName);
@@ -2864,21 +2924,21 @@ def get_admin_dashboard(path: str = ""):
                 }
             }
 
-            function openEditCategoryModal(oldName) {
-                document.getElementById('editCategoryOldName').value = oldName;
-                document.getElementById('editCategoryNewName').value = oldName;
+            function openEditCategoryModal(catId, catName) {
+                document.getElementById('editCategoryId').value = catId;
+                document.getElementById('editCategoryNewName').value = catName;
                 currentBsModal = new bootstrap.Modal(document.getElementById('editCategoryModal'));
                 currentBsModal.show();
             }
 
             async function submitEditCategory() {
-                const oldName = document.getElementById('editCategoryOldName').value;
+                const catId = document.getElementById('editCategoryId').value;
                 const newName = document.getElementById('editCategoryNewName').value.trim();
-                if (!newName) return;
+                if (!newName || !catId) return;
 
                 const token = await getAdminAuthToken();
                 try {
-                    const res = await fetch(`/api/forms/categories/${encodeURIComponent(oldName)}`, {
+                    const res = await fetch(`/api/forms/categories/${catId}`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
                         body: JSON.stringify({ name: newName })
@@ -2886,6 +2946,11 @@ def get_admin_dashboard(path: str = ""):
                     if (res.ok) {
                         showToast(`Category renamed to '${newName}'.`);
                         if (currentBsModal) currentBsModal.hide();
+                        currentFormCategory = newName;
+                        localStorage.setItem('lastSelectedFormCategory', newName);
+                        await renderSidebarFormsCategories();
+                        const titleEl = document.getElementById('formsCategoryPageTitle') || document.getElementById('formsPageHeaderTitle');
+                        if (titleEl) titleEl.innerText = newName;
                         loadCustomForms(newName);
                     } else {
                         showToast('Failed to rename category.');
@@ -2917,8 +2982,31 @@ def get_admin_dashboard(path: str = ""):
                         showToast(`Category '${catName}' deleted.`);
                         if (currentBsModal) currentBsModal.hide();
                         await renderSidebarFormsCategories();
-                        const nextCat = availableCategoriesList.length > 0 ? availableCategoriesList[0].name : 'IT Forms';
-                        selectFormCategoryTab(nextCat);
+                        if (availableCategoriesList.length > 0) {
+                            selectFormCategoryTab(availableCategoriesList[0].name);
+                        } else {
+                            currentFormCategory = null;
+                            localStorage.removeItem('lastSelectedFormCategory');
+                            history.pushState({}, '', '/admin/forms/');
+                            const pageTitle = document.getElementById('page-title');
+                            if (pageTitle) pageTitle.innerText = 'Forms';
+                            const catHeaderTitle = document.getElementById('forms-category-header-title');
+                            if (catHeaderTitle) catHeaderTitle.innerText = 'Forms';
+                            const tableContainer = document.getElementById('custom-forms-list-body');
+                            if (tableContainer) {
+                                tableContainer.innerHTML = `
+                                    <tr>
+                                        <td colspan="6" class="text-center py-5 text-muted">
+                                            <i class="bi bi-folder-x fs-1 d-block mb-2 text-secondary"></i>
+                                            <h6 class="fw-bold mb-1">No Form Categories Available</h6>
+                                            <p class="fs-7 mb-3">Create custom forms for your department by adding a new category first.</p>
+                                            <button class="btn btn-primary btn-sm rounded-pill px-3" onclick="openCreateCategoryModal()">
+                                                <i class="bi bi-plus-lg me-1"></i> Create New Category
+                                            </button>
+                                        </td>
+                                    </tr>`;
+                            }
+                        }
                     } else {
                         const errData = await res.json().catch(() => ({}));
                         showToast(errData.detail || 'Failed to delete category.');
@@ -3039,6 +3127,25 @@ def get_admin_dashboard(path: str = ""):
                 await handleUrlRoutingOnLoad();
             });
         </script>
-    </body>
+    
+    <!-- Generic Confirm Modal -->
+    <div class="modal fade" id="genericConfirmModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">
+            <div class="modal-content border-0 shadow-lg p-3" style="border-radius: 18px;">
+                <div class="modal-header border-0 pb-0 pt-2 px-3 align-items-center">
+                    <h5 class="modal-title fw-bold text-dark m-0" id="confirmModalTitle" style="font-size: 20px;">Confirm Action</h5>
+                    <button type="button" class="btn-close text-muted" data-bs-dismiss="modal" aria-label="Close" style="font-size: 12px; background-color: #f1f3f5; border-radius: 50%; padding: 8px;"></button>
+                </div>
+                <div class="modal-body px-3 py-3">
+                    <p class="m-0 text-muted" id="confirmModalMessage" style="font-size: 14px; line-height: 1.5;">Are you sure?</p>
+                </div>
+                <div class="modal-footer border-0 pt-0 pb-2 px-3 d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-light fw-medium border" data-bs-dismiss="modal" style="border-radius: 10px; padding: 8px 18px; color: #333; background: #fff;">Cancel</button>
+                    <button type="button" class="btn btn-danger fw-medium" id="confirmModalBtn" style="border-radius: 10px; padding: 8px 18px; background-color: #f02849; border: none;">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
     </html>
     """
