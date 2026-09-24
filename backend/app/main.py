@@ -2914,6 +2914,10 @@ def get_admin_dashboard(path: str = ""):
             function selectFormSource(sourceType) {
                 if (currentBsModal) currentBsModal.hide();
                 openCreateCustomFormModal();
+                if (currentFormCategory) {
+                    const catSelect = document.getElementById('newFormCategorySelect');
+                    if (catSelect) catSelect.value = currentFormCategory;
+                }
                 if (sourceType === 'template') {
                     setTimeout(() => {
                         addBuilderField();
