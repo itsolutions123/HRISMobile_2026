@@ -183,6 +183,30 @@ def create_form(form_in: CustomFormCreate, db: Session = Depends(get_db), curren
     db.refresh(new_form)
     return {"id": new_form.id, "name": new_form.name, "category": cat_obj.name, "assignmentType": new_form.assignment_type}
 
+@router.get("/{form_id}")
+def get_form_detail(form_id: int, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
+    form_obj = db.query(CustomForm).filter(CustomForm.id == form_id).first()
+    if not form_obj:
+        raise HTTPException(status_code=404, detail="Form not found")
+    cat_item = db.query(FormCategory).filter(FormCategory.id == form_obj.category_id).first()
+    total_employees_count = db.query(Employee).count()
+    submission_count = db.query(FormSubmission).filter(FormSubmission.form_id == form_obj.id).count()
+    
+    return {
+        "id": form_obj.id,
+        "category": cat_item.name if cat_item else "General",
+        "name": form_obj.name,
+        "status": form_obj.status,
+        "entries": submission_count,
+        "assigned_groups": form_obj.assigned_groups.split(",") if form_obj.assigned_groups else [],
+        "assignment_type": form_obj.assignment_type or "Dynamic",
+        "totalAssignees": total_employees_count,
+        "createdBy": form_obj.created_by,
+        "dateCreated": form_obj.date_created,
+        "isArchived": form_obj.is_archived,
+        "schema_fields": json.loads(form_obj.schema_fields) if form_obj.schema_fields else []
+    }
+
 @router.put("/{form_id}")
 def update_form(form_id: int, form_in: CustomFormUpdate, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
     if current_user.role not in ["Admin", "Superadmin"]:

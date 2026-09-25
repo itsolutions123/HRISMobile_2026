@@ -760,7 +760,17 @@ def get_admin_dashboard(path: str = ""):
                                         <div class="avatar-circle bg-dark text-white" style="width:28px; height:28px; font-size:11px;">SA</div>
                                         <button class="btn btn-outline-custom btn-sm"><i class="bi bi-phone me-1"></i> Preview</button>
                                         <button class="btn btn-outline-custom btn-sm" onclick="showToast('Form Editor opened')"><i class="bi bi-pencil me-1"></i> Edit form</button>
-                                        <button class="btn btn-outline-custom btn-sm" onclick="showToast('Form Settings opened')"><i class="bi bi-gear me-1"></i> Settings</button>
+                                        <div class="dropdown d-inline-block">
+                                            <button class="btn btn-outline-custom btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                                <i class="bi bi-gear me-1"></i> Settings
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 rounded-3">
+                                                <li><a class="dropdown-item fs-7 py-2" href="#" onclick="openFormAssignmentsModal(event); return false;"><i class="bi bi-people me-2"></i>Edit assignments</a></li>
+                                                <li><a class="dropdown-item fs-7 py-2" href="#" onclick="copyFormShareableLink(); return false;"><i class="bi bi-link-45deg me-2"></i>Copy shareable link</a></li>
+                                                <li><hr class="dropdown-divider"></li>
+                                                <li><a class="dropdown-item fs-7 py-2 text-danger" href="#" onclick="archiveCurrentFormFromDetail(); return false;"><i class="bi bi-archive me-2"></i>Archive</a></li>
+                                            </ul>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -1159,7 +1169,7 @@ def get_admin_dashboard(path: str = ""):
         </div>
 
         <!-- EDIT ASSIGNMENTS DRAWER (#editAssignmentsModal) -->
-        <div class="offcanvas offcanvas-end offcanvas-group-drawer" tabindex="-1" id="editAssignmentsModal">
+        <div class="offcanvas offcanvas-end offcanvas-group-drawer" tabindex="-1" id="editAssignmentsOffcanvas">
             <div class="offcanvas-header border-bottom p-4 d-flex justify-content-between align-items-center bg-light">
                 <h5 class="offcanvas-title fw-bold text-dark m-0">Edit Form Assignments</h5>
                 <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas"></button>
@@ -1191,6 +1201,114 @@ def get_admin_dashboard(path: str = ""):
                     </div>
                 </div>
                 <button type="button" class="btn btn-primary-custom w-100 py-2" onclick="submitAssignmentsDrawer()">Save Assignments</button>
+            </div>
+        </div>
+
+        <!-- EDIT ASSIGNMENTS MODAL -->
+        <div class="modal fade" id="editAssignmentsModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 shadow-lg rounded-4">
+                    <div class="modal-header border-bottom-0 pb-0 pt-4 px-4 position-relative">
+                        <div class="w-100 text-center">
+                            <h5 class="modal-title fw-bold text-dark m-0">Edit assignments</h5>
+                        </div>
+                        <button type="button" class="btn-close position-absolute end-0 top-0 m-4" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <div class="text-center mb-4">
+                            <h6 class="fw-bold text-dark mb-1">Select assignees</h6>
+                            <p class="text-muted fs-7 mb-0">You can select groups, specific users, or both</p>
+                        </div>
+
+                        <!-- Smart groups section -->
+                        <div class="card border rounded-3 p-3 mb-3 bg-light-subtle">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="fw-semibold text-dark fs-7"><i class="bi bi-people me-2"></i>Smart groups</span>
+                                <div class="dropdown">
+                                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle rounded-3 fs-7" type="button" data-bs-toggle="dropdown" id="smartGroupSelectBtn">
+                                        Select groups
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 p-2" style="max-height: 250px; overflow-y: auto;">
+                                        <li class="px-2 pb-2">
+                                            <input type="text" class="form-control form-control-sm" placeholder="Filter by brand/group..." id="smartGroupFilterInput" oninput="filterSmartGroupDropdown()">
+                                        </li>
+                                        <li><hr class="dropdown-divider my-1"></li>
+                                        <div id="smartGroupDropdownOptions">
+                                            <li><a class="dropdown-item rounded-2 fs-7" href="#" onclick="toggleSmartGroupSelection('All users group'); return false;">All users group</a></li>
+                                            <li><a class="dropdown-item rounded-2 fs-7" href="#" onclick="toggleSmartGroupSelection('HO - I.T.'); return false;">HO - I.T.</a></li>
+                                            <li><a class="dropdown-item rounded-2 fs-7" href="#" onclick="toggleSmartGroupSelection('Management Group'); return false;">Management Group</a></li>
+                                            <li><a class="dropdown-item rounded-2 fs-7" href="#" onclick="toggleSmartGroupSelection('Store Operations'); return false;">Store Operations</a></li>
+                                        </div>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="d-flex flex-wrap gap-1 mb-3" id="selectedSmartGroupsBadges">
+                                <span class="badge bg-white text-dark border px-2 py-1 fs-7 rounded-2">All users group <i class="bi bi-x ms-1 style-pointer" onclick="removeSmartGroupBadge('All users group')"></i></span>
+                            </div>
+                            <div class="form-check fs-7 mb-1">
+                                <input class="form-check-input" type="radio" name="assignmentGroupType" id="typeDynamic" value="dynamic" checked>
+                                <label class="form-check-label fw-medium text-dark" for="typeDynamic">Dynamic <span class="text-muted fw-normal">Current and future group members</span></label>
+                            </div>
+                            <div class="form-check fs-7">
+                                <input class="form-check-input" type="radio" name="assignmentGroupType" id="typeFixed" value="fixed">
+                                <label class="form-check-label fw-medium text-dark" for="typeFixed">Fixed <span class="text-muted fw-normal">Only current group members</span></label>
+                            </div>
+                        </div>
+
+                        <!-- Specific users section -->
+                        <div class="card border rounded-3 p-3 mb-4 bg-light-subtle">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="fw-semibold text-dark fs-7"><i class="bi bi-person me-2"></i>Specific users</span>
+                                <button type="button" class="btn btn-outline-secondary btn-sm rounded-3 fs-7" onclick="openSpecificUsersModal()">Select Users <i class="bi bi-chevron-down ms-1"></i></button>
+                            </div>
+                            <div class="d-flex flex-wrap gap-1 mt-2" id="selectedSpecificUsersBadges"></div>
+                        </div>
+
+                        <!-- Total assignees banner -->
+                        <div class="card border-0 bg-light rounded-3 p-3 mb-4">
+                            <div class="d-flex align-items-center gap-3">
+                                <h2 class="fw-bold text-dark m-0" id="totalAssigneesCount">86</h2>
+                                <div>
+                                    <div class="fw-bold text-dark fs-7">Total assignees</div>
+                                    <div class="text-muted fs-7">The current number may change when Dynamic is selected</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="button" class="btn btn-primary-custom w-100 py-2 rounded-3 fw-bold" onclick="saveFormAssignments()">SAVE</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SPECIFIC USERS SELECTOR SUB-MODAL (STRICT BACKDROP) -->
+        <div class="modal fade" id="specificUsersSelectModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 shadow-lg rounded-4">
+                    <div class="modal-header border-bottom p-3">
+                        <h6 class="modal-title fw-bold text-dark m-0"><i class="bi bi-people me-2 text-primary"></i>Select Specific Users</h6>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body p-3">
+                        <div class="input-group mb-3">
+                            <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                            <input type="text" class="form-control border-start-0" id="userSearchInput" placeholder="Search user name or email..." oninput="filterSpecificUsersList()">
+                        </div>
+                        <div class="list-group list-group-flush border rounded-3" style="max-height: 280px; overflow-y: auto;" id="specificUsersListGroup">
+                            <label class="list-group-item d-flex align-items-center gap-2 style-pointer">
+                                <input class="form-check-input me-1" type="checkbox" value="Alejandro Luanzon Jr." onchange="updateSpecificUsersSelection()">
+                                <div class="fs-7"><strong class="text-dark">Alejandro Luanzon Jr.</strong> <span class="text-muted">(alejandro@example.com)</span></div>
+                            </label>
+                            <label class="list-group-item d-flex align-items-center gap-2 style-pointer">
+                                <input class="form-check-input me-1" type="checkbox" value="Drenzo Pornel" onchange="updateSpecificUsersSelection()">
+                                <div class="fs-7"><strong class="text-dark">Drenzo Pornel</strong> <span class="text-muted">(drenzo@example.com)</span></div>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-top-0 p-3">
+                        <button type="button" class="btn btn-primary-custom btn-sm px-4 rounded-3" data-bs-dismiss="modal">Apply Selection</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -1551,16 +1669,30 @@ def get_admin_dashboard(path: str = ""):
             }
 
             async function handleUrlRoutingOnLoad() {
-                const path = window.location.pathname;
+                const path = window.location.pathname.toLowerCase();
                 if (path.includes('/admin/smart-groups')) {
                     switchTab('jobs', false);
                 } else if (path.includes('/admin/users')) {
                     switchTab('users', false);
                 } else if (path.includes('/admin/forms/category/modules/')) {
-                    const slug = path.split('/admin/forms/category/modules/')[1];
+                    const slug = window.location.pathname.split('/admin/forms/category/modules/')[1];
                     if (slug) {
                         const catName = slug.replace(/-/g, ' ');
                         await selectFormCategoryTabBySlug(catName);
+                    } else {
+                        switchTab('clock', false);
+                    }
+                } else if (path.includes('/admin/forms/')) {
+                    const parts = window.location.pathname.split('/admin/Forms/');
+                    const altParts = window.location.pathname.split('/admin/forms/');
+                    const segment = parts.length > 1 ? parts[1] : (altParts.length > 1 ? altParts[1] : '');
+                    if (segment) {
+                        const catName = segment.split('/')[0];
+                        const formId = segment.split('/')[1];
+                        await selectFormCategoryTabBySlug(catName);
+                        if (formId) {
+                            await openFormDetailSubmissions(formId);
+                        }
                     } else {
                         switchTab('clock', false);
                     }
@@ -2630,6 +2762,7 @@ def get_admin_dashboard(path: str = ""):
             let currentFormTabStatus = 'ACTIVE';
             let fetchedCustomFormsList = [];
             let availableCategoriesList = [];
+            let customFormsList = [];
 
             async function loadCategoryTabsBar() {
                 await renderSidebarFormsCategories();
@@ -2867,7 +3000,8 @@ def get_admin_dashboard(path: str = ""):
                 if (!tbody) return;
 
                 const isArchivedTarget = (currentFormTabStatus === 'ARCHIVED');
-                let items = mockCustomFormsData.filter(f => (f.category === currentFormCategory || f.category_id === currentFormCategory) && ((f.isArchived !== undefined ? f.isArchived : f.is_archived) === isArchivedTarget));
+                const dataSource = (typeof customFormsList !== 'undefined' && customFormsList.length > 0) ? customFormsList : mockCustomFormsData;
+                let items = dataSource.filter(f => (f.category === currentFormCategory || f.category_id === currentFormCategory || String(f.category).toLowerCase() === String(currentFormCategory).toLowerCase()) && ((f.isArchived !== undefined ? f.isArchived : f.is_archived) == isArchivedTarget));
 
                 if (searchFilter.trim() !== '') {
                     const term = searchFilter.toLowerCase();
@@ -2883,7 +3017,7 @@ def get_admin_dashboard(path: str = ""):
                     const newBadge = f.isNew ? `<span class="badge bg-primary ms-2 rounded-pill" style="font-size:10px;">1 new</span>` : '';
                     const assignedBadge = f.assignedGroups.join(', ');
                     return `
-                        <tr style="cursor: pointer;" onclick="openFormDetailSubmissions(${f.id})">
+                        <tr style="cursor: pointer;" onclick="openFormDetailSubmissions('${f.id}')">
                             <td onclick="event.stopPropagation()"><input type="checkbox" class="form-check-input"></td>
                             <td>
                                 <span class="fw-bold text-dark">
@@ -3036,37 +3170,196 @@ def get_admin_dashboard(path: str = ""):
                 renderCustomFormsTable(query);
             }
 
-            function openFormDetailSubmissions(formId) {
-                const formObj = (typeof customFormsList !== 'undefined' && customFormsList.find(f => f.id === formId)) || (typeof mockCustomFormsData !== 'undefined' && mockCustomFormsData.find(f => f.id === formId)) || { name: 'Form #' + formId, entries: 0, category: currentFormCategory };
-                const catSlug = encodeURIComponent(formObj.category || currentFormCategory || 'Admin');
-                const formSlug = encodeURIComponent(formObj.id);
-                history.pushState({ formId: formId }, '', `/admin/Forms/${catSlug}/${formSlug}`);
-                document.getElementById('selected-form-title').innerText = formObj.name;
-                document.getElementById('form-submission-count-label').innerText = formObj.entries;
+            async function openFormDetailSubmissions(formId) {
+                if (typeof customFormsList === 'undefined' || !customFormsList || customFormsList.length === 0) {
+                    await loadCustomForms(currentFormCategory || 'Admin');
+                }
+                const formObj = (typeof customFormsList !== 'undefined' && customFormsList.find(f => String(f.id) === String(formId))) ||
+                                (typeof mockCustomFormsData !== 'undefined' && mockCustomFormsData.find(f => String(f.id) === String(formId))) ||
+                                { id: formId, name: 'Form #' + formId, entries: 0, category: currentFormCategory };
+                
+                const resolvedCategory = formObj.category || currentFormCategory || 'Admin';
+                const catSlug = encodeURIComponent(resolvedCategory);
+                const validFormId = formObj.id || formId;
+                
+                if (validFormId && validFormId !== 'undefined') {
+                    history.pushState({ formId: validFormId }, '', `/admin/Forms/${catSlug}/${validFormId}`);
+                }
+                
+                document.getElementById('selected-form-title').innerText = formObj.name && formObj.name !== ('Form #' + formId) ? formObj.name : (formObj.title || formObj.name || ('Form #' + formId));
+                const countLbl = document.getElementById('form-submission-count-label');
+                if (countLbl) countLbl.innerText = formObj.entries || 0;
+                
                 document.getElementById('forms-list-container').style.display = 'none';
                 document.getElementById('form-detail-submissions-container').style.display = 'block';
 
                 const tbody = document.getElementById('form-submissions-tbody');
                 if (tbody) {
-                    tbody.innerHTML = `
-                        <tr>
-                            <td><input type="checkbox" class="form-check-input"></td>
-                            <td><span class="fw-bold text-dark">Alejandro Luanzon Jr.</span></td>
-                            <td>09/18/2026, 08:30 AM</td>
-                            <td><span class="badge bg-light text-dark border fw-normal fs-7">HO - I.T.</span></td>
-                            <td><span class="badge bg-success-subtle text-success">Submitted</span></td>
-                            <td class="text-end"><button class="btn btn-outline-custom btn-sm" onclick="showToast('Viewing submission response details...')"><i class="bi bi-eye"></i> View</button></td>
-                        </tr>
-                        <tr>
-                            <td><input type="checkbox" class="form-check-input"></td>
-                            <td><span class="fw-bold text-dark">Drenzo Pornel</span></td>
-                            <td>09/17/2026, 04:15 PM</td>
-                            <td><span class="badge bg-light text-dark border fw-normal fs-7">Management Group</span></td>
-                            <td><span class="badge bg-success-subtle text-success">Submitted</span></td>
-                            <td class="text-end"><button class="btn btn-outline-custom btn-sm" onclick="showToast('Viewing submission response details...')"><i class="bi bi-eye"></i> View</button></td>
-                        </tr>
-                    `;
+                    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-muted fs-7">No submissions found.</td></tr>`;
                 }
+            }
+
+            
+            // EDIT ASSIGNMENTS MODAL HANDLERS
+            let currentEditingFormAssignments = {
+                smartGroups: ['All users group'],
+                specificUsers: [],
+                assignmentType: 'dynamic'
+            };
+
+            async function openFormAssignmentsModal(evt) {
+                if (evt && typeof evt.preventDefault === 'function') {
+                    evt.preventDefault();
+                }
+                // Extract current form ID from path e.g. /admin/Forms/Admin/57
+                const pathParts = window.location.pathname.split('/').filter(Boolean);
+                const lastPart = pathParts[pathParts.length - 1];
+                const formIdInput = document.getElementById('assignmentFormId');
+                let targetFormId = '';
+                if (lastPart && !isNaN(parseInt(lastPart))) {
+                    targetFormId = lastPart;
+                } else if (typeof currentFormId !== 'undefined' && currentFormId) {
+                    targetFormId = currentFormId;
+                }
+                if (formIdInput) formIdInput.value = targetFormId;
+
+                // Close open dropdowns
+                document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
+                document.querySelectorAll('.dropdown-toggle.show').forEach(t => t.classList.remove('show'));
+
+                // Hydrate checkboxes from server before opening
+                if (targetFormId) {
+                    try {
+                        const token = await getAdminAuthToken();
+                        const res = await fetch(`${window.location.origin}/api/forms/${targetFormId}`, {
+                            headers: { 'Authorization': 'Bearer ' + token }
+                        });
+                        if (res.ok) {
+                            const formData = await res.json();
+                            const assigned = formData.assigned_groups || [];
+                            document.querySelectorAll('.assignment-group-check').forEach(chk => {
+                                chk.checked = assigned.includes(chk.value);
+                            });
+                        }
+                    } catch (e) {
+                        console.warn('Failed to fetch assigned_groups for form:', e);
+                    }
+                }
+
+                const drawerEl = document.getElementById('editAssignmentsOffcanvas');
+                if (drawerEl) {
+                    if (typeof renderAssignmentsModalState === 'function') {
+                        renderAssignmentsModalState();
+                    }
+                    const bsOffcanvas = bootstrap.Offcanvas.getOrCreateInstance(drawerEl);
+                    bsOffcanvas.show();
+                } else {
+                    console.error('Drawer element #editAssignmentsOffcanvas not found.');
+                }
+            }
+
+            function renderAssignmentsModalState() {
+                // Render Smart Groups badges
+                const sgContainer = document.getElementById('selectedSmartGroupsBadges');
+                if (sgContainer) {
+                    sgContainer.innerHTML = currentEditingFormAssignments.smartGroups.map(grp => `
+                        <span class="badge bg-white text-dark border px-2 py-1 fs-7 rounded-2">
+                            ${grp} <i class="bi bi-x ms-1 style-pointer" onclick="removeSmartGroupBadge('${grp}')"></i>
+                        </span>
+                    `).join('');
+                }
+
+                // Render Specific Users badges
+                const suContainer = document.getElementById('selectedSpecificUsersBadges');
+                if (suContainer) {
+                    suContainer.innerHTML = currentEditingFormAssignments.specificUsers.map(usr => `
+                        <span class="badge bg-white text-dark border px-2 py-1 fs-7 rounded-2">
+                            ${usr} <i class="bi bi-x ms-1 style-pointer" onclick="removeSpecificUserBadge('${usr}')"></i>
+                        </span>
+                    `).join('');
+                }
+
+                // Calculate Total Assignees
+                updateTotalAssigneesCount();
+            }
+
+            function toggleSmartGroupSelection(groupName) {
+                if (!currentEditingFormAssignments.smartGroups.includes(groupName)) {
+                    currentEditingFormAssignments.smartGroups.push(groupName);
+                    renderAssignmentsModalState();
+                }
+            }
+
+            function removeSmartGroupBadge(groupName) {
+                currentEditingFormAssignments.smartGroups = currentEditingFormAssignments.smartGroups.filter(g => g !== groupName);
+                renderAssignmentsModalState();
+            }
+
+            function removeSpecificUserBadge(userName) {
+                currentEditingFormAssignments.specificUsers = currentEditingFormAssignments.specificUsers.filter(u => u !== userName);
+                renderAssignmentsModalState();
+            }
+
+            function filterSmartGroupDropdown() {
+                const query = (document.getElementById('smartGroupFilterInput')?.value || '').toLowerCase();
+                const items = document.querySelectorAll('#smartGroupDropdownOptions li');
+                items.forEach(item => {
+                    const text = item.textContent.toLowerCase();
+                    item.style.display = text.includes(query) ? 'block' : 'none';
+                });
+            }
+
+            function openSpecificUsersModal() {
+                const modalEl = document.getElementById('specificUsersSelectModal');
+                if (modalEl) {
+                    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                    modal.show();
+                }
+            }
+
+            function filterSpecificUsersList() {
+                const query = (document.getElementById('userSearchInput')?.value || '').toLowerCase();
+                const items = document.querySelectorAll('#specificUsersListGroup label');
+                items.forEach(item => {
+                    const text = item.textContent.toLowerCase();
+                    item.style.display = text.includes(query) ? 'flex' : 'none';
+                });
+            }
+
+            function updateSpecificUsersSelection() {
+                const checkboxes = document.querySelectorAll('#specificUsersListGroup input[type="checkbox"]:checked');
+                currentEditingFormAssignments.specificUsers = Array.from(checkboxes).map(cb => cb.value);
+                renderAssignmentsModalState();
+            }
+
+            function updateTotalAssigneesCount() {
+                let count = 0;
+                if (currentEditingFormAssignments.smartGroups.includes('All users group')) {
+                    count = 86;
+                } else {
+                    count = (currentEditingFormAssignments.smartGroups.length * 15) + currentEditingFormAssignments.specificUsers.length;
+                }
+                const countEl = document.getElementById('totalAssigneesCount');
+                if (countEl) countEl.innerText = count;
+            }
+
+            function saveFormAssignments() {
+                showToast('Form assignments saved successfully!');
+                const modalEl = document.getElementById('editAssignmentsModal');
+                if (modalEl) {
+                    const modal = bootstrap.Modal.getInstance(modalEl);
+                    if (modal) modal.hide();
+                }
+            }
+
+            function copyFormShareableLink() {
+                navigator.clipboard.writeText(window.location.href);
+                showToast('Shareable link copied to clipboard!');
+            }
+
+            function archiveCurrentFormFromDetail() {
+                showToast('Form archived successfully.');
+                closeFormDetailSubmissions();
             }
 
             function closeFormDetailSubmissions() {
@@ -3099,33 +3392,47 @@ def get_admin_dashboard(path: str = ""):
             }
 
             function openEditAssignmentsDrawer(formId) {
-                document.getElementById('assignmentFormId').value = formId;
-                const drawer = new bootstrap.Offcanvas(document.getElementById('editAssignmentsModal'));
-                drawer.show();
+                const formIdInput = document.getElementById('assignmentFormId');
+                if (formIdInput) formIdInput.value = formId;
+                const drawerEl = document.getElementById('editAssignmentsOffcanvas');
+                if (drawerEl) {
+                    const drawer = bootstrap.Offcanvas.getOrCreateInstance(drawerEl);
+                    drawer.show();
+                }
             }
 
             async function submitAssignmentsDrawer() {
-                const formId = document.getElementById('assignmentFormId').value;
+                const formIdInput = document.getElementById('assignmentFormId');
+                const formId = formIdInput ? formIdInput.value : '';
+                if (!formId) {
+                    showToast('Error: Form ID is missing.');
+                    return;
+                }
                 const checkedGroups = [];
                 document.querySelectorAll('.assignment-group-check:checked').forEach(c => checkedGroups.push(c.value));
                 const token = await getAdminAuthToken();
 
                 try {
-                    const res = await fetch(`/api/forms/${formId}`, {
+                    const res = await fetch(`${window.location.origin}/api/forms/${formId}`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
                         body: JSON.stringify({ assigned_groups: checkedGroups })
                     });
                     if (res.ok) {
                         showToast('Form assignments updated.');
-                        const el = document.getElementById('editAssignmentsModal');
-                        const inst = bootstrap.Offcanvas.getInstance(el);
-                        if (inst) inst.hide();
-                        loadCustomForms(currentFormCategory);
+                        const el = document.getElementById('editAssignmentsOffcanvas');
+                        if (el) {
+                            const inst = bootstrap.Offcanvas.getInstance(el);
+                            if (inst) inst.hide();
+                        }
+                        if (typeof loadCustomForms === 'function' && typeof currentFormCategory !== 'undefined') {
+                            loadCustomForms(currentFormCategory);
+                        }
                     } else {
                         showToast('Failed to update form assignments.');
                     }
                 } catch(e) {
+                    console.error('Error saving assignments:', e);
                     showToast('Error updating form assignments.');
                 }
             }
