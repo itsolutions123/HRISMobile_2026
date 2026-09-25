@@ -1313,6 +1313,58 @@ def get_admin_dashboard(path: str = ""):
         </div>
 
         <!-- CREATE CUSTOM FORM MODAL BUILDER -->
+        
+        <!-- Description Element Editor Modal -->
+        <div class="modal fade" id="descriptionEditorModal" tabindex="-1" aria-hidden="true" style="z-index: 1070;">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content border-0 shadow-lg rounded-4">
+                    <div class="modal-header border-bottom px-4 py-3">
+                        <h6 class="modal-title fw-bold text-dark m-0 d-flex align-items-center gap-2">
+                            <i class="bi bi-file-earmark-text text-secondary"></i> Description
+                        </h6>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <div class="border rounded-3 p-2 bg-light mb-2 d-flex flex-wrap align-items-center gap-2" id="descEditorToolbar">
+                            <select class="form-select form-select-sm w-auto" style="max-width: 100px;">
+                                <option>11pt</option>
+                                <option>12pt</option>
+                                <option>14pt</option>
+                                <option>16pt</option>
+                            </select>
+                            <div class="btn-group btn-group-sm">
+                                <button type="button" class="btn btn-outline-secondary fw-bold" onclick="document.execCommand('bold', false, null)">B</button>
+                                <button type="button" class="btn btn-outline-secondary fst-italic" onclick="document.execCommand('italic', false, null)">I</button>
+                                <button type="button" class="btn btn-outline-secondary text-decoration-underline" onclick="document.execCommand('underline', false, null)">U</button>
+                            </div>
+                            <div class="btn-group btn-group-sm">
+                                <button type="button" class="btn btn-outline-secondary" onclick="document.execCommand('justifyLeft', false, null)"><i class="bi bi-text-left"></i></button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="document.execCommand('justifyCenter', false, null)"><i class="bi bi-text-center"></i></button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="document.execCommand('justifyRight', false, null)"><i class="bi bi-text-right"></i></button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="document.execCommand('justifyFull', false, null)"><i class="bi bi-justify"></i></button>
+                            </div>
+                            <div class="btn-group btn-group-sm">
+                                <button type="button" class="btn btn-outline-secondary" onclick="document.execCommand('insertUnorderedList', false, null)"><i class="bi bi-list-ul"></i></button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="document.execCommand('insertOrderedList', false, null)"><i class="bi bi-list-ol"></i></button>
+                            </div>
+                            <div class="btn-group btn-group-sm">
+                                <button type="button" class="btn btn-outline-secondary" onclick="document.execCommand('indent', false, null)"><i class="bi bi-indent"></i></button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="document.execCommand('outdent', false, null)"><i class="bi bi-outdent"></i></button>
+                            </div>
+                            <div class="btn-group btn-group-sm">
+                                <button type="button" class="btn btn-outline-secondary" onclick="const url=prompt('Enter link URL:'); if(url) document.execCommand('createLink', false, url)"><i class="bi bi-link-45deg"></i></button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="const img=prompt('Enter image URL:'); if(img) document.execCommand('insertImage', false, img)"><i class="bi bi-image"></i></button>
+                            </div>
+                        </div>
+                        <div id="descriptionEditorArea" class="form-control border rounded-3 p-3" contenteditable="true" style="min-height: 280px; max-height: 400px; overflow-y: auto; background-color: #fff;"></div>
+                    </div>
+                    <div class="modal-footer border-top px-4 py-3">
+                        <button type="button" class="btn btn-primary rounded-pill px-4 fw-semibold" onclick="confirmDescriptionContent()">Confirm</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="modal fade" id="createCustomFormModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-lg modal-dialog-centered">
                 <div class="modal-content border-0 shadow">
@@ -3543,6 +3595,73 @@ def get_admin_dashboard(path: str = ""):
                 currentBsModal.show();
             }
 
+            
+            let activeDescTargetId = null;
+
+            function openDescriptionEditor(fieldId) {
+                activeDescTargetId = fieldId;
+                const fieldCard = document.getElementById(fieldId);
+                if (!fieldCard) return;
+                const labelInput = fieldCard.querySelector('.field-label-input');
+                const editorArea = document.getElementById('descriptionEditorArea');
+                if (editorArea && labelInput) {
+                    editorArea.innerHTML = labelInput.value || '';
+                }
+                const modalEl = document.getElementById('descriptionEditorModal');
+                if (modalEl) {
+                    let bsModal = bootstrap.Modal.getInstance(modalEl);
+                    if (!bsModal) {
+                        bsModal = new bootstrap.Modal(modalEl, { backdrop: 'static' });
+                    }
+                    bsModal.show();
+                    setTimeout(() => {
+                        const backdrops = document.querySelectorAll('.modal-backdrop');
+                        if (backdrops.length > 1) {
+                            backdrops[backdrops.length - 1].style.zIndex = "1065";
+                        }
+                    }, 150);
+                }
+            }
+
+            function confirmDescriptionContent() {
+                const editorArea = document.getElementById('descriptionEditorArea');
+                if (activeDescTargetId && editorArea) {
+                    const fieldCard = document.getElementById(activeDescTargetId);
+                    if (fieldCard) {
+                        const labelInput = fieldCard.querySelector('.field-label-input');
+                        if (labelInput) {
+                            labelInput.value = editorArea.innerHTML;
+                        }
+                    }
+                }
+                const modalEl = document.getElementById('descriptionEditorModal');
+                if (modalEl) {
+                    const bsModal = bootstrap.Modal.getInstance(modalEl);
+                    if (bsModal) bsModal.hide();
+                }
+            }
+
+            function handleFieldTypeChange(selectEl, fieldId) {
+                const fieldCard = document.getElementById(fieldId);
+                if (!fieldCard) return;
+                let btn = fieldCard.querySelector('.desc-edit-btn');
+                if (selectEl.value === 'description') {
+                    if (!btn) {
+                        const container = fieldCard.querySelector('.col-md-7');
+                        if (container) {
+                            btn = document.createElement('button');
+                            btn.type = 'button';
+                            btn.className = 'btn btn-sm btn-outline-primary mt-2 desc-edit-btn';
+                            btn.innerHTML = '<i class="bi bi-pencil-square me-1"></i> Edit Formatted Description';
+                            btn.onclick = () => openDescriptionEditor(fieldId);
+                            container.appendChild(btn);
+                        }
+                    }
+                } else if (btn) {
+                    btn.remove();
+                }
+            }
+
             function addBuilderField() {
                 const container = document.getElementById('builderFieldsContainer');
                 if (!container) return;
@@ -3551,25 +3670,41 @@ def get_admin_dashboard(path: str = ""):
                 const cardHtml = `
                     <div class="card p-3 border shadow-sm builder-field-card" id="${fieldId}">
                         <div class="d-flex align-items-center justify-content-between mb-2">
-                            <span class="badge bg-light text-dark border fw-semibold fs-7">Field #${builderFieldIndex}</span>
-                            <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2" onclick="removeBuilderField('${fieldId}')" title="Remove Field">
-                                <i class="bi bi-trash"></i>
-                            </button>
+                            <span class="badge bg-light text-dark border fw-semibold fs-7">Element #${builderFieldIndex}</span>
+                            <div class="btn-group btn-group-sm">
+                                <button type="button" class="btn btn-outline-secondary py-0 px-2" onclick="moveBuilderFieldUp('${fieldId}')" title="Move Up (Hierarchy)">
+                                    <i class="bi bi-arrow-up"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary py-0 px-2" onclick="moveBuilderFieldDown('${fieldId}')" title="Move Down (Hierarchy)">
+                                    <i class="bi bi-arrow-down"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-danger py-0 px-2" onclick="removeBuilderField('${fieldId}')" title="Remove Field">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
                         </div>
                         <div class="row g-2">
                             <div class="col-md-7">
-                                <label class="form-label fw-semibold text-secondary fs-7 mb-1">FIELD LABEL</label>
-                                <input type="text" class="form-control form-control-sm field-label-input" placeholder="e.g. Serial Number">
+                                <label class="form-label fw-semibold text-secondary fs-7 mb-1">FIELD LABEL / HEADING</label>
+                                <input type="text" class="form-control form-control-sm field-label-input" placeholder="e.g. Item Details or Description text">
                             </div>
                             <div class="col-md-5">
-                                <label class="form-label fw-semibold text-secondary fs-7 mb-1">FIELD TYPE</label>
-                                <select class="form-select form-select-sm field-type-select">
-                                    <option value="text">Short Text Input</option>
-                                    <option value="textarea">Paragraph / Textarea</option>
-                                    <option value="dropdown">Dropdown / Select</option>
-                                    <option value="checkbox">Checkbox</option>
-                                    <option value="date">Date Picker</option>
-                                    <option value="file">File Upload</option>
+                                <label class="form-label fw-semibold text-secondary fs-7 mb-1">ELEMENT TYPE</label>
+                                <select class="form-select form-select-sm field-type-select" onchange="handleFieldTypeChange(this, '${fieldId}')">
+                                    <optgroup label="Layout">
+                                        <option value="description">📄 Description</option>
+                                    </optgroup>
+                                    <optgroup label="Elements">
+                                        <option value="dropdown">≔ Dropdown</option>
+                                        <option value="number"># Number</option>
+                                        <option value="open_ended">☰ Open ended</option>
+                                        <option value="yes_no">✓ Yes/No</option>
+                                        <option value="location">📍 Location</option>
+                                        <option value="file_upload">📎 File upload</option>
+                                        <option value="date">📅 Date</option>
+                                        <option value="rating">⭐ Rating</option>
+                                        <option value="signature">✍ Signature</option>
+                                    </optgroup>
                                 </select>
                             </div>
                         </div>
@@ -3580,6 +3715,20 @@ def get_admin_dashboard(path: str = ""):
                     </div>
                 `;
                 container.insertAdjacentHTML('beforeend', cardHtml);
+            }
+
+            function moveBuilderFieldUp(fieldId) {
+                const el = document.getElementById(fieldId);
+                if (el && el.previousElementSibling) {
+                    el.parentNode.insertBefore(el, el.previousElementSibling);
+                }
+            }
+
+            function moveBuilderFieldDown(fieldId) {
+                const el = document.getElementById(fieldId);
+                if (el && el.nextElementSibling) {
+                    el.parentNode.insertBefore(el.nextElementSibling, el);
+                }
             }
 
             function removeBuilderField(fieldId) {
