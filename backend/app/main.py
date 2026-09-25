@@ -364,9 +364,20 @@ def get_admin_dashboard(path: str = ""):
 
         <!-- MAIN HRIS PORTAL VIEW -->
         <div id="portal-main-view" class="container-fluid p-0">
+            <!-- Mobile Top Header Bar -->
+            <div class="d-lg-none bg-dark text-white p-3 d-flex align-items-center justify-content-between border-bottom border-secondary">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-hexagon-fill text-warning fs-5"></i>
+                    <span class="fs-5 fw-extrabold text-white tracking-tight">atWork</span>
+                </div>
+                <button class="btn btn-outline-light btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#mobileSidebarCollapse" aria-expanded="false" aria-controls="mobileSidebarCollapse">
+                    <i class="bi bi-list fs-5"></i>
+                </button>
+            </div>
+
             <div class="row g-0">
                 <!-- SIDEBAR -->
-                <div class="col-md-2 sidebar p-3">
+                <div class="col-12 col-lg-2 sidebar p-3 collapse d-lg-block" id="mobileSidebarCollapse">
                     <div class="d-flex align-items-center gap-2 mb-1 px-2 pt-2">
                         <i class="bi bi-hexagon-fill text-warning fs-5"></i>
                         <span class="fs-5 fw-extrabold text-white tracking-tight" style="letter-spacing:-0.03em;">atWork</span>
@@ -392,7 +403,7 @@ def get_admin_dashboard(path: str = ""):
                 </div>
 
                 <!-- MAIN CONTENT -->
-                <div class="col-md-10">
+                <div class="col-12 col-lg-10">
                     <div class="top-bar d-flex justify-content-between align-items-center">
                         <div>
                             <h6 class="m-0 fw-bold text-dark" id="page-title">Time Clock</h6>
