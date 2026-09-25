@@ -1189,17 +1189,8 @@ def get_admin_dashboard(path: str = ""):
                 <input type="hidden" id="assignmentFormId">
                 <div class="mb-4">
                     <label class="form-label fw-semibold text-secondary fs-7">TARGET SMART GROUPS</label>
-                    <div class="form-check mb-2">
-                        <input class="form-check-input assignment-group-check" type="checkbox" value="All users group" id="assign_group_all">
-                        <label class="form-check-label fw-semibold" for="assign_group_all">All users group</label>
-                    </div>
-                    <div class="form-check mb-2">
-                        <input class="form-check-input assignment-group-check" type="checkbox" value="HO - I.T." id="assign_group_it">
-                        <label class="form-check-label fw-semibold" for="assign_group_it">HO - I.T.</label>
-                    </div>
-                    <div class="form-check mb-2">
-                        <input class="form-check-input assignment-group-check" type="checkbox" value="Management Group" id="assign_group_mgmt">
-                        <label class="form-check-label fw-semibold" for="assign_group_mgmt">Management Group</label>
+                    <div id="assignmentSmartGroupsContainer" class="border rounded p-3 bg-light" style="max-height: 280px; overflow-y: auto;">
+                        <small class="text-muted">Loading Smart Groups...</small>
                     </div>
                 </div>
                 <div class="mb-4">
@@ -1325,6 +1316,57 @@ def get_admin_dashboard(path: str = ""):
 
         <!-- CREATE CUSTOM FORM MODAL BUILDER -->
         
+        <!-- Dropdown Element Editor Modal -->
+        <div class="modal fade" id="dropdownEditorModal" tabindex="-1" aria-hidden="true" style="z-index: 1070;">
+            <div class="modal-dialog modal-dialog-centered" style="max-width: 580px;">
+                <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+                    <div class="modal-header border-0 pb-0 pt-4 px-4 position-relative justify-content-center">
+                        <div class="d-flex align-items-center gap-2 text-secondary fw-semibold fs-6">
+                            <i class="bi bi-list-task"></i>
+                            <span>Dropdown</span>
+                        </div>
+                        <button type="button" class="btn-close position-absolute end-0 top-0 m-4" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <div class="mb-3">
+                            <input type="text" class="form-control form-control-lg rounded-4 fs-6 py-2 px-3 border" id="dropdownQuestionInput" placeholder="Question" style="border-color: #e2e8f0;">
+                        </div>
+                        <div class="mb-4">
+                            <input type="text" class="form-control rounded-4 fs-6 py-2 px-3 border" id="dropdownDescriptionInput" placeholder="Description (optional)" style="border-color: #e2e8f0;">
+                        </div>
+                        
+                        <div class="border-top mb-4" style="border-color: #f1f5f9;"></div>
+
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <h6 class="fw-bold text-dark m-0 fs-6">Items</h6>
+                            <div class="dropdown">
+                                <a class="text-decoration-none text-primary fw-medium fs-7 dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    Sort - Custom
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 fs-7">
+                                    <li><a class="dropdown-item" href="javascript:void(0)" onclick="sortDropdownItems('asc')">Sort Alphabetical (A-Z)</a></li>
+                                    <li><a class="dropdown-item" href="javascript:void(0)" onclick="sortDropdownItems('desc')">Sort Alphabetical (Z-A)</a></li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div id="dropdownItemsContainer" class="d-flex flex-column gap-2 mb-4">
+                            <!-- Dynamic item rows inserted here -->
+                        </div>
+
+                        <div>
+                            <button type="button" class="btn btn-outline-primary rounded-pill px-3 py-1 fs-7 fw-medium d-inline-flex align-items-center gap-1" onclick="addDropdownItemRow()">
+                                <i class="bi bi-plus fs-6"></i> add field
+                            </button>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0 pt-0 pb-4 px-4 justify-content-end">
+                        <button type="button" class="btn btn-primary rounded-pill px-4 fw-semibold" onclick="confirmDropdownOptions()">Confirm</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Description Element Editor Modal -->
         <div class="modal fade" id="descriptionEditorModal" tabindex="-1" aria-hidden="true" style="z-index: 1070;">
             <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -1686,11 +1728,14 @@ def get_admin_dashboard(path: str = ""):
                     if (formsView) formsView.style.display = 'block';
 
                     let finalCatName = currentFormCategory;
-                    if (!finalCatName) {
-                        const catName = tab.replace('forms-', '').replace(/-/g, ' ');
-                        const matchedCat = availableCategoriesList.find(c => c.name.toLowerCase() === catName.toLowerCase());
+                    if (!finalCatName || finalCatName.toLowerCase() === 'forms') {
+                        const rawCat = tab.replace('forms-', '').replace(/-/g, ' ');
+                        const formattedFallback = rawCat.replace(/\b\w/g, l => l.toUpperCase());
+                        const matchedCat = availableCategoriesList.find(c => c.name.toLowerCase() === rawCat.toLowerCase());
                         if (matchedCat) {
                             finalCatName = matchedCat.name;
+                        } else if (rawCat && rawCat !== 'view') {
+                            finalCatName = formattedFallback;
                         } else if (availableCategoriesList.length > 0) {
                             finalCatName = availableCategoriesList[0].name;
                         } else {
@@ -3243,7 +3288,7 @@ def get_admin_dashboard(path: str = ""):
                                 { id: formId, name: 'Form #' + formId, entries: 0, category: currentFormCategory };
                 
                 const resolvedCategory = formObj.category || currentFormCategory || 'Admin';
-                const catSlug = encodeURIComponent(resolvedCategory);
+                const catSlug = resolvedCategory.toLowerCase().replace(/\s+/g, '-');
                 const validFormId = formObj.id || formId;
                 
                 if (validFormId && validFormId !== 'undefined') {
@@ -3275,7 +3320,6 @@ def get_admin_dashboard(path: str = ""):
                 if (evt && typeof evt.preventDefault === 'function') {
                     evt.preventDefault();
                 }
-                // Extract current form ID from path e.g. /admin/Forms/Admin/57
                 const pathParts = window.location.pathname.split('/').filter(Boolean);
                 const lastPart = pathParts[pathParts.length - 1];
                 const formIdInput = document.getElementById('assignmentFormId');
@@ -3287,11 +3331,12 @@ def get_admin_dashboard(path: str = ""):
                 }
                 if (formIdInput) formIdInput.value = targetFormId;
 
-                // Close open dropdowns
                 document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
                 document.querySelectorAll('.dropdown-toggle.show').forEach(t => t.classList.remove('show'));
 
-                // Hydrate checkboxes from server before opening
+                const sgContainer = document.getElementById('assignmentSmartGroupsContainer');
+                let assigned = [];
+
                 if (targetFormId) {
                     try {
                         const token = await getAdminAuthToken();
@@ -3300,14 +3345,55 @@ def get_admin_dashboard(path: str = ""):
                         });
                         if (res.ok) {
                             const formData = await res.json();
-                            const assigned = formData.assigned_groups || [];
-                            document.querySelectorAll('.assignment-group-check').forEach(chk => {
-                                chk.checked = assigned.includes(chk.value);
-                            });
+                            assigned = formData.assigned_groups || [];
                         }
                     } catch (e) {
                         console.warn('Failed to fetch assigned_groups for form:', e);
                     }
+                }
+
+                try {
+                    const token = await getAdminAuthToken();
+                    const sgRes = await fetch(`${window.location.origin}/api/jobs/groups`, {
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
+                    if (sgRes.ok && sgContainer) {
+                        const groupsList = await sgRes.json();
+                        const groupedByBrand = {};
+
+                        groupsList.forEach(g => {
+                            const brand = g.brand_name || 'General';
+                            if (!groupedByBrand[brand]) groupedByBrand[brand] = [];
+                            groupedByBrand[brand].push(g);
+                        });
+
+                        let html = '';
+                        const isAllChecked = assigned.includes('All users group') ? 'checked' : '';
+                        html += `
+                            <div class="form-check mb-3 pb-2 border-bottom">
+                                <input class="form-check-input assignment-group-check" type="checkbox" value="All users group" id="assign_group_all" ${isAllChecked}>
+                                <label class="form-check-label fw-bold text-dark" for="assign_group_all">All users group</label>
+                            </div>
+                        `;
+
+                        for (const [brand, groups] of Object.entries(groupedByBrand)) {
+                            html += `<div class="fw-bold text-primary fs-7 mb-2 mt-2"><i class="bi bi-chevron-down me-1"></i>${brand}</div>`;
+                            groups.forEach((grp, idx) => {
+                                const chkId = `assign_group_${brand.replace(/\W+/g, '_')}_${idx}`;
+                                const isChecked = assigned.includes(grp.name) ? 'checked' : '';
+                                html += `
+                                    <div class="form-check mb-2 ms-2">
+                                        <input class="form-check-input assignment-group-check" type="checkbox" value="${grp.name}" id="${chkId}" ${isChecked}>
+                                        <label class="form-check-label fw-semibold text-dark" for="${chkId}">${grp.name}</label>
+                                    </div>
+                                `;
+                            });
+                        }
+                        sgContainer.innerHTML = html || '<small class="text-muted">No Smart Groups found.</small>';
+                    }
+                } catch (e) {
+                    console.error('Failed to load dynamic Smart Groups for assignments:', e);
+                    if (sgContainer) sgContainer.innerHTML = '<small class="text-danger">Error loading Smart Groups.</small>';
                 }
 
                 const drawerEl = document.getElementById('editAssignmentsOffcanvas');
@@ -3429,6 +3515,17 @@ def get_admin_dashboard(path: str = ""):
             function closeFormDetailSubmissions() {
                 document.getElementById('form-detail-submissions-container').style.display = 'none';
                 document.getElementById('forms-list-container').style.display = 'block';
+                
+                let catName = typeof currentFormCategory !== 'undefined' && currentFormCategory ? currentFormCategory : 'Admin';
+                const parts = window.location.pathname.split('/').filter(Boolean);
+                if (parts.length >= 3 && parts[1] === 'forms' && parts[2] === 'category') {
+                    if (parts[3]) catName = decodeURIComponent(parts[3]);
+                }
+                const catSlug = catName.toLowerCase().replace(/\s+/g, '-');
+                const targetUrl = `/admin/forms/category/${catSlug}`;
+                if (window.location.pathname !== targetUrl) {
+                    window.history.pushState({ path: targetUrl }, '', targetUrl);
+                }
             }
 
             function openFormSourceModal() {
@@ -3607,6 +3704,116 @@ def get_admin_dashboard(path: str = ""):
             }
 
             
+            let activeDropdownTargetId = null;
+
+            function openDropdownEditor(fieldId) {
+                activeDropdownTargetId = fieldId;
+                const fieldCard = document.getElementById(fieldId);
+                if (!fieldCard) return;
+
+                const labelInput = fieldCard.querySelector('.field-label-input');
+                const qInput = document.getElementById('dropdownQuestionInput');
+                const descInput = document.getElementById('dropdownDescriptionInput');
+                const itemsContainer = document.getElementById('dropdownItemsContainer');
+
+                if (qInput && labelInput) {
+                    qInput.value = labelInput.value || '';
+                }
+                if (descInput) {
+                    descInput.value = fieldCard.dataset.fieldDescription || '';
+                }
+
+                itemsContainer.innerHTML = '';
+                let savedOptions = [];
+                try {
+                    savedOptions = JSON.parse(fieldCard.dataset.fieldOptions || '[]');
+                } catch(e) {
+                    savedOptions = [];
+                }
+
+                if (!savedOptions || savedOptions.length === 0) {
+                    addDropdownItemRow();
+                    addDropdownItemRow();
+                } else {
+                    savedOptions.forEach(opt => addDropdownItemRow(opt));
+                }
+
+                const modalEl = document.getElementById('dropdownEditorModal');
+                if (modalEl) {
+                    let bsModal = bootstrap.Modal.getInstance(modalEl);
+                    if (!bsModal) {
+                        bsModal = new bootstrap.Modal(modalEl, { backdrop: 'static' });
+                    }
+                    bsModal.show();
+                    setTimeout(() => {
+                        const backdrops = document.querySelectorAll('.modal-backdrop');
+                        if (backdrops.length > 1) {
+                            backdrops[backdrops.length - 1].style.zIndex = "1065";
+                        }
+                    }, 150);
+                }
+            }
+
+            function addDropdownItemRow(value = '') {
+                const itemsContainer = document.getElementById('dropdownItemsContainer');
+                if (!itemsContainer) return;
+
+                const row = document.createElement('div');
+                row.className = 'd-flex align-items-center gap-2 dropdown-item-row';
+                row.innerHTML = `
+                    <i class="bi bi-grid-3x2-gap-fill text-muted opacity-50 drag-handle" style="cursor: grab;"></i>
+                    <input type="text" class="form-control rounded-4 fs-6 py-2 px-3 border dropdown-item-val" placeholder="Item" value="${value.replace(/"/g, '&quot;')}" style="border-color: #e2e8f0;">
+                    <button type="button" class="btn btn-link text-muted p-1" onclick="this.closest('.dropdown-item-row').remove()">
+                        <i class="bi bi-trash fs-6"></i>
+                    </button>
+                `;
+                itemsContainer.appendChild(row);
+            }
+
+            function sortDropdownItems(order = 'asc') {
+                const itemsContainer = document.getElementById('dropdownItemsContainer');
+                if (!itemsContainer) return;
+                const rows = Array.from(itemsContainer.querySelectorAll('.dropdown-item-row'));
+                rows.sort((a, b) => {
+                    const valA = (a.querySelector('.dropdown-item-val')?.value || '').trim().toLowerCase();
+                    const valB = (b.querySelector('.dropdown-item-val')?.value || '').trim().toLowerCase();
+                    if (order === 'asc') return valA.localeCompare(valB);
+                    return valB.localeCompare(valA);
+                });
+                itemsContainer.innerHTML = '';
+                rows.forEach(r => itemsContainer.appendChild(r));
+            }
+
+            function confirmDropdownOptions() {
+                if (!activeDropdownTargetId) return;
+                const fieldCard = document.getElementById(activeDropdownTargetId);
+                if (!fieldCard) return;
+
+                const qInput = document.getElementById('dropdownQuestionInput');
+                const descInput = document.getElementById('dropdownDescriptionInput');
+                const labelInput = fieldCard.querySelector('.field-label-input');
+                const itemInputs = document.querySelectorAll('#dropdownItemsContainer .dropdown-item-val');
+
+                if (qInput && labelInput) {
+                    labelInput.value = qInput.value.trim();
+                }
+
+                const optionsArr = [];
+                itemInputs.forEach(inp => {
+                    const v = inp.value.trim();
+                    if (v) optionsArr.push(v);
+                });
+
+                fieldCard.dataset.fieldDescription = descInput ? descInput.value.trim() : '';
+                fieldCard.dataset.fieldOptions = JSON.stringify(optionsArr);
+
+                const modalEl = document.getElementById('dropdownEditorModal');
+                if (modalEl) {
+                    const bsModal = bootstrap.Modal.getInstance(modalEl);
+                    if (bsModal) bsModal.hide();
+                }
+            }
+
             let activeDescTargetId = null;
 
             function openDescriptionEditor(fieldId) {
@@ -3655,21 +3862,34 @@ def get_admin_dashboard(path: str = ""):
             function handleFieldTypeChange(selectEl, fieldId) {
                 const fieldCard = document.getElementById(fieldId);
                 if (!fieldCard) return;
-                let btn = fieldCard.querySelector('.desc-edit-btn');
+                let descBtn = fieldCard.querySelector('.desc-edit-btn');
+                let dropdownBtn = fieldCard.querySelector('.dropdown-edit-btn');
+                const container = fieldCard.querySelector('.col-md-7');
+
                 if (selectEl.value === 'description') {
-                    if (!btn) {
-                        const container = fieldCard.querySelector('.col-md-7');
-                        if (container) {
-                            btn = document.createElement('button');
-                            btn.type = 'button';
-                            btn.className = 'btn btn-sm btn-outline-primary mt-2 desc-edit-btn';
-                            btn.innerHTML = '<i class="bi bi-pencil-square me-1"></i> Edit Formatted Description';
-                            btn.onclick = () => openDescriptionEditor(fieldId);
-                            container.appendChild(btn);
-                        }
+                    if (dropdownBtn) dropdownBtn.remove();
+                    if (!descBtn && container) {
+                        descBtn = document.createElement('button');
+                        descBtn.type = 'button';
+                        descBtn.className = 'btn btn-sm btn-outline-primary mt-2 desc-edit-btn';
+                        descBtn.innerHTML = '<i class="bi bi-pencil-square me-1"></i> Edit Formatted Description';
+                        descBtn.onclick = () => openDescriptionEditor(fieldId);
+                        container.appendChild(descBtn);
                     }
-                } else if (btn) {
-                    btn.remove();
+                } else if (selectEl.value === 'dropdown') {
+                    if (descBtn) descBtn.remove();
+                    if (!dropdownBtn && container) {
+                        dropdownBtn = document.createElement('button');
+                        dropdownBtn.type = 'button';
+                        dropdownBtn.className = 'btn btn-sm btn-outline-primary mt-2 dropdown-edit-btn';
+                        dropdownBtn.innerHTML = '<i class="bi bi-list-task me-1"></i> Edit Options / Question';
+                        dropdownBtn.onclick = () => openDropdownEditor(fieldId);
+                        container.appendChild(dropdownBtn);
+                    }
+                    openDropdownEditor(fieldId);
+                } else {
+                    if (descBtn) descBtn.remove();
+                    if (dropdownBtn) dropdownBtn.remove();
                 }
             }
 
