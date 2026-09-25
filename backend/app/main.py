@@ -1613,6 +1613,11 @@ def get_admin_dashboard(path: str = ""):
                 document.getElementById('nav-clock').classList.remove('active');
                 document.getElementById('nav-jobs').classList.remove('active');
                 document.getElementById('nav-users').classList.remove('active');
+                document.querySelectorAll('.nav-link-sidebar-item').forEach(el => {
+                    el.classList.remove('active');
+                    el.style.background = 'transparent';
+                    el.style.color = '#94a3b8';
+                });
 
                 if (tab === 'forms-view' || tab.startsWith('forms-')) {
                     if (formsView) formsView.style.display = 'block';
@@ -1637,7 +1642,7 @@ def get_admin_dashboard(path: str = ""):
 
                     if (updateUrl && finalCatName !== 'Forms') {
                         const urlSlug = finalCatName.toLowerCase().replace(/\s+/g, '-');
-                        history.pushState(null, '', '/admin/forms/category/modules/' + urlSlug);
+                        history.pushState(null, '', '/admin/forms/category/' + urlSlug);
                     }
                     closeFormDetailSubmissions();
                     loadCustomForms(finalCatName);
@@ -1674,30 +1679,26 @@ def get_admin_dashboard(path: str = ""):
                     switchTab('jobs', false);
                 } else if (path.includes('/admin/users')) {
                     switchTab('users', false);
-                } else if (path.includes('/admin/forms/category/modules/')) {
-                    const slug = window.location.pathname.split('/admin/forms/category/modules/')[1];
-                    if (slug) {
-                        const catName = slug.replace(/-/g, ' ');
-                        await selectFormCategoryTabBySlug(catName);
-                    } else {
-                        switchTab('clock', false);
-                    }
-                } else if (path.includes('/admin/forms/')) {
-                    const parts = window.location.pathname.split('/admin/Forms/');
-                    const altParts = window.location.pathname.split('/admin/forms/');
-                    const segment = parts.length > 1 ? parts[1] : (altParts.length > 1 ? altParts[1] : '');
+                } else if (path.includes('/admin/forms/category/')) {
+                    const segment = window.location.pathname.split('/admin/forms/category/')[1] || '';
                     if (segment) {
-                        const catName = segment.split('/')[0];
-                        const formId = segment.split('/')[1];
+                        const parts = segment.split('/').filter(Boolean);
+                        const catSlug = parts[0];
+                        const formId = parts[1];
+                        const catName = catSlug ? catSlug.replace(/-/g, ' ') : '';
                         await selectFormCategoryTabBySlug(catName);
                         if (formId) {
                             await openFormDetailSubmissions(formId);
                         }
                     } else {
-                        switchTab('clock', false);
+                        switchTab('forms', false);
                     }
+                } else if (path.includes('/admin/forms')) {
+                    switchTab('forms', false);
                 } else {
                     switchTab('clock', false);
+                    if (typeof loadClockData === 'function') loadClockData();
+                    if (typeof loadTimeClockEntries === 'function') loadTimeClockEntries();
                 }
             }
 
@@ -3183,7 +3184,7 @@ def get_admin_dashboard(path: str = ""):
                 const validFormId = formObj.id || formId;
                 
                 if (validFormId && validFormId !== 'undefined') {
-                    history.pushState({ formId: validFormId }, '', `/admin/Forms/${catSlug}/${validFormId}`);
+                    history.pushState({ formId: validFormId }, '', `/admin/forms/category/${catSlug}/${validFormId}`);
                 }
                 
                 document.getElementById('selected-form-title').innerText = formObj.name && formObj.name !== ('Form #' + formId) ? formObj.name : (formObj.title || formObj.name || ('Form #' + formId));
