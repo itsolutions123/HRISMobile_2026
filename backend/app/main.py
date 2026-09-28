@@ -893,8 +893,8 @@ def get_admin_dashboard(path: str = ""):
                                     <div class="d-flex align-items-center gap-2">
                                         <small class="text-muted">Permissions</small>
                                         <div class="avatar-circle bg-dark text-white" style="width:28px; height:28px; font-size:11px;">SA</div>
-                                        <button class="btn btn-outline-custom btn-sm"><i class="bi bi-phone me-1"></i> Preview</button>
-                                        <button class="btn btn-outline-custom btn-sm" onclick="showToast('Form Editor opened')"><i class="bi bi-pencil me-1"></i> Edit form</button>
+                                        <button class="btn btn-outline-custom btn-sm" onclick="openFormPreviewModal()"><i class="bi bi-file-earmark-pdf me-1"></i> Preview</button>
+                                        <button class="btn btn-outline-custom btn-sm" onclick="openEditCustomFormModal()"><i class="bi bi-pencil me-1"></i> Edit form</button>
                                         <div class="dropdown d-inline-block">
                                             <button class="btn btn-outline-custom btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                                                 <i class="bi bi-gear me-1"></i> Settings
@@ -1597,6 +1597,39 @@ def get_admin_dashboard(path: str = ""):
             </div>
         </div>
 
+        <!-- FORM PREVIEW MODAL (MOCK PDF DOCUMENT) -->
+        <div class="modal fade" id="formPreviewModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content border-0 shadow-lg">
+                    <div class="modal-header border-bottom px-4 py-3 bg-light">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-file-earmark-pdf text-danger fs-4"></i>
+                            <h6 class="modal-title fw-bold text-dark m-0" id="previewModalTitle">Document Preview</h6>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-4 bg-secondary-subtle">
+                        <div class="card border shadow-sm p-4 mx-auto bg-white rounded-3" style="max-width: 680px; min-height: 500px; font-family: Arial, sans-serif;">
+                            <div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-3">
+                                <div>
+                                    <h5 class="fw-bold text-dark m-0 text-uppercase" id="previewDocHeaderTitle">BIGTIME EMPIRE CORPORATION</h5>
+                                    <small class="text-muted" id="previewDocSubCategory">Custom Form Document</small>
+                                </div>
+                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-3 py-1 fw-bold fs-7">PDF PREVIEW</span>
+                            </div>
+                            <div id="previewDocFieldsArea" class="d-flex flex-column gap-3 py-2">
+                                <!-- Dynamic form schema fields rendered here -->
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-top p-3 bg-light">
+                        <button type="button" class="btn btn-outline-secondary px-4 fw-semibold" data-bs-dismiss="modal">Close</button>
+                        <button type="button" class="btn btn-primary px-4 fw-semibold" onclick="window.print()"><i class="bi bi-printer me-1"></i> Print / Download PDF</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- ADD / EDIT GROUP FORM MODAL -->
         <div class="modal fade" id="groupModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered">
@@ -1743,7 +1776,7 @@ def get_admin_dashboard(path: str = ""):
 
                 try {
                     const res = await fetch('/api/auth/login', {
-                        method: 'POST',
+                        method: method,
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ employee_id: empId, password: pwd })
                     });
@@ -3416,6 +3449,8 @@ def get_admin_dashboard(path: str = ""):
                 renderCustomFormsTable(query);
             }
 
+            let activeCustomForm = null;
+
             async function openFormDetailSubmissions(formId) {
                 if (typeof customFormsList === 'undefined' || !customFormsList || customFormsList.length === 0) {
                     await loadCustomForms(currentFormCategory || 'Admin');
@@ -3423,6 +3458,8 @@ def get_admin_dashboard(path: str = ""):
                 const formObj = (typeof customFormsList !== 'undefined' && customFormsList.find(f => String(f.id) === String(formId))) ||
                                 (typeof mockCustomFormsData !== 'undefined' && mockCustomFormsData.find(f => String(f.id) === String(formId))) ||
                                 { id: formId, name: 'Form #' + formId, entries: 0, category: currentFormCategory };
+
+                activeCustomForm = formObj;
                 
                 const resolvedCategory = formObj.category || currentFormCategory || 'Admin';
                 const catSlug = resolvedCategory.toLowerCase().replace(/\s+/g, '-');
@@ -3828,8 +3865,91 @@ def get_admin_dashboard(path: str = ""):
             let builderFieldIndex = 0;
 
             let modalBuilderFields = [];
+            let editingFormId = null;
+
+            function openFormPreviewModal() {
+                if (!activeCustomForm) {
+                    showToast('No active form loaded');
+                    return;
+                }
+                const titleEl = document.getElementById('previewModalTitle');
+                const headerEl = document.getElementById('previewDocHeaderTitle');
+                const catEl = document.getElementById('previewDocSubCategory');
+                const areaEl = document.getElementById('previewDocFieldsArea');
+
+                if (titleEl) titleEl.innerText = activeCustomForm.name + ' - Document Preview';
+                if (headerEl) headerEl.innerText = activeCustomForm.name;
+                if (catEl) catEl.innerText = 'Category: ' + (activeCustomForm.category || 'General');
+
+                if (areaEl) {
+                    const fields = activeCustomForm.schema_fields || activeCustomForm.fields || [];
+                    if (fields.length === 0) {
+                        areaEl.innerHTML = '<div class="text-center text-muted py-4">No fields defined for this form.</div>';
+                    } else {
+                        let html = '';
+                        fields.forEach((f, idx) => {
+                            html += `<div class="p-3 border rounded bg-light mb-2">
+                                        <label class="fw-bold text-dark d-block mb-1 fs-7">${idx + 1}. ${f.label || f.name || 'Untitled Field'} ${f.required ? '<span class="text-danger">*</span>' : ''}</label>`;
+                            if (f.type === 'Short Text' || f.type === 'text') {
+                                html += `<input type="text" class="form-control form-control-sm" placeholder="User response line..." disabled>`;
+                            } else if (f.type === 'Description') {
+                                html += `<textarea class="form-control form-control-sm" rows="2" placeholder="Description/Note text..." disabled></textarea>`;
+                            } else if (f.type === 'Dropdown') {
+                                html += `<select class="form-select form-select-sm" disabled><option>Select option...</option>`;
+                                (f.options || []).forEach(o => { html += `<option>${o}</option>`; });
+                                html += `</select>`;
+                            } else if (f.type === 'Yes/No') {
+                                html += `<div class="d-flex gap-3"><div class="form-check"><input class="form-check-input" type="radio" disabled><label class="form-check-label small">Yes</label></div><div class="form-check"><input class="form-check-input" type="radio" disabled><label class="form-check-label small">No</label></div></div>`;
+                            } else if (f.type === 'Signature') {
+                                html += `<div class="border border-dashed p-3 text-center text-muted small bg-white">Signature Box Area</div>`;
+                            } else {
+                                html += `<input type="text" class="form-control form-control-sm" placeholder="Value..." disabled>`;
+                            }
+                            html += `</div>`;
+                        });
+                        areaEl.innerHTML = html;
+                    }
+                }
+
+                const prevModal = new bootstrap.Modal(document.getElementById('formPreviewModal'));
+                prevModal.show();
+            }
+
+            function openEditCustomFormModal() {
+                if (!activeCustomForm) {
+                    showToast('No active form loaded to edit');
+                    return;
+                }
+                editingFormId = activeCustomForm.id;
+                const nameEl = document.getElementById('builderFormName');
+                const catEl = document.getElementById('builderFormCategory');
+                if (nameEl) nameEl.value = activeCustomForm.name || '';
+
+                if (catEl) {
+                    if (typeof availableCategoriesList !== 'undefined' && availableCategoriesList.length > 0) {
+                        catEl.innerHTML = availableCategoriesList.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+                    } else {
+                        catEl.innerHTML = `<option value="${activeCustomForm.category}">${activeCustomForm.category}</option>`;
+                    }
+                    catEl.value = activeCustomForm.category || 'Admin';
+                }
+
+                modalBuilderFields = (activeCustomForm.schema_fields || activeCustomForm.fields || []).map(f => ({
+                    id: f.id || ('field_' + Date.now()),
+                    type: f.type || 'Short Text',
+                    label: f.label || f.name || 'Untitled Field',
+                    required: !!f.required,
+                    options: f.options || []
+                }));
+
+                renderModalCanvasBlocks();
+
+                currentBsModal = new bootstrap.Modal(document.getElementById('createCustomFormModal'));
+                currentBsModal.show();
+            }
 
             function openCreateCustomFormModal() {
+                editingFormId = null;
                 const nameEl = document.getElementById('builderFormName');
                 const catEl = document.getElementById('builderFormCategory');
                 if (nameEl) nameEl.value = '';
@@ -3963,13 +4083,16 @@ def get_admin_dashboard(path: str = ""):
                     const payload = {
                         name: name,
                         category: category,
-                        assigned_groups: ['All users group'],
+                        assigned_groups: activeCustomForm ? (activeCustomForm.assigned_groups || ['All users group']) : ['All users group'],
                         assignment_type: 'Dynamic',
                         schema_fields: modalBuilderFields
                     };
 
-                    const res = await fetch('/api/forms', {
-                        method: 'POST',
+                    const url = editingFormId ? (`/api/forms/${editingFormId}`) : '/api/forms';
+                    const method = editingFormId ? 'PUT' : 'POST';
+
+                    const res = await fetch(url, {
+                        method: method,
                         headers: {
                             'Content-Type': 'application/json',
                             'Authorization': 'Bearer ' + token
@@ -3983,8 +4106,17 @@ def get_admin_dashboard(path: str = ""):
                         return;
                     }
 
-                    showToast('Custom form created successfully!');
+                    showToast(editingFormId ? 'Custom form updated successfully!' : 'Custom form created successfully!');
+                    if (activeCustomForm && editingFormId) {
+                        activeCustomForm.name = name;
+                        activeCustomForm.category = category;
+                        activeCustomForm.schema_fields = modalBuilderFields;
+                        const titleEl = document.getElementById('selected-form-title');
+                        if (titleEl) titleEl.innerText = name;
+                    }
                     if (currentBsModal) currentBsModal.hide();
+                    modalBuilderFields = [];
+                    editingFormId = null;
 
                     if (typeof loadCustomForms === 'function') {
                         loadCustomForms(category);
