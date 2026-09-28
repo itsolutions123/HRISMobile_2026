@@ -696,6 +696,130 @@ def get_admin_dashboard(path: str = ""):
                         </div>
 
                         <!-- TAB FORMS: IT FORMS / ADMIN FORMS / HR FORMS -->
+                        <!-- Custom Form Creator View -->
+                        <script>
+                            function openFormCreator() {
+                                document.getElementById('tab-forms-view').style.display = 'none';
+                                document.getElementById('form-creator-view').style.display = 'block';
+                            }
+                            function closeFormCreator() {
+                                document.getElementById('form-creator-view').style.display = 'none';
+                                document.getElementById('tab-forms-view').style.display = 'block';
+                            }
+                        </script>
+                        <div id="form-creator-view" style="display:none;" class="container-fluid py-3 h-100">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h4 class="mb-0 fw-bold">Custom Form Creator</h4>
+                                <div>
+                                    <button class="btn btn-outline-secondary btn-sm fw-bold" onclick="closeFormCreator()">Cancel</button>
+                                    <button class="btn btn-primary btn-sm fw-bold ms-2" onclick="showToast('Form saved successfully!')">Save Form</button>
+                                </div>
+                            </div>
+                            <div class="row" style="min-height: 75vh;">
+                                <!-- Left Column: Builder -->
+                                <div class="col-md-5 d-flex flex-column gap-3">
+                                    <div class="row g-3">
+                                        <div class="col-6">
+                                            <div class="card-custom h-100 p-0 border-2 border-dark rounded-3" style="box-shadow: none; border-style: solid;">
+                                                <div class="card-header bg-white border-bottom-0 pb-0 pt-3">
+                                                    <span class="mb-0 text-dark fw-bold" style="font-size:0.85rem;">ADD ELEMENT</span>
+                                                </div>
+                                                <div class="card-body p-3" style="font-size:0.8rem;">
+                                                    <div class="row">
+                                                        <div class="col-6 d-flex flex-column gap-2">
+                                                            <div class="cursor-pointer">DROPDOWN</div>
+                                                            <div class="cursor-pointer">NUMBER</div>
+                                                            <div class="cursor-pointer">OPEN ENDED</div>
+                                                            <div class="cursor-pointer">YES/NO</div>
+                                                            <div class="cursor-pointer">LOCATION</div>
+                                                        </div>
+                                                        <div class="col-6 d-flex flex-column gap-2">
+                                                            <div class="cursor-pointer">FILE UPLOAD</div>
+                                                            <div class="cursor-pointer">DATE</div>
+                                                            <div class="cursor-pointer">RATING</div>
+                                                            <div class="cursor-pointer">SIGNATURE</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="card-custom h-100 p-0 border-2 border-dark rounded-3" style="box-shadow: none; border-style: solid;">
+                                                <div class="card-header bg-white border-bottom-0 pb-0 pt-3 border-start-0">
+                                                    <span class="mb-0 text-dark fw-bold" style="font-size:0.85rem;">FORM LAYOUT</span>
+                                                </div>
+                                                <div class="card-body p-3" style="font-size:0.8rem;">
+                                                    <div class="d-flex flex-column gap-2">
+                                                        <div class="cursor-pointer">HEADER</div>
+                                                        <div class="cursor-pointer">FOOTER</div>
+                                                        <div class="cursor-pointer">DESCRIPTION</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="card-custom flex-grow-1 p-0 border-2 border-dark rounded-3" style="box-shadow: none; border-style: solid;">
+                                        <div class="card-header bg-white border-bottom-0 pb-0 pt-3">
+                                            <span class="mb-0 text-dark fw-bold" style="font-size:0.85rem;">FORM FIELDS</span>
+                                        </div>
+                                        <div class="card-body p-3 d-flex flex-column gap-3">
+                                            <div class="border border-2 border-dark rounded-3 p-2 d-flex justify-content-between align-items-center bg-white">
+                                                <span class="fs-7 text-dark fw-bold" style="font-size:0.85rem;">DESCRIPTION</span>
+                                                <div class="btn-group border border-2 border-dark bg-white">
+                                                    <button class="btn btn-sm btn-white py-0 border-end border-2 border-dark rounded-0 text-dark fw-bold" style="font-size:0.75rem; background:white;">EDIT</button>
+                                                    <button class="btn btn-sm btn-white py-0 rounded-0 text-dark fw-bold" style="font-size:0.75rem; background:white;">DELETE</button>
+                                                </div>
+                                            </div>
+                                            <div class="border border-2 border-dark rounded-3 p-2 d-flex justify-content-between align-items-center bg-white">
+                                                <span class="fs-7 text-dark fw-bold" style="font-size:0.85rem;">OPEN ENDED</span>
+                                                <div class="btn-group border border-2 border-dark bg-white">
+                                                    <button class="btn btn-sm btn-white py-0 border-end border-2 border-dark rounded-0 text-dark fw-bold" style="font-size:0.75rem; background:white;">EDIT</button>
+                                                    <button class="btn btn-sm btn-white py-0 rounded-0 text-dark fw-bold" style="font-size:0.75rem; background:white;">DELETE</button>
+                                                </div>
+                                            </div>
+                                            <div class="border border-2 border-dark rounded-3 p-2 d-flex justify-content-between align-items-center bg-white">
+                                                <span class="fs-7 text-dark fw-bold" style="font-size:0.85rem;">SIGNATURE</span>
+                                                <div class="btn-group border border-2 border-dark bg-white">
+                                                    <button class="btn btn-sm btn-white py-0 border-end border-2 border-dark rounded-0 text-dark fw-bold" style="font-size:0.75rem; background:white;">EDIT</button>
+                                                    <button class="btn btn-sm btn-white py-0 rounded-0 text-dark fw-bold" style="font-size:0.75rem; background:white;">DELETE</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Right Column: Preview -->
+                                <div class="col-md-7 d-flex flex-column">
+                                    <div class="text-center mb-2 text-dark fw-bold" style="font-size:0.85rem;">
+                                        FORM PREVIEW (PDF PREVIEW)
+                                    </div>
+                                    <div class="card-custom flex-grow-1 p-4 bg-white rounded-3 border-2 border-dark" style="box-shadow: none; border-style: solid;">
+                                        <div class="border-bottom border-dark border-2 mb-3 pb-2">
+                                            <div class="text-uppercase text-dark fw-bold" style="font-size:0.9rem;">BIGTIME EMPIRE CORPORATION</div>
+                                        </div>
+                                        
+                                        <div class="border border-dark p-2 mb-3 border-2">
+                                            <div class="text-uppercase border-bottom border-dark border-2 mb-2 pb-1 text-dark fw-bold" style="font-size:0.85rem;">DESCRIPTION</div>
+                                            <div style="font-size:0.8rem; color:#000;" class="mb-1">TO: </div>
+                                            <div style="font-size:0.8rem; color:#000;">FROM: </div>
+                                        </div>
+
+                                        <div class="border border-dark p-2 mb-3 border-2">
+                                            <div class="text-uppercase border-bottom border-dark border-2 mb-2 pb-1 text-dark fw-bold" style="font-size:0.85rem;">OPEN ENDED</div>
+                                            <div style="font-size:0.75rem; color:#000;">
+                                                <p class="mb-2">Lorem ipsum dolor sit amet consectetur adipiscing elit. Est quo et dolorem mollit minim et laborum voluptas ad nostrud nulla. Sed adipiscing dolore facere in placeat qui assumenda aute. Voluptas aute est repellendus ea deserunt consequat. Velit quas in possimus animi et dolor et optio elit.</p>
+                                                <p class="mb-2">Duis est dolores accusamus cupidatat irure. Et quidem elit dignissimos non est occaecat qui officia. Sint in culpa dolorem assumenda quibusdam voluptas minim. Praesentium eos maxime excepteur quidem rerum eos est et facilis provident cillum cum. Rerum ut qui enim sunt veniam vel iusto.</p>
+                                                <p class="mb-0">Culpa deserunt quo culpa et assumenda. Consequatur labore placeat quis cum accusamus laborum facere quis. Imperdiet qui exercitation ut expedita accusamus cumque nulla in temporibus facere libero occaecat. Deleniti quis deserunt sint ut corrupti distinctio elit cupiditate nulla aut blanditiis.</p>
+                                            </div>
+                                        </div>
+
+                                        <div class="border border-dark border-2 p-2" style="width: 250px; height: 100px;">
+                                            <div class="text-uppercase border-bottom border-dark border-2 mb-2 pb-1 text-dark fw-bold" style="font-size:0.85rem;">SIGNATURE</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div id="tab-forms-view" style="display:none;">
                             <!-- LIST VIEW -->
                             <div id="forms-list-container">
@@ -723,7 +847,7 @@ def get_admin_dashboard(path: str = ""):
                                             </li>
                                         </ul>
 
-                                        <button class="btn btn-primary-custom" onclick="openFormSourceModal()"><i class="bi bi-plus-lg me-1"></i> Add new</button>
+                                        <button class="btn btn-primary-custom" onclick="openFormSourceModal()"><i class="bi bi-plus-lg me-1"></i> Create Form</button>
                                     </div>
 
                                     <div class="p-3 border-bottom d-flex align-items-center gap-2">
@@ -2989,7 +3113,7 @@ def get_admin_dashboard(path: str = ""):
                                     <a class="nav-link fw-bold text-muted" id="form-tab-archived" href="#" onclick="switchFormTabStatus('ARCHIVED'); return false;">Archived (<span id="count-archived-forms">0</span>)</a>
                                 </li>
                             </ul>
-                            <button class="btn btn-warning text-white fw-bold px-3 rounded-2" onclick="openFormBuilderModal()"><i class="bi bi-plus-lg me-1"></i> Add new</button>
+                            <button class="btn btn-warning text-white fw-bold px-3 rounded-2" onclick="openFormBuilderModal()"><i class="bi bi-plus-lg me-1"></i> Create Form</button>
                         </div>
                         <div class="card border-0 shadow-sm rounded-3">
                             <div class="card-body p-0">

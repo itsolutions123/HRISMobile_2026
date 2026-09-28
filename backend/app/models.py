@@ -26,6 +26,7 @@ class Employee(Base):
     status = Column(String, default="APPROVED", nullable=False) # 'PENDING', 'APPROVED', 'DENIED'
     created_at = Column(DateTime, default=datetime.utcnow)
     manager_id = Column(String, ForeignKey("employees.employee_id"), nullable=True)
+    saved_signature = Column(String, nullable=True)
 
 class JobCategory(Base):
     __tablename__ = "job_categories"
