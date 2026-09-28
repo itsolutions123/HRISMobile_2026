@@ -1543,42 +1543,55 @@ def get_admin_dashboard(path: str = ""):
         </div>
 
         <div class="modal fade" id="createCustomFormModal" tabindex="-1" aria-hidden="true">
-            <div class="modal-dialog modal-lg modal-dialog-centered">
-                <div class="modal-content border-0 shadow">
-                    <div class="modal-header border-bottom p-4">
-                        <h6 class="modal-title fw-bold text-dark m-0"><i class="bi bi-file-earmark-plus me-2 text-primary"></i>Create Custom Form</h6>
+            <div class="modal-dialog modal-xl modal-dialog-centered">
+                <div class="modal-content border-0 shadow-lg">
+                    <div class="modal-header border-bottom px-4 py-3 bg-light">
+                        <div>
+                            <h5 class="modal-title fw-bold text-dark m-0"><i class="bi bi-ui-checks-grid me-2 text-primary"></i>Modern Form Builder</h5>
+                            <small class="text-muted">Design custom form fields with dynamic schemas</small>
+                        </div>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
-                    <div class="modal-body p-4">
-                        <div class="row g-3 mb-4">
-                            <div class="col-md-6">
-                                <label class="form-label fw-semibold text-secondary fs-7">FORM NAME</label>
-                                <input type="text" class="form-control" id="builderFormName" placeholder="e.g. Equipment Request Form">
+                    <div class="modal-body p-4" style="max-height: 75vh; overflow-y: auto;">
+                        <div class="row g-3">
+                            <div class="col-md-4 border-end pe-3">
+                                <h6 class="fw-bold text-dark mb-3"><i class="bi bi-gear me-2"></i>Form Details</h6>
+                                <div class="mb-3">
+                                    <label class="form-label text-secondary fw-semibold small mb-1">FORM NAME</label>
+                                    <input type="text" id="builderFormName" class="form-control" placeholder="e.g. Equipment Request Form">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label text-secondary fw-semibold small mb-1">CATEGORY</label>
+                                    <select id="builderFormCategory" class="form-select">
+                                    </select>
+                                </div>
+                                <h6 class="fw-bold text-dark mb-3 mt-4"><i class="bi bi-plus-circle me-2"></i>Add Form Elements</h6>
+                                <div class="row g-2">
+                                    <div class="col-6"><button class="btn btn-outline-secondary btn-sm w-100 text-start fw-medium" onclick="addModalCanvasBlock('Short Text')"><i class="bi bi-input-cursor-text text-primary me-2"></i>Short Text</button></div>
+                                    <div class="col-6"><button class="btn btn-outline-secondary btn-sm w-100 text-start fw-medium" onclick="addModalCanvasBlock('Description')"><i class="bi bi-text-paragraph text-success me-2"></i>Description</button></div>
+                                    <div class="col-6"><button class="btn btn-outline-secondary btn-sm w-100 text-start fw-medium" onclick="addModalCanvasBlock('Dropdown')"><i class="bi bi-menu-button-wide text-warning me-2"></i>Dropdown</button></div>
+                                    <div class="col-6"><button class="btn btn-outline-secondary btn-sm w-100 text-start fw-medium" onclick="addModalCanvasBlock('Yes/No')"><i class="bi bi-toggle-on text-info me-2"></i>Yes / No</button></div>
+                                    <div class="col-6"><button class="btn btn-outline-secondary btn-sm w-100 text-start fw-medium" onclick="addModalCanvasBlock('Location')"><i class="bi bi-geo-alt text-danger me-2"></i>Location</button></div>
+                                    <div class="col-6"><button class="btn btn-outline-secondary btn-sm w-100 text-start fw-medium" onclick="addModalCanvasBlock('Date')"><i class="bi bi-calendar-event text-secondary me-2"></i>Date</button></div>
+                                    <div class="col-6"><button class="btn btn-outline-secondary btn-sm w-100 text-start fw-medium" onclick="addModalCanvasBlock('Rating')"><i class="bi bi-star text-warning me-2"></i>Rating</button></div>
+                                    <div class="col-6"><button class="btn btn-outline-secondary btn-sm w-100 text-start fw-medium" onclick="addModalCanvasBlock('Signature')"><i class="bi bi-pencil-square text-dark me-2"></i>Signature</button></div>
+                                    <div class="col-12"><button class="btn btn-outline-secondary btn-sm w-100 text-start fw-medium" onclick="addModalCanvasBlock('Task')"><i class="bi bi-check2-square text-primary me-2"></i>Task / Checkbox</button></div>
+                                </div>
                             </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-semibold text-secondary fs-7">CATEGORY</label>
-                                <select class="form-select" id="builderFormCategory">
-                                    <option value="IT Forms">IT Forms</option>
-                                    <option value="Admin Forms">Admin Forms</option>
-                                    <option value="HR Forms">HR Forms</option>
-                                </select>
+                            <div class="col-md-8 ps-3">
+                                <div id="builderModalCanvasArea" class="d-flex flex-column gap-3 min-vh-50 p-2 bg-light rounded border border-dashed">
+                                    <div class="text-center text-muted py-5">
+                                        <i class="bi bi-cursor-fill display-6 text-secondary mb-2 d-block"></i>
+                                        <p class="mb-0 fw-semibold">Your form canvas is empty</p>
+                                        <small>Click elements on the left to start adding blocks</small>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-
-                        <div class="d-flex align-items-center justify-content-between mb-3">
-                            <h6 class="fw-bold text-dark m-0 fs-7">FORM FIELDS</h6>
-                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="addBuilderField()">
-                                <i class="bi bi-plus-lg me-1"></i>Add Field
-                            </button>
-                        </div>
-
-                        <div id="builderFieldsContainer" class="d-flex flex-column gap-3 mb-3" style="max-height: 380px; overflow-y: auto;">
-                            <!-- Dynamic fields inserted here -->
                         </div>
                     </div>
-                    <div class="modal-footer border-top p-3">
-                        <button type="button" class="btn btn-outline-custom" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-primary-custom" onclick="submitCustomFormBuilder()">Save & Publish Form</button>
+                    <div class="modal-footer border-top p-3 bg-light">
+                        <button type="button" class="btn btn-outline-secondary px-4 fw-semibold" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary px-4 fw-semibold" onclick="saveModalCustomForm()"><i class="bi bi-cloud-arrow-up me-1"></i>Save & Publish Form</button>
                     </div>
                 </div>
             </div>
@@ -3814,17 +3827,173 @@ def get_admin_dashboard(path: str = ""):
 
             let builderFieldIndex = 0;
 
+            let modalBuilderFields = [];
+
             function openCreateCustomFormModal() {
-                document.getElementById('builderFormName').value = '';
-                document.getElementById('builderFormCategory').value = currentFormCategory || 'IT Forms';
-                const container = document.getElementById('builderFieldsContainer');
-                if (container) {
-                    container.innerHTML = '';
-                    builderFieldIndex = 0;
-                    addBuilderField(); // Add initial default text field
+                const nameEl = document.getElementById('builderFormName');
+                const catEl = document.getElementById('builderFormCategory');
+                if (nameEl) nameEl.value = '';
+
+                if (catEl) {
+                    if (typeof availableCategoriesList !== 'undefined' && availableCategoriesList.length > 0) {
+                        catEl.innerHTML = availableCategoriesList.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+                    } else {
+                        catEl.innerHTML = `<option value="${currentFormCategory || 'Admin'}">${currentFormCategory || 'Admin'}</option>`;
+                    }
+                    catEl.value = currentFormCategory || (availableCategoriesList[0] ? availableCategoriesList[0].name : 'Admin');
                 }
+
+                modalBuilderFields = [];
+                renderModalCanvasBlocks();
+
                 currentBsModal = new bootstrap.Modal(document.getElementById('createCustomFormModal'));
                 currentBsModal.show();
+            }
+
+            function addModalCanvasBlock(type) {
+                const id = 'field_' + Date.now();
+                modalBuilderFields.push({
+                    id: id,
+                    type: type,
+                    label: type + ' Question',
+                    required: false,
+                    options: type === 'Dropdown' ? ['Option 1', 'Option 2'] : []
+                });
+                renderModalCanvasBlocks();
+            }
+
+            function removeModalCanvasBlock(index) {
+                modalBuilderFields.splice(index, 1);
+                renderModalCanvasBlocks();
+            }
+
+            function updateModalBlockLabel(index, val) {
+                modalBuilderFields[index].label = val;
+            }
+
+            function updateModalBlockRequired(index, chk) {
+                modalBuilderFields[index].required = chk;
+            }
+
+            function addModalBlockOption(index) {
+                modalBuilderFields[index].options.push('New Option');
+                renderModalCanvasBlocks();
+            }
+
+            function updateModalBlockOption(fieldIndex, optIndex, val) {
+                modalBuilderFields[fieldIndex].options[optIndex] = val;
+            }
+
+            function renderModalCanvasBlocks() {
+                const container = document.getElementById('builderModalCanvasArea');
+                if (!container) return;
+
+                if (modalBuilderFields.length === 0) {
+                    container.innerHTML = `
+                        <div class="text-center text-muted py-5">
+                            <i class="bi bi-cursor-fill display-6 text-secondary mb-2 d-block"></i>
+                            <p class="mb-0 fw-semibold">Your form canvas is empty</p>
+                            <small>Click elements on the left to start adding blocks</small>
+                        </div>`;
+                    return;
+                }
+
+                let html = '';
+                modalBuilderFields.forEach((field, idx) => {
+                    html += `
+                        <div class="card border shadow-sm p-3 rounded-3 position-relative bg-white">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle fw-semibold" style="font-size:11px;">
+                                    ${field.type.toUpperCase()}
+                                </span>
+                                <button class="btn btn-sm btn-outline-danger border-0 p-1" onclick="removeModalCanvasBlock(${idx})">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                            <div class="row g-2 align-items-center mb-2">
+                                <div class="col-8">
+                                    <input type="text" class="form-control form-control-sm fw-medium" value="${field.label}" onchange="updateModalBlockLabel(${idx}, this.value)" placeholder="Field Label">
+                                </div>
+                                <div class="col-4 d-flex align-items-center">
+                                    <div class="form-check form-switch m-0">
+                                        <input class="form-check-input" type="checkbox" id="mreq_${idx}" ${field.required ? 'checked' : ''} onchange="updateModalBlockRequired(${idx}, this.checked)">
+                                        <label class="form-check-label small text-muted" for="mreq_${idx}">Required</label>
+                                    </div>
+                                </div>
+                            </div>`;
+
+                    if (field.type === 'Dropdown') {
+                        html += `<div class="mt-2 ps-2 border-start border-2 border-warning">
+                                    <label class="form-label text-secondary small fw-semibold mb-1">DROPDOWN OPTIONS</label>`;
+                        field.options.forEach((opt, optIdx) => {
+                            html += `<div class="input-group input-group-sm mb-1">
+                                        <input type="text" class="form-control" value="${opt}" onchange="updateModalBlockOption(${idx}, ${optIdx}, this.value)">
+                                     </div>`;
+                        });
+                        html += `<button class="btn btn-link btn-sm p-0 text-decoration-none fw-semibold" onclick="addModalBlockOption(${idx})">+ Add Option</button>`;
+                        html += `</div>`;
+                    }
+
+                    html += `</div>`;
+                });
+
+                container.innerHTML = html;
+            }
+
+            async function saveModalCustomForm() {
+                const nameEl = document.getElementById('builderFormName');
+                const catEl = document.getElementById('builderFormCategory');
+
+                const name = nameEl ? nameEl.value.trim() : '';
+                const category = catEl ? catEl.value : (currentFormCategory || 'Admin');
+
+                if (!name) {
+                    showToast('Please enter a Form Name');
+                    return;
+                }
+
+                if (modalBuilderFields.length === 0) {
+                    showToast('Please add at least one element to your form');
+                    return;
+                }
+
+                const token = localStorage.getItem('token') || localStorage.getItem('adminToken') || sessionStorage.getItem('token') || '';
+
+                try {
+                    const payload = {
+                        name: name,
+                        category: category,
+                        assigned_groups: ['All users group'],
+                        assignment_type: 'Dynamic',
+                        schema_fields: modalBuilderFields
+                    };
+
+                    const res = await fetch('/api/forms', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + token
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const data = await res.json();
+                    if (!res.ok) {
+                        showToast(data.detail || 'Failed to create custom form');
+                        return;
+                    }
+
+                    showToast('Custom form created successfully!');
+                    if (currentBsModal) currentBsModal.hide();
+
+                    if (typeof loadCustomForms === 'function') {
+                        loadCustomForms(category);
+                    } else if (typeof loadCustomFormsList === 'function') {
+                        loadCustomFormsList();
+                    }
+                } catch(err) {
+                    showToast('Error saving custom form');
+                }
             }
 
             
