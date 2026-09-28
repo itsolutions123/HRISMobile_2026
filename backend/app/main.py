@@ -3957,7 +3957,7 @@ def get_admin_dashboard(path: str = ""):
                     return;
                 }
 
-                const token = localStorage.getItem('token') || localStorage.getItem('adminToken') || sessionStorage.getItem('token') || '';
+                const token = await getAdminAuthToken();
 
                 try {
                     const payload = {
