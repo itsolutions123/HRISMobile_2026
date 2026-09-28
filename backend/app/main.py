@@ -1762,10 +1762,21 @@ def get_admin_dashboard(path: str = ""):
                 if (!session) {
                     document.getElementById('portal-main-view').style.display = 'none';
                     document.getElementById('login-overlay-page').style.display = 'flex';
+                    if (window.location.pathname !== '/admin/login') {
+                        sessionStorage.setItem('redirect_after_login', window.location.pathname);
+                        history.pushState(null, '', '/admin/login');
+                    } else {
+                        sessionStorage.removeItem('redirect_after_login');
+                    }
                 } else {
                     document.getElementById('login-overlay-page').style.display = 'none';
                     document.getElementById('portal-main-view').style.display = 'block';
                     updateTopBarUserHeader();
+                    if (window.location.pathname === '/admin/login') {
+                        const savedRedirect = sessionStorage.getItem('redirect_after_login') || '/admin/forms';
+                        sessionStorage.removeItem('redirect_after_login');
+                        history.pushState(null, '', savedRedirect);
+                    }
                 }
             }
 
@@ -1776,7 +1787,7 @@ def get_admin_dashboard(path: str = ""):
 
                 try {
                     const res = await fetch('/api/auth/login', {
-                        method: method,
+                        method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ employee_id: empId, password: pwd })
                     });
@@ -1787,12 +1798,20 @@ def get_admin_dashboard(path: str = ""):
                         localStorage.setItem('atwork_session_active', 'true');
                         showToast('Successfully authenticated into atWork.');
                         checkAuthentication();
+                        if (typeof loadCategoryTabsBar === 'function') await loadCategoryTabsBar();
+                        if (typeof renderSidebarFormsCategories === 'function') await renderSidebarFormsCategories();
+                        if (typeof handleUrlRoutingOnLoad === 'function') {
+                            await handleUrlRoutingOnLoad();
+                        } else if (typeof switchTab === 'function') {
+                            switchTab('forms-view');
+                        }
                         await renderBrandSelectorOptions();
                         await renderConnecteamProvisioningTable();
                     } else {
                         showToast('Invalid Employee ID or Password.');
                     }
                 } catch(err) {
+                    console.error("Login submission error:", err);
                     showToast('Server connection error.');
                 }
             }
@@ -1800,6 +1819,7 @@ def get_admin_dashboard(path: str = ""):
             function performSignOut() {
                 localStorage.removeItem('atwork_session_active');
                 localStorage.removeItem('atwork_jwt_token');
+                sessionStorage.removeItem('redirect_after_login');
                 adminToken = '';
                 showToast('Signed out of atWork.');
                 checkAuthentication();
@@ -1879,15 +1899,17 @@ def get_admin_dashboard(path: str = ""):
             }
 
             function switchTab(tab, updateUrl = true) {
-                document.getElementById('tab-clock').style.display = 'none';
-                document.getElementById('tab-jobs').style.display = 'none';
-                document.getElementById('tab-users').style.display = 'none';
+                ['tab-clock', 'tab-jobs', 'tab-users'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.style.display = 'none';
+                });
                 const formsView = document.getElementById('tab-forms-view');
                 if (formsView) formsView.style.display = 'none';
 
-                document.getElementById('nav-clock').classList.remove('active');
-                document.getElementById('nav-jobs').classList.remove('active');
-                document.getElementById('nav-users').classList.remove('active');
+                ['nav-clock', 'nav-jobs', 'nav-users'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.classList.remove('active');
+                });
                 document.querySelectorAll('.nav-link-sidebar-item').forEach(el => {
                     el.classList.remove('active');
                     el.style.background = 'transparent';
@@ -1953,6 +1975,9 @@ def get_admin_dashboard(path: str = ""):
 
             async function handleUrlRoutingOnLoad() {
                 const path = window.location.pathname.toLowerCase();
+                if (path === '/admin/login' || path === '/admin/login/') {
+                    return;
+                }
                 if (path.includes('/admin/smart-groups')) {
                     switchTab('jobs', false);
                 } else if (path.includes('/admin/users')) {
