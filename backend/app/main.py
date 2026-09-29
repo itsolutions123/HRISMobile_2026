@@ -1544,54 +1544,62 @@ def get_admin_dashboard(path: str = ""):
         </div>
 
         <!-- Description Element Editor Modal -->
-        <div class="modal fade" id="descriptionEditorModal" tabindex="-1" aria-hidden="true" style="z-index: 1070;">
-            <div class="modal-dialog modal-lg modal-dialog-centered">
-                <div class="modal-content border-0 shadow-lg rounded-4">
-                    <div class="modal-header border-bottom px-4 py-3">
-                        <h6 class="modal-title fw-bold text-dark m-0 d-flex align-items-center gap-2">
-                            <i class="bi bi-file-earmark-text text-secondary"></i> Description
-                        </h6>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            <!-- RICH TEXT DESCRIPTION EDITOR MODAL -->
+    <div class="modal fade" id="descriptionEditorModal" tabindex="-1" aria-hidden="true" style="z-index: 1070;">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg rounded-4">
+                <div class="modal-header border-bottom-0 pb-0 pt-3 px-4 position-relative">
+                    <div class="w-100 text-center">
+                        <span class="modal-title fw-semibold text-secondary fs-6 d-inline-flex align-items-center gap-2">
+                            <i class="bi bi-file-earmark-text"></i> Description
+                        </span>
                     </div>
-                    <div class="modal-body p-4">
-                        <div class="border rounded-3 p-2 bg-light mb-2 d-flex flex-wrap align-items-center gap-2" id="descEditorToolbar">
-                            <select class="form-select form-select-sm w-auto" style="max-width: 100px;">
-                                <option>11pt</option>
-                                <option>12pt</option>
-                                <option>14pt</option>
-                                <option>16pt</option>
+                    <button type="button" class="btn-close position-absolute end-0 me-3 top-50 translate-middle-y" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <input type="hidden" id="descEditorFieldIndex">
+                    <div class="border rounded-4 p-3 bg-white shadow-sm">
+                        <!-- Toolbar -->
+                        <div class="d-flex flex-wrap align-items-center gap-2 mb-3 pb-2 border-bottom text-muted fs-7">
+                            <select class="form-select form-select-sm border-0 bg-light rounded-2 me-2" style="width: 110px;" onchange="document.execCommand('fontSize', false, this.value)">
+                                <option value="3" selected>11pt</option>
+                                <option value="1">9pt</option>
+                                <option value="2">10pt</option>
+                                <option value="4">12pt</option>
+                                <option value="5">14pt</option>
+                                <option value="6">18pt</option>
                             </select>
-                            <div class="btn-group btn-group-sm">
-                                <button type="button" class="btn btn-outline-secondary fw-bold" onclick="document.execCommand('bold', false, null)">B</button>
-                                <button type="button" class="btn btn-outline-secondary fst-italic" onclick="document.execCommand('italic', false, null)">I</button>
-                                <button type="button" class="btn btn-outline-secondary text-decoration-underline" onclick="document.execCommand('underline', false, null)">U</button>
-                            </div>
-                            <div class="btn-group btn-group-sm">
-                                <button type="button" class="btn btn-outline-secondary" onclick="document.execCommand('justifyLeft', false, null)"><i class="bi bi-text-left"></i></button>
-                                <button type="button" class="btn btn-outline-secondary" onclick="document.execCommand('justifyCenter', false, null)"><i class="bi bi-text-center"></i></button>
-                                <button type="button" class="btn btn-outline-secondary" onclick="document.execCommand('justifyRight', false, null)"><i class="bi bi-text-right"></i></button>
-                                <button type="button" class="btn btn-outline-secondary" onclick="document.execCommand('justifyFull', false, null)"><i class="bi bi-justify"></i></button>
-                            </div>
-                            <div class="btn-group btn-group-sm">
-                                <button type="button" class="btn btn-outline-secondary" onclick="document.execCommand('insertUnorderedList', false, null)"><i class="bi bi-list-ul"></i></button>
-                                <button type="button" class="btn btn-outline-secondary" onclick="document.execCommand('insertOrderedList', false, null)"><i class="bi bi-list-ol"></i></button>
-                            </div>
-                            <div class="btn-group btn-group-sm">
-                                <button type="button" class="btn btn-outline-secondary" onclick="document.execCommand('indent', false, null)"><i class="bi bi-indent"></i></button>
-                                <button type="button" class="btn btn-outline-secondary" onclick="document.execCommand('outdent', false, null)"><i class="bi bi-outdent"></i></button>
-                            </div>
-                            <div class="btn-group btn-group-sm">
-                                <button type="button" class="btn btn-outline-secondary" onclick="const url=prompt('Enter link URL:'); if(url) document.execCommand('createLink', false, url)"><i class="bi bi-link-45deg"></i></button>
-                                <button type="button" class="btn btn-outline-secondary" onclick="const img=prompt('Enter image URL:'); if(img) document.execCommand('insertImage', false, img)"><i class="bi bi-image"></i></button>
-                            </div>
+                            <div class="vr my-1"></div>
+                            <button type="button" class="btn btn-sm btn-light border-0 fw-bold px-2" onclick="document.execCommand('bold', false, null)" title="Bold">B</button>
+                            <button type="button" class="btn btn-sm btn-light border-0 fst-italic px-2" onclick="document.execCommand('italic', false, null)" title="Italic">I</button>
+                            <button type="button" class="btn btn-sm btn-light border-0 text-decoration-underline px-2" onclick="document.execCommand('underline', false, null)" title="Underline">U</button>
+                            <button type="button" class="btn btn-sm btn-light border-0 px-2" onclick="const c=prompt('Text Color (e.g. #000000 or red):'); if(c) document.execCommand('foreColor', false, c)" title="Text Color"><i class="bi bi-type"></i>A</button>
+                            <button type="button" class="btn btn-sm btn-light border-0 px-2" onclick="const c=prompt('Highlight Color (e.g. #ffff00):'); if(c) document.execCommand('hiliteColor', false, c)" title="Highlight Color"><i class="bi bi-pencil-fill" style="font-size:12px;"></i></button>
+                            <div class="vr my-1"></div>
+                            <button type="button" class="btn btn-sm btn-light border-0 px-2" onclick="document.execCommand('justifyLeft', false, null)" title="Align Left"><i class="bi bi-text-left"></i></button>
+                            <button type="button" class="btn btn-sm btn-light border-0 px-2" onclick="document.execCommand('justifyCenter', false, null)" title="Align Center"><i class="bi bi-text-center"></i></button>
+                            <button type="button" class="btn btn-sm btn-light border-0 px-2" onclick="document.execCommand('justifyRight', false, null)" title="Align Right"><i class="bi bi-text-right"></i></button>
+                            <button type="button" class="btn btn-sm btn-light border-0 px-2" onclick="document.execCommand('justifyFull', false, null)" title="Justify"><i class="bi bi-justify"></i></button>
+                            <div class="vr my-1"></div>
+                            <button type="button" class="btn btn-sm btn-light border-0 px-2" onclick="document.execCommand('undo', false, null)" title="Undo"><i class="bi bi-arrow-counterclockwise"></i></button>
+                            <button type="button" class="btn btn-sm btn-light border-0 px-2" onclick="document.execCommand('redo', false, null)" title="Redo"><i class="bi bi-arrow-clockwise"></i></button>
+                            <button type="button" class="btn btn-sm btn-light border-0 px-2" onclick="document.execCommand('insertUnorderedList', false, null)" title="Bullet List"><i class="bi bi-list-ul"></i></button>
+                            <button type="button" class="btn btn-sm btn-light border-0 px-2" onclick="document.execCommand('insertOrderedList', false, null)" title="Numbered List"><i class="bi bi-list-ol"></i></button>
+                            <button type="button" class="btn btn-sm btn-light border-0 px-2" onclick="document.execCommand('indent', false, null)" title="Indent Right"><i class="bi bi-text-indent-left"></i></button>
+                            <button type="button" class="btn btn-sm btn-light border-0 px-2" onclick="document.execCommand('outdent', false, null)" title="Indent Left"><i class="bi bi-text-indent-right"></i></button>
+                            <button type="button" class="btn btn-sm btn-light border-0 px-2" onclick="const u=prompt('Enter link URL:'); if(u) document.execCommand('createLink', false, u)" title="Insert Link"><i class="bi bi-link-45deg"></i></button>
+                            <button type="button" class="btn btn-sm btn-light border-0 px-2" onclick="const i=prompt('Enter image URL:'); if(i) document.execCommand('insertImage', false, i)" title="Insert Image"><i class="bi bi-image"></i></button>
                         </div>
-                        <div id="descriptionEditorArea" class="form-control border rounded-3 p-3" contenteditable="true" style="min-height: 280px; max-height: 400px; overflow-y: auto; background-color: #fff;"></div>
-                    </div>
-                    <div class="modal-footer border-top px-4 py-3">
-                        <button type="button" class="btn btn-primary rounded-pill px-4 fw-semibold" onclick="confirmDescriptionContent()">Confirm</button>
+                        <!-- Canvas Editor -->
+                        <div id="descEditorCanvas" contenteditable="true" class="form-control border-0 shadow-none p-2" style="min-height: 280px; outline: none; font-size: 14px; color: #333;" placeholder="Start typing description..."></div>
                     </div>
                 </div>
+                <div class="modal-footer border-top-0 pt-0 px-4 pb-4 justify-content-end">
+                    <button type="button" class="btn btn-primary rounded-pill px-4 py-2 fw-semibold shadow-sm" onclick="confirmDescriptionEditor()">Confirm</button>
+                </div>
             </div>
+        </div>
+    </div>
         </div>
 
         <div class="modal fade" id="createCustomFormModal" tabindex="-1" aria-hidden="true">
@@ -1599,7 +1607,7 @@ def get_admin_dashboard(path: str = ""):
                 <div class="modal-content border-0 shadow-lg">
                     <div class="modal-header border-bottom px-4 py-3 bg-light">
                         <div>
-                            <h5 class="modal-title fw-bold text-dark m-0"><i class="bi bi-ui-checks-grid me-2 text-primary"></i>Modern Form Builder</h5>
+                            <h5 class="modal-title fw-bold text-dark m-0" id="customFormBuilderModalTitle"><i class="bi bi-ui-checks-grid me-2 text-primary"></i>Modern Form Builder</h5>
                             <small class="text-muted">Design custom form fields with dynamic schemas</small>
                         </div>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -4106,13 +4114,20 @@ if (titleEl) titleEl.innerText = activeCustomForm.name + ' - Document Preview';
                         areaEl.innerHTML = '<div class="text-center text-muted py-4">No fields defined for this form.</div>';
                     } else {
                         let html = '';
+                        let qNum = 1;
                         fields.forEach((f, idx) => {
+                            if (f.type === 'Description') {
+                                const descHtml = f.description || f.content || f.label || '';
+                                html += `<div class="my-3 text-dark fs-7 lh-base text-break">${descHtml}</div>`;
+                                return;
+                            }
                             html += `<div class="p-3 border rounded bg-light mb-2">
-                                        <label class="fw-bold text-dark d-block mb-1 fs-7">${idx + 1}. ${f.label || f.name || 'Untitled Field'} ${f.required ? '<span class="text-danger">*</span>' : ''}</label>`;
+                                        <label class="fw-bold text-dark d-block mb-1 fs-7">${qNum++}. ${f.label || f.name || 'Untitled Field'} ${f.required ? '<span class="text-danger">*</span>' : ''}</label>`;
                             if (f.type === 'Short Text' || f.type === 'text') {
                                 html += `<input type="text" class="form-control form-control-sm" placeholder="User response line..." disabled>`;
                             } else if (f.type === 'Description') {
-                                html += `<textarea class="form-control form-control-sm" rows="2" placeholder="Description/Note text..." disabled></textarea>`;
+                                const descHtml = f.description || f.content || f.label || '<i class="text-muted">No description provided.</i>';
+                                html += `<div class="p-3 bg-white border rounded text-dark fs-7 lh-base text-break">${descHtml}</div>`;
                             } else if (f.type === 'Dropdown') {
                                 html += `<select class="form-select form-select-sm" disabled><option>Select option...</option>`;
                                 (f.options || []).forEach(o => { html += `<option>${o}</option>`; });
@@ -4158,7 +4173,10 @@ if (titleEl) titleEl.innerText = activeCustomForm.name + ' - Document Preview';
                     type: f.type || 'Short Text',
                     label: f.label || f.name || 'Untitled Field',
                     required: !!f.required,
-                    options: f.options || []
+                    options: f.options || [],
+                    description: f.description || f.content || f.value || '',
+                    content: f.description || f.content || f.value || '',
+                    value: f.description || f.content || f.value || ''
                 }));
 
                 renderModalCanvasBlocks();
@@ -4168,6 +4186,8 @@ if (titleEl) titleEl.innerText = activeCustomForm.name + ' - Document Preview';
             }
 
             function openCreateCustomFormModal() {
+    const titleEl = document.getElementById('customFormBuilderModalTitle');
+    if (titleEl) titleEl.innerHTML = '<i class="bi bi-ui-checks-grid me-2 text-primary"></i>Modern Form Builder';
                 editingFormId = null;
                 const nameEl = document.getElementById('builderFormName');
                 const catEl = document.getElementById('builderFormCategory');
@@ -4189,7 +4209,37 @@ if (titleEl) titleEl.innerText = activeCustomForm.name + ' - Document Preview';
                 currentBsModal.show();
             }
 
+                        function syncModalCanvasInputs() {
+                if (!modalBuilderFields || modalBuilderFields.length === 0) return;
+                modalBuilderFields.forEach((field, idx) => {
+                    // Sync Label input if present
+                    const labelInput = document.querySelector(`input[onchange*="updateModalBlockLabel(${idx}"]`);
+                    if (labelInput) field.label = labelInput.value;
+
+                    // Sync Required switch
+                    const reqInput = document.getElementById(`mreq_${idx}`);
+                    if (reqInput) field.required = reqInput.checked;
+
+                    // Ensure Description fields retain rich content across syncs
+                    if (field.type === 'Description') {
+                        const val = field.description || field.content || field.value || '';
+                        field.description = val;
+                        field.content = val;
+                        field.value = val;
+                    }
+
+                    // Sync Dropdown Options
+                    if (field.type === 'Dropdown' && Array.isArray(field.options)) {
+                        field.options.forEach((opt, optIdx) => {
+                            const optInput = document.querySelector(`input[onchange*="updateModalBlockOption(${idx}, ${optIdx}"]`);
+                            if (optInput) field.options[optIdx] = optInput.value;
+                        });
+                    }
+                });
+            }
+
             function addModalCanvasBlock(type) {
+                syncModalCanvasInputs();
                 const id = 'field_' + Date.now();
                 modalBuilderFields.push({
                     id: id,
@@ -4202,6 +4252,7 @@ if (titleEl) titleEl.innerText = activeCustomForm.name + ' - Document Preview';
             }
 
             function removeModalCanvasBlock(index) {
+                syncModalCanvasInputs();
                 modalBuilderFields.splice(index, 1);
                 renderModalCanvasBlocks();
             }
@@ -4215,12 +4266,69 @@ if (titleEl) titleEl.innerText = activeCustomForm.name + ' - Document Preview';
             }
 
             function addModalBlockOption(index) {
+                syncModalCanvasInputs();
                 modalBuilderFields[index].options.push('New Option');
                 renderModalCanvasBlocks();
             }
 
             function updateModalBlockOption(fieldIndex, optIndex, val) {
                 modalBuilderFields[fieldIndex].options[optIndex] = val;
+            }
+
+            
+            let descEditorBsModal = null;
+            
+            function openElementEditorModal(idx) {
+                const field = modalBuilderFields[idx];
+                if (!field) return;
+                if (field.type === 'Description') {
+                    openDescriptionModal(idx);
+                } else if (field.type === 'Dropdown') {
+                    if (typeof openDropdownModal === 'function') {
+                        openDropdownModal(idx);
+                    } else {
+                        showToast('Dropdown choices editor coming up next!');
+                    }
+                } else {
+                    showToast(field.type + ' configuration modal coming up next!');
+                }
+            }
+
+            function openDescriptionModal(idx) {
+                document.getElementById('descEditorFieldIndex').value = idx;
+                const field = modalBuilderFields[idx];
+                const editor = document.getElementById('descEditorCanvas');
+                if (editor && field) {
+                    const savedHtml = field.description || field.content || field.value || '';
+                    editor.innerHTML = (savedHtml === 'Description Question') ? '' : savedHtml;
+                }
+                const modalEl = document.getElementById('descriptionEditorModal');
+                if (modalEl) {
+                    descEditorBsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                    descEditorBsModal.show();
+                }
+            }
+
+            function confirmDescriptionEditor() {
+                const idxStr = document.getElementById('descEditorFieldIndex').value;
+                const idx = parseInt(idxStr, 10);
+                const editor = document.getElementById('descEditorCanvas');
+                
+                if (!isNaN(idx) && modalBuilderFields[idx] && editor) {
+                    const htmlVal = editor.innerHTML;
+                    modalBuilderFields[idx].description = htmlVal;
+                    modalBuilderFields[idx].content = htmlVal;
+                    modalBuilderFields[idx].value = htmlVal;
+                    showToast('Description updated');
+                }
+                
+                const modalEl = document.getElementById('descriptionEditorModal');
+                if (modalEl) {
+                    const bsModal = bootstrap.Modal.getInstance(modalEl) || bootstrap.Modal.getOrCreateInstance(modalEl);
+                    if (bsModal) bsModal.hide();
+                }
+                
+                renderModalCanvasBlocks();
             }
 
             function renderModalCanvasBlocks() {
@@ -4251,13 +4359,20 @@ if (titleEl) titleEl.innerText = activeCustomForm.name + ' - Document Preview';
                             </div>
                             <div class="row g-2 align-items-center mb-2">
                                 <div class="col-8">
-                                    <input type="text" class="form-control form-control-sm fw-medium" value="${field.label}" onchange="updateModalBlockLabel(${idx}, this.value)" placeholder="Field Label">
+                                    ${field.type === 'Description' ? `
+                                        <div class="p-2 border rounded bg-light text-dark fs-7 lh-sm overflow-hidden text-truncate" style="max-height: 48px; cursor: pointer;" onclick="openDescriptionModal(${idx})">
+                                            ${(field.description || field.content || field.value) ? (field.description || field.content || field.value) : '<span class="text-muted fst-italic">Click Edit to add rich text content...</span>'}
+                                        </div>
+                                    ` : `
+                                        <input type="text" class="form-control form-control-sm fw-medium" value="${field.label}" onchange="updateModalBlockLabel(${idx}, this.value)" placeholder="Field Label">
+                                    `}
                                 </div>
-                                <div class="col-4 d-flex align-items-center">
-                                    <div class="form-check form-switch m-0">
+                                <div class="col-4 d-flex align-items-center justify-content-end gap-2">
+                                    <div class="form-check form-switch m-0 me-1">
                                         <input class="form-check-input" type="checkbox" id="mreq_${idx}" ${field.required ? 'checked' : ''} onchange="updateModalBlockRequired(${idx}, this.checked)">
                                         <label class="form-check-label small text-muted" for="mreq_${idx}">Required</label>
                                     </div>
+                                    <button type="button" class="btn btn-sm btn-link text-decoration-none fw-semibold p-0 text-primary ms-1" onclick="openElementEditorModal(${idx})">Edit</button>
                                 </div>
                             </div>`;
 
@@ -4302,6 +4417,10 @@ if (titleEl) titleEl.innerText = activeCustomForm.name + ' - Document Preview';
                         const reqChk = canvasContainer.querySelector(`#mreq_${idx}`);
                         if (reqChk) {
                             field.required = reqChk.checked;
+                        }
+                        if (field.type === 'Description') {
+                            if (!field.description && field.content) field.description = field.content;
+                            if (!field.content && field.description) field.content = field.description;
                         }
                         if (field.type === 'Dropdown' && Array.isArray(field.options)) {
                             const optInputs = canvasContainer.querySelectorAll(`input[onchange*="updateModalBlockOption(${idx},"]`);
