@@ -2043,12 +2043,12 @@ def get_admin_dashboard(path: str = ""):
 
             async function loadHomeDashboardData() {
                 try {
-                    const res = await fetch('/api/active-punches', {
+                    const res = await fetch('/api/punch/logs', {
                         headers: { 'Authorization': 'Bearer ' + adminToken }
                     });
                     if (res.ok) {
-                        const data = await res.json();
-                        homeAttendanceCache = Array.isArray(data) ? data : (data.active_punches || []);
+                        const logs = await res.json();
+                        homeAttendanceCache = Array.isArray(logs) ? logs : [];
                         renderHomeAttendanceTables(homeAttendanceCache);
                     } else {
                         renderHomeAttendanceTables([]);
@@ -2074,15 +2074,40 @@ def get_admin_dashboard(path: str = ""):
                 if (clockedInCount) clockedInCount.innerText = `(${clockedInList.length})`;
                 if (clockOutCount) clockOutCount.innerText = `(${clockOutList.length})`;
 
-                if (clockedInList.length === 0) {
-                    clockedInBody.innerHTML = '<tr><td colspan="2" class="text-muted text-center py-3">No employees clocked in right now.</td></tr>';
+                // Filter active clock-ins (latest punch_type === 'CLOCK_IN')
+                const latestMap = {};
+                records.forEach(r => {
+                    const emp = r.employee_id;
+                    if (!latestMap[emp] || r.id > latestMap[emp].id) {
+                        latestMap[emp] = r;
+                    }
+                });
+                const activeClockIns = Object.values(latestMap).filter(r => (r.punch_type || '').toUpperCase() === 'CLOCK_IN');
+
+                if (clockedInCount) clockedInCount.innerText = `(${activeClockIns.length})`;
+
+                if (activeClockIns.length === 0) {
+                    clockedInBody.innerHTML = '<div class="text-muted text-center py-4 fs-7">No employees clocked in right now.</div>';
                 } else {
-                    clockedInBody.innerHTML = clockedInList.map(r => `
-                        <tr>
-                            <td class="fw-bold text-dark py-2"><i class="bi bi-person-circle text-primary me-2"></i>${r.full_name || r.employee_id || 'User'}</td>
-                            <td class="text-end text-muted font-monospace py-2">${r.clock_in_time ? new Date(r.clock_in_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}</td>
-                        </tr>
-                    `).join('');
+                    clockedInBody.innerHTML = activeClockIns.map(r => {
+                        const empName = r.full_name || r.employee_id || 'Staff';
+                        const timeStr = r.timestamp || 'N/A';
+                        const jobRole = r.address || 'Duty Shift';
+                        return `
+                            <div class="card border rounded-3 p-3 mb-2 shadow-sm bg-white pointer-events-none" style="user-select: none;">
+                                <div class="d-flex align-items-center justify-content-between mb-1">
+                                    <span class="fw-bold text-dark fs-6">${empName}</span>
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 fs-8 text-uppercase fw-semibold">CLOCK_IN</span>
+                                </div>
+                                <div class="text-muted fs-7 d-flex align-items-center gap-1">
+                                    <i class="bi bi-clock"></i> ${timeStr}
+                                </div>
+                                <div class="text-secondary fs-7 mt-1">
+                                    <i class="bi bi-briefcase me-1"></i>Job: ${jobRole}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
                 }
 
                 if (clockOutList.length === 0) {
@@ -2126,6 +2151,8 @@ def get_admin_dashboard(path: str = ""):
                 }
                 if (path.includes('/admin/home')) {
                     switchTab('home', false);
+                } else if (path.includes('/admin/timeclock')) {
+                    switchTab('clock', false);
                 } else if (path.includes('/admin/smart-groups')) {
                     switchTab('jobs', false);
                 } else if (path.includes('/admin/users')) {
