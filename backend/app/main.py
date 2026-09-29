@@ -4066,6 +4066,23 @@ def get_admin_dashboard(path: str = ""):
 
             let builderFieldIndex = 0;
 
+            
+            function normalizeFormSchemaFields(raw) {
+                if (!raw) return [];
+                let res = raw;
+                while (typeof res === 'string') {
+                    try {
+                        const parsed = JSON.parse(res);
+                        if (parsed === res) break;
+                        res = parsed;
+                    } catch(e) {
+                        res = [];
+                        break;
+                    }
+                }
+                return Array.isArray(res) ? res : [];
+            }
+
             let modalBuilderFields = [];
             let editingFormId = null;
 
@@ -4079,12 +4096,12 @@ def get_admin_dashboard(path: str = ""):
                 const catEl = document.getElementById('previewDocSubCategory');
                 const areaEl = document.getElementById('previewDocFieldsArea');
 
-                if (titleEl) titleEl.innerText = activeCustomForm.name + ' - Document Preview';
+                let fields = normalizeFormSchemaFields(activeCustomForm ? (activeCustomForm.schema_fields || activeCustomForm.fields) : []);
+if (titleEl) titleEl.innerText = activeCustomForm.name + ' - Document Preview';
                 if (headerEl) headerEl.innerText = activeCustomForm.name;
                 if (catEl) catEl.innerText = 'Category: ' + (activeCustomForm.category || 'General');
 
                 if (areaEl) {
-                    const fields = activeCustomForm.schema_fields || activeCustomForm.fields || [];
                     if (fields.length === 0) {
                         areaEl.innerHTML = '<div class="text-center text-muted py-4">No fields defined for this form.</div>';
                     } else {
@@ -4136,7 +4153,7 @@ def get_admin_dashboard(path: str = ""):
                     catEl.value = activeCustomForm.category || 'Admin';
                 }
 
-                modalBuilderFields = (activeCustomForm.schema_fields || activeCustomForm.fields || []).map(f => ({
+                modalBuilderFields = (typeof activeCustomForm.schema_fields === 'string' ? (JSON.parse(activeCustomForm.schema_fields || '[]')) : (activeCustomForm.schema_fields || [])).map(f => ({
                     id: f.id || ('field_' + Date.now()),
                     type: f.type || 'Short Text',
                     label: f.label || f.name || 'Untitled Field',
@@ -4272,6 +4289,29 @@ def get_admin_dashboard(path: str = ""):
                 if (!name) {
                     showToast('Please enter a Form Name');
                     return;
+                }
+
+                // Sync current DOM inputs back into modalBuilderFields array
+                const canvasContainer = document.getElementById('builderModalCanvasArea');
+                if (canvasContainer) {
+                    modalBuilderFields.forEach((field, idx) => {
+                        const labelInput = canvasContainer.querySelector(`input[onchange*="updateModalBlockLabel(${idx}"]`);
+                        if (labelInput && labelInput.value.trim()) {
+                            field.label = labelInput.value.trim();
+                        }
+                        const reqChk = canvasContainer.querySelector(`#mreq_${idx}`);
+                        if (reqChk) {
+                            field.required = reqChk.checked;
+                        }
+                        if (field.type === 'Dropdown' && Array.isArray(field.options)) {
+                            const optInputs = canvasContainer.querySelectorAll(`input[onchange*="updateModalBlockOption(${idx},"]`);
+                            optInputs.forEach((optInp, optIdx) => {
+                                if (optInp.value.trim()) {
+                                    field.options[optIdx] = optInp.value.trim();
+                                }
+                            });
+                        }
+                    });
                 }
 
                 if (modalBuilderFields.length === 0) {

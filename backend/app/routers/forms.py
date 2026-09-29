@@ -137,7 +137,8 @@ def list_forms(category: Optional[str] = None, is_archived: bool = False, db: Se
             "administratedBy": f.administrated_by,
             "dateCreated": f.date_created,
             "isArchived": f.is_archived,
-            "isNew": f.is_new
+            "isNew": f.is_new,
+            "schema_fields": f.schema_fields or "[]"
         })
     return results
 
