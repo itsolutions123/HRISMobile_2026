@@ -387,7 +387,8 @@ def get_admin_dashboard(path: str = ""):
                     </div>
 
                     <div class="section-label">Core Workspace</div>
-                    <a class="nav-link active" id="nav-clock" onclick="switchTab('clock')"><i class="bi bi-stopwatch"></i> Time Clock</a>
+                    <a class="nav-link active" id="nav-home" onclick="switchTab('home')"><i class="bi bi-house-door"></i> Home</a>
+                    <a class="nav-link" id="nav-clock" onclick="switchTab('clock')"><i class="bi bi-stopwatch"></i> Time Clock</a>
                     <a class="nav-link" id="nav-jobs" onclick="switchTab('jobs')"><i class="bi bi-diagram-3"></i> Smart Groups</a>
                     <a class="nav-link d-flex justify-content-between align-items-center" id="nav-users" onclick="switchTab('users')">
                         <span><i class="bi bi-people me-2"></i> Users & Directory</span>
@@ -428,8 +429,59 @@ def get_admin_dashboard(path: str = ""):
                     </div>
 
                     <div class="p-4">
+                        <!-- TAB 0: HOME LANDING -->
+                        <div id="tab-home">
+                            <!-- ATTENDANCE CARD -->
+                            <div class="card-custom mb-4">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h6 class="fw-bold m-0 text-dark"><i class="bi bi-person-check me-2 text-warning"></i> Attendance</h6>
+                                    <div class="input-group input-group-sm" style="width: 250px;">
+                                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                                        <input type="text" class="form-control border-start-0" id="homeAttendanceSearch" placeholder="SEARCH" onkeyup="filterHomeAttendance(this.value)">
+                                    </div>
+                                </div>
+                                <ul class="nav nav-tabs mb-3 border-bottom" role="tablist">
+                                    <li class="nav-item">
+                                        <button class="nav-link active fw-bold text-dark px-3 py-2" id="home-clocked-in-tab" data-bs-toggle="tab" data-bs-target="#home-clocked-in" type="button"><span class="badge bg-warning text-dark me-2">CLOCKED IN NOW</span> <span id="home-clocked-in-count">(0)</span></button>
+                                    </li>
+                                    <li class="nav-item">
+                                        <button class="nav-link fw-bold text-dark px-3 py-2" id="home-clock-out-tab" data-bs-toggle="tab" data-bs-target="#home-clock-out" type="button">NEED TO CLOCK OUT <span id="home-clock-out-count">(0)</span></button>
+                                    </li>
+                                </ul>
+                                <div class="tab-content">
+                                    <div class="tab-pane fade show active" id="home-clocked-in">
+                                        <div class="table-responsive">
+                                            <table class="table table-hover align-middle mb-0" style="font-size: 13px;">
+                                                <tbody id="homeClockedInTableBody">
+                                                    <tr><td colspan="2" class="text-muted text-center py-3">Loading active attendance...</td></tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                    <div class="tab-pane fade" id="home-clock-out">
+                                        <div class="table-responsive">
+                                            <table class="table table-hover align-middle mb-0" style="font-size: 13px;">
+                                                <tbody id="homeClockOutTableBody">
+                                                    <tr><td colspan="2" class="text-muted text-center py-3">Loading records...</td></tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- FEED CARD -->
+                            <div class="card-custom">
+                                <h6 class="fw-bold mb-3 text-dark"><i class="bi bi-newspaper me-2 text-warning"></i> Feed</h6>
+                                <div class="p-3 border rounded-3 bg-light shadow-sm" style="max-width: 320px;">
+                                    <div class="fw-bold text-primary mb-1 fs-7" style="letter-spacing:0.05em;">CELEBRATING TODAY!</div>
+                                    <div class="fw-semibold text-dark fs-6" id="homeCelebratingText">User anniversaries & milestones</div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- TAB 1: TIME CLOCK -->
-                        <div id="tab-clock">
+                        <div id="tab-clock" style="display:none;">
                             <div class="card-custom mb-4">
                                 <div class="d-flex justify-content-between align-items-center mb-4">
                                     <div>
@@ -1759,23 +1811,27 @@ def get_admin_dashboard(path: str = ""):
 
             function checkAuthentication() {
                 const session = localStorage.getItem('atwork_session_active');
+                const loginOverlay = document.getElementById('login-overlay-page');
+                const portalView = document.getElementById('portal-main-view');
+
                 if (!session) {
-                    document.getElementById('portal-main-view').style.display = 'none';
-                    document.getElementById('login-overlay-page').style.display = 'flex';
+                    if (portalView) portalView.style.display = 'none';
+                    if (loginOverlay) loginOverlay.style.display = 'flex';
                     if (window.location.pathname !== '/admin/login') {
                         sessionStorage.setItem('redirect_after_login', window.location.pathname);
                         history.pushState(null, '', '/admin/login');
-                    } else {
-                        sessionStorage.removeItem('redirect_after_login');
+                    } else if (!sessionStorage.getItem('redirect_after_login')) {
+                        sessionStorage.setItem('redirect_after_login', '/admin/home');
                     }
                 } else {
-                    document.getElementById('login-overlay-page').style.display = 'none';
-                    document.getElementById('portal-main-view').style.display = 'block';
+                    if (loginOverlay) loginOverlay.style.display = 'none';
+                    if (portalView) portalView.style.display = 'block';
                     updateTopBarUserHeader();
                     if (window.location.pathname === '/admin/login') {
-                        const savedRedirect = sessionStorage.getItem('redirect_after_login') || '/admin/forms';
+                        const savedRedirect = sessionStorage.getItem('redirect_after_login') || '/admin/home';
                         sessionStorage.removeItem('redirect_after_login');
                         history.pushState(null, '', savedRedirect);
+                        handleUrlRoutingOnLoad();
                     }
                 }
             }
@@ -1800,10 +1856,13 @@ def get_admin_dashboard(path: str = ""):
                         checkAuthentication();
                         if (typeof loadCategoryTabsBar === 'function') await loadCategoryTabsBar();
                         if (typeof renderSidebarFormsCategories === 'function') await renderSidebarFormsCategories();
-                        if (typeof handleUrlRoutingOnLoad === 'function') {
+                        if (window.location.pathname === '/admin/login' || window.location.pathname === '/admin/login/') {
+                            history.pushState(null, '', '/admin/home');
+                            if (typeof switchTab === 'function') switchTab('home', false);
+                        } else if (typeof handleUrlRoutingOnLoad === 'function') {
                             await handleUrlRoutingOnLoad();
                         } else if (typeof switchTab === 'function') {
-                            switchTab('forms-view');
+                            switchTab('home', false);
                         }
                         await renderBrandSelectorOptions();
                         await renderConnecteamProvisioningTable();
@@ -1899,14 +1958,17 @@ def get_admin_dashboard(path: str = ""):
             }
 
             function switchTab(tab, updateUrl = true) {
-                ['tab-clock', 'tab-jobs', 'tab-users'].forEach(id => {
+                if (window.location.pathname === '/admin/login' || !localStorage.getItem('atwork_session_active')) {
+                    updateUrl = false;
+                }
+                ['tab-home', 'tab-clock', 'tab-jobs', 'tab-users'].forEach(id => {
                     const el = document.getElementById(id);
                     if (el) el.style.display = 'none';
                 });
                 const formsView = document.getElementById('tab-forms-view');
                 if (formsView) formsView.style.display = 'none';
 
-                ['nav-clock', 'nav-jobs', 'nav-users'].forEach(id => {
+                ['nav-home', 'nav-clock', 'nav-jobs', 'nav-users'].forEach(id => {
                     const el = document.getElementById(id);
                     if (el) el.classList.remove('active');
                 });
@@ -1953,7 +2015,11 @@ def get_admin_dashboard(path: str = ""):
                 const navBtn = document.getElementById('nav-' + tab);
                 if (navBtn) navBtn.classList.add('active');
 
-                if (tab === 'clock') {
+                if (tab === 'home') {
+                    if (updateUrl) history.pushState(null, '', '/admin/home');
+                    document.getElementById('page-title').innerText = 'Home';
+                    loadHomeDashboardData();
+                } else if (tab === 'clock') {
                     if (updateUrl) history.pushState(null, '', '/admin/timeclock');
                     document.getElementById('page-title').innerText = 'Time Clock';
                     setTimeout(() => { if (map) map.invalidateSize(); else initMap(); }, 200);
@@ -1973,12 +2039,94 @@ def get_admin_dashboard(path: str = ""):
                 }
             }
 
+            let homeAttendanceCache = [];
+
+            async function loadHomeDashboardData() {
+                try {
+                    const res = await fetch('/api/active-punches', {
+                        headers: { 'Authorization': 'Bearer ' + adminToken }
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        homeAttendanceCache = Array.isArray(data) ? data : (data.active_punches || []);
+                        renderHomeAttendanceTables(homeAttendanceCache);
+                    } else {
+                        renderHomeAttendanceTables([]);
+                    }
+                } catch(err) {
+                    console.error("Failed to load home dashboard data:", err);
+                    renderHomeAttendanceTables([]);
+                }
+            }
+
+            function renderHomeAttendanceTables(records) {
+                const clockedInBody = document.getElementById('homeClockedInTableBody');
+                const clockOutBody = document.getElementById('homeClockOutTableBody');
+                const clockedInCount = document.getElementById('home-clocked-in-count');
+                const clockOutCount = document.getElementById('home-clock-out-count');
+                const celebratingText = document.getElementById('homeCelebratingText');
+
+                if (!clockedInBody || !clockOutBody) return;
+
+                const clockedInList = records.filter(r => !r.clock_out_time);
+                const clockOutList = records.filter(r => r.clock_out_time || r.status === 'need_clock_out');
+
+                if (clockedInCount) clockedInCount.innerText = `(${clockedInList.length})`;
+                if (clockOutCount) clockOutCount.innerText = `(${clockOutList.length})`;
+
+                if (clockedInList.length === 0) {
+                    clockedInBody.innerHTML = '<tr><td colspan="2" class="text-muted text-center py-3">No employees clocked in right now.</td></tr>';
+                } else {
+                    clockedInBody.innerHTML = clockedInList.map(r => `
+                        <tr>
+                            <td class="fw-bold text-dark py-2"><i class="bi bi-person-circle text-primary me-2"></i>${r.full_name || r.employee_id || 'User'}</td>
+                            <td class="text-end text-muted font-monospace py-2">${r.clock_in_time ? new Date(r.clock_in_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}</td>
+                        </tr>
+                    `).join('');
+                }
+
+                if (clockOutList.length === 0) {
+                    clockOutBody.innerHTML = '<tr><td colspan="2" class="text-muted text-center py-3">No pending clock-out alerts.</td></tr>';
+                } else {
+                    clockOutBody.innerHTML = clockOutList.map(r => `
+                        <tr>
+                            <td class="fw-bold text-dark py-2"><i class="bi bi-person-circle text-warning me-2"></i>${r.full_name || r.employee_id || 'User'}</td>
+                            <td class="text-end text-muted font-monospace py-2">${r.clock_out_time ? new Date(r.clock_out_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Needs Clock Out'}</td>
+                        </tr>
+                    `).join('');
+                }
+
+                if (celebratingText) {
+                    if (records.length > 0) {
+                        const topUser = records[0].full_name || 'User 1';
+                        celebratingText.innerText = `${topUser} - Active today at Bigtime!`;
+                    } else {
+                        celebratingText.innerText = 'Celebrating all team contributions today!';
+                    }
+                }
+            }
+
+            function filterHomeAttendance(query) {
+                const q = query.toLowerCase().trim();
+                if (!q) {
+                    renderHomeAttendanceTables(homeAttendanceCache);
+                    return;
+                }
+                const filtered = homeAttendanceCache.filter(r => 
+                    (r.full_name && r.full_name.toLowerCase().includes(q)) ||
+                    (r.employee_id && r.employee_id.toLowerCase().includes(q))
+                );
+                renderHomeAttendanceTables(filtered);
+            }
+
             async function handleUrlRoutingOnLoad() {
                 const path = window.location.pathname.toLowerCase();
                 if (path === '/admin/login' || path === '/admin/login/') {
                     return;
                 }
-                if (path.includes('/admin/smart-groups')) {
+                if (path.includes('/admin/home')) {
+                    switchTab('home', false);
+                } else if (path.includes('/admin/smart-groups')) {
                     switchTab('jobs', false);
                 } else if (path.includes('/admin/users')) {
                     switchTab('users', false);
@@ -1999,7 +2147,7 @@ def get_admin_dashboard(path: str = ""):
                 } else if (path.includes('/admin/forms')) {
                     switchTab('forms', false);
                 } else {
-                    switchTab('clock', false);
+                    switchTab('home', true);
                     if (typeof loadClockData === 'function') loadClockData();
                     if (typeof loadTimeClockEntries === 'function') loadTimeClockEntries();
                 }
@@ -2737,6 +2885,7 @@ def get_admin_dashboard(path: str = ""):
             }
 
             async function loadConnecteamDirectory() {
+                if (window.location.pathname === '/admin/login' || !localStorage.getItem('atwork_session_active')) return;
                 const token = await getAdminAuthToken();
                 try {
                     const res = await fetch('/api/auth/users', { 
@@ -3079,6 +3228,7 @@ def get_admin_dashboard(path: str = ""):
             }
 
             async function renderSidebarFormsCategories() {
+                if (window.location.pathname === '/admin/login' || !localStorage.getItem('atwork_session_active')) return;
                 const token = await getAdminAuthToken();
                 try {
                     const res = await fetch('/api/forms/categories', {
