@@ -1576,10 +1576,10 @@ def get_admin_dashboard(path: str = ""):
                             <button type="button" class="btn btn-sm btn-light border-0 px-2" onclick="const c=prompt('Text Color (e.g. #000000 or red):'); if(c) document.execCommand('foreColor', false, c)" title="Text Color"><i class="bi bi-type"></i>A</button>
                             <button type="button" class="btn btn-sm btn-light border-0 px-2" onclick="const c=prompt('Highlight Color (e.g. #ffff00):'); if(c) document.execCommand('hiliteColor', false, c)" title="Highlight Color"><i class="bi bi-pencil-fill" style="font-size:12px;"></i></button>
                             <div class="vr my-1"></div>
-                            <button type="button" class="btn btn-sm btn-light border-0 px-2" onclick="document.execCommand('justifyLeft', false, null)" title="Align Left"><i class="bi bi-text-left"></i></button>
-                            <button type="button" class="btn btn-sm btn-light border-0 px-2" onclick="document.execCommand('justifyCenter', false, null)" title="Align Center"><i class="bi bi-text-center"></i></button>
-                            <button type="button" class="btn btn-sm btn-light border-0 px-2" onclick="document.execCommand('justifyRight', false, null)" title="Align Right"><i class="bi bi-text-right"></i></button>
-                            <button type="button" class="btn btn-sm btn-light border-0 px-2" onclick="document.execCommand('justifyFull', false, null)" title="Justify"><i class="bi bi-justify"></i></button>
+                            <button type="button" class="btn btn-sm btn-light border-0 px-2" onclick="if(typeof activeSelectedRichImg !== \'undefined\' && activeSelectedRichImg) { alignRichTextImage(\'left\'); } else { document.execCommand(\'justifyLeft\', false, null); }" title="Align Left"><i class="bi bi-text-left"></i></button>
+                            <button type="button" class="btn btn-sm btn-light border-0 px-2" onclick="if(typeof activeSelectedRichImg !== \'undefined\' && activeSelectedRichImg) { alignRichTextImage(\'center\'); } else { document.execCommand(\'justifyCenter\', false, null); }" title="Align Center"><i class="bi bi-text-center"></i></button>
+                            <button type="button" class="btn btn-sm btn-light border-0 px-2" onclick="if(typeof activeSelectedRichImg !== \'undefined\' && activeSelectedRichImg) { alignRichTextImage(\'right\'); } else { document.execCommand(\'justifyRight\', false, null); }" title="Align Right"><i class="bi bi-text-right"></i></button>
+                            <button type="button" class="btn btn-sm btn-light border-0 px-2" onclick="if(typeof activeSelectedRichImg !== \'undefined\' && activeSelectedRichImg) { alignRichTextImage(\'full\'); } else { document.execCommand(\'justifyFull\', false, null); }" title="Justify"><i class="bi bi-justify"></i></button>
                             <div class="vr my-1"></div>
                             <button type="button" class="btn btn-sm btn-light border-0 px-2" onclick="document.execCommand('undo', false, null)" title="Undo"><i class="bi bi-arrow-counterclockwise"></i></button>
                             <button type="button" class="btn btn-sm btn-light border-0 px-2" onclick="document.execCommand('redo', false, null)" title="Redo"><i class="bi bi-arrow-clockwise"></i></button>
@@ -1600,6 +1600,92 @@ def get_admin_dashboard(path: str = ""):
     margin: 4px 0;
   }
 </style>
+<style>
+  .desc-img-wrapper {
+    display: inline-block;
+    position: relative;
+    max-width: 100%;
+    margin: 6px auto;
+    vertical-align: bottom;
+  }
+  /* Force image wrapper alignment based on execCommand parent text-align */
+  [style*="text-align: center"] > .desc-img-wrapper,
+  [style*="text-align:center"] > .desc-img-wrapper,
+  div[align="center"] > .desc-img-wrapper,
+  p[align="center"] > .desc-img-wrapper,
+  .text-center > .desc-img-wrapper {
+    display: block !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    text-align: center !important;
+  }
+  [style*="text-align: right"] > .desc-img-wrapper,
+  [style*="text-align:right"] > .desc-img-wrapper,
+  div[align="right"] > .desc-img-wrapper,
+  p[align="right"] > .desc-img-wrapper {
+    display: block !important;
+    margin-left: auto !important;
+    margin-right: 0 !important;
+    text-align: right !important;
+  }
+  [style*="text-align: left"] > .desc-img-wrapper,
+  [style*="text-align:left"] > .desc-img-wrapper,
+  div[align="left"] > .desc-img-wrapper,
+  p[align="left"] > .desc-img-wrapper {
+    display: inline-block !important;
+    margin-right: auto !important;
+    margin-left: 0 !important;
+    text-align: left !important;
+  }
+  /* Allow standard editor toolbar alignment (text-align) to align wrappers */
+  [style*="text-align: center"] > .desc-img-wrapper,
+  div[align="center"] > .desc-img-wrapper,
+  p[align="center"] > .desc-img-wrapper {
+    margin-left: auto !important;
+    margin-right: auto !important;
+    display: block !important;
+    text-align: center !important;
+  }
+  [style*="text-align: right"] > .desc-img-wrapper,
+  div[align="right"] > .desc-img-wrapper {
+    margin-left: auto !important;
+    margin-right: 0 !important;
+    display: block !important;
+  }
+  [style*="text-align: left"] > .desc-img-wrapper {
+    margin-right: auto !important;
+    margin-left: 0 !important;
+    display: inline-block !important;
+  }
+  .desc-img-wrapper img {
+    display: block;
+    max-width: 100% !important;
+    height: auto !important;
+    object-fit: contain;
+  }
+  .desc-img-wrapper.selected img {
+    outline: 2px solid #0d6efd;
+  }
+  .desc-img-handle {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background-color: #0d6efd;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    z-index: 15;
+    display: none;
+  }
+  .desc-img-wrapper.selected .desc-img-handle {
+    display: block;
+  }
+  .desc-handle-se { right: -6px; bottom: -6px; cursor: nwse-resize; }
+  .desc-handle-sw { left: -6px; bottom: -6px; cursor: nesw-resize; }
+  .desc-handle-ne { right: -6px; top: -6px; cursor: nesw-resize; }
+  .desc-handle-nw { left: -6px; top: -6px; cursor: nwse-resize; }
+</style>
+
+
 <div id="descEditorCanvas" contenteditable="true" class="form-control border-0 shadow-none p-2" style="min-height: 280px; max-height: 450px; overflow-y: auto; outline: none; font-size: 14px; color: #333;" placeholder="Start typing description..."></div>
                     </div>
                 </div>
@@ -4303,6 +4389,167 @@ if (titleEl) titleEl.innerText = activeCustomForm.name + ' - Document Preview';
                 }
             }
 
+            let activeSelectedRichImg = null;
+
+            function wrapRichTextImagesInCanvas() {
+                const canvas = document.getElementById('descEditorCanvas');
+                if (!canvas) return;
+                const imgs = canvas.querySelectorAll('img:not(.desc-wrapped)');
+                imgs.forEach(img => {
+                    img.classList.add('desc-wrapped');
+                    if (img.parentElement && img.parentElement.classList.contains('desc-img-wrapper')) return;
+                    
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'desc-img-wrapper';
+                    if (img.style.display === 'block' && img.style.marginLeft === 'auto' && img.style.marginRight === 'auto') {
+                        wrapper.style.display = 'block';
+                        wrapper.style.marginLeft = 'auto';
+                        wrapper.style.marginRight = 'auto';
+                        wrapper.style.textAlign = 'center';
+                        img.style.float = 'none';
+                    } else if (img.style.float === 'left') {
+                        wrapper.style.float = 'left';
+                        wrapper.style.marginRight = '12px';
+                        img.style.display = 'inline-block';
+                    } else if (img.style.float === 'right') {
+                        wrapper.style.float = 'right';
+                        wrapper.style.marginLeft = '12px';
+                        img.style.display = 'inline-block';
+                    } else if (img.style.width === '100%') {
+                        wrapper.style.display = 'block';
+                        wrapper.style.width = '100%';
+                    }
+
+                    img.parentNode.insertBefore(wrapper, img);
+                    wrapper.appendChild(img);
+
+                    ['nw', 'ne', 'sw', 'se'].forEach(pos => {
+                        const handle = document.createElement('div');
+                        handle.className = `desc-img-handle desc-handle-${pos}`;
+                        handle.dataset.handle = pos;
+                        wrapper.appendChild(handle);
+                    });
+                });
+            }
+
+            function alignRichTextImage(mode) {
+                if (!activeSelectedRichImg) return;
+                const wrapper = activeSelectedRichImg.closest('.desc-img-wrapper');
+                if (!wrapper) return;
+
+                wrapper.style.float = 'none';
+                wrapper.style.marginLeft = '0';
+                wrapper.style.marginRight = '0';
+                wrapper.style.textAlign = 'left';
+                wrapper.style.display = 'inline-block';
+
+                if (mode === 'center') {
+                    wrapper.style.display = 'block';
+                    wrapper.style.marginLeft = 'auto';
+                    wrapper.style.marginRight = 'auto';
+                    wrapper.style.textAlign = 'center';
+                    activeSelectedRichImg.style.display = 'block';
+                    activeSelectedRichImg.style.marginLeft = 'auto';
+                    activeSelectedRichImg.style.marginRight = 'auto';
+                } else if (mode === 'left') {
+                    wrapper.style.float = 'left';
+                    wrapper.style.marginRight = '12px';
+                    activeSelectedRichImg.style.display = 'inline-block';
+                } else if (mode === 'right') {
+                    wrapper.style.float = 'right';
+                    wrapper.style.marginLeft = '12px';
+                    activeSelectedRichImg.style.display = 'inline-block';
+                } else if (mode === 'full') {
+                    wrapper.style.display = 'block';
+                    wrapper.style.width = '100%';
+                    activeSelectedRichImg.style.width = '100%';
+                    activeSelectedRichImg.style.maxWidth = '100%';
+                }
+            }
+
+            function removeSelectedRichTextImage() {
+                if (activeSelectedRichImg) {
+                    const wrapper = activeSelectedRichImg.closest('.desc-img-wrapper');
+                    if (wrapper) wrapper.remove();
+                    else activeSelectedRichImg.remove();
+                    activeSelectedRichImg = null;
+                    const toolbar = document.getElementById('descEditorImageToolbar');
+                    if (toolbar) toolbar.classList.add('d-none');
+                }
+            }
+
+            function setupRichTextImageResizeListeners() {
+                const canvas = document.getElementById('descEditorCanvas');
+                const toolbar = document.getElementById('descEditorImageToolbar');
+                if (!canvas) return;
+
+                wrapRichTextImagesInCanvas();
+
+                // Observe pastes or changes to wrap new images
+                const observer = new MutationObserver(() => wrapRichTextImagesInCanvas());
+                observer.observe(canvas, { childList: true, subtree: true });
+
+                let isResizing = false;
+                let startX, startWidth, currentImg, currentWrapper, currentHandle;
+
+                canvas.addEventListener('mousedown', function(e) {
+                    if (e.target.classList.contains('desc-img-handle')) {
+                        e.preventDefault();
+                        isResizing = true;
+                        currentHandle = e.target.dataset.handle;
+                        currentWrapper = e.target.closest('.desc-img-wrapper');
+                        currentImg = currentWrapper ? currentWrapper.querySelector('img') : null;
+                        startX = e.clientX;
+                        startWidth = currentImg ? currentImg.offsetWidth : 0;
+
+                        function doDrag(dragEvent) {
+                            if (!isResizing || !currentImg || !currentWrapper) return;
+                            const canvasWidth = canvas.clientWidth - 20;
+                            let diffX = dragEvent.clientX - startX;
+                            if (currentHandle === 'sw' || currentHandle === 'nw') diffX = -diffX;
+                            
+                            let newWidth = startWidth + diffX;
+                            if (newWidth < 40) newWidth = 40;
+                            if (newWidth > canvasWidth) newWidth = canvasWidth;
+
+                            currentImg.style.width = newWidth + 'px';
+                            currentImg.style.maxWidth = '100%';
+                            currentImg.style.height = 'auto';
+                            currentWrapper.style.width = newWidth + 'px';
+                        }
+
+                        function stopDrag() {
+                            isResizing = false;
+                            document.removeEventListener('mousemove', doDrag);
+                            document.removeEventListener('mouseup', stopDrag);
+                        }
+
+                        document.addEventListener('mousemove', doDrag);
+                        document.addEventListener('mouseup', stopDrag);
+                        return;
+                    }
+
+                    const clickedImg = e.target.tagName === 'IMG' ? e.target : null;
+                    canvas.querySelectorAll('.desc-img-wrapper').forEach(w => w.classList.remove('selected'));
+
+                    if (clickedImg) {
+                        activeSelectedRichImg = clickedImg;
+                        const wrapper = clickedImg.closest('.desc-img-wrapper');
+                        if (wrapper) wrapper.classList.add('selected');
+                        if (toolbar) {
+                            toolbar.classList.remove('d-none');
+                            toolbar.classList.add('d-flex');
+                        }
+                    } else {
+                        activeSelectedRichImg = null;
+                        if (toolbar) {
+                            toolbar.classList.add('d-none');
+                            toolbar.classList.remove('d-flex');
+                        }
+                    }
+                });
+            }
+
             function openDescriptionModal(idx) {
                 document.getElementById('descEditorFieldIndex').value = idx;
                 const field = modalBuilderFields[idx];
@@ -4310,6 +4557,10 @@ if (titleEl) titleEl.innerText = activeCustomForm.name + ' - Document Preview';
                 if (editor && field) {
                     const savedHtml = field.description || field.content || field.value || '';
                     editor.innerHTML = (savedHtml === 'Description Question') ? '' : savedHtml;
+                    setTimeout(() => {
+                        setupRichTextImageResizeListeners();
+                        wrapRichTextImagesInCanvas();
+                    }, 50);
                 }
                 const modalEl = document.getElementById('descriptionEditorModal');
                 if (modalEl) {
@@ -4324,7 +4575,44 @@ if (titleEl) titleEl.innerText = activeCustomForm.name + ' - Document Preview';
                 const editor = document.getElementById('descEditorCanvas');
                 
                 if (!isNaN(idx) && modalBuilderFields[idx] && editor) {
-                    const htmlVal = editor.innerHTML;
+                    // Unwrap handles before saving clean HTML
+                    const clone = editor.cloneNode(true);
+                    clone.querySelectorAll('.desc-img-wrapper').forEach(wrapper => {
+                        const img = wrapper.querySelector('img');
+                        if (img) {
+                            const align = window.getComputedStyle(wrapper).textAlign || wrapper.style.textAlign;
+                            if (wrapper.style.marginLeft === 'auto' && wrapper.style.marginRight === 'auto') {
+                                img.style.display = 'block';
+                                img.style.marginLeft = 'auto';
+                                img.style.marginRight = 'auto';
+                                img.style.float = 'none';
+                                img.style.width = '';
+                            } else if (wrapper.style.float === 'left') {
+                                img.style.float = 'left';
+                                img.style.marginRight = '12px';
+                                img.style.marginLeft = '0';
+                                img.style.display = 'inline-block';
+                                img.style.width = '';
+                            } else if (wrapper.style.float === 'right') {
+                                img.style.float = 'right';
+                                img.style.marginLeft = '12px';
+                                img.style.marginRight = '0';
+                                img.style.display = 'inline-block';
+                                img.style.width = '';
+                            } else if (wrapper.style.width === '100%') {
+                                img.style.display = 'block';
+                                img.style.width = '100%';
+                                img.style.float = 'none';
+                                img.style.marginLeft = '0';
+                                img.style.marginRight = '0';
+                            }
+                            img.classList.remove('desc-wrapped');
+                            wrapper.parentNode.insertBefore(img, wrapper);
+                        }
+                        wrapper.remove();
+                    });
+                    clone.querySelectorAll('.desc-img-handle').forEach(h => h.remove());
+                    const htmlVal = clone.innerHTML;
                     modalBuilderFields[idx].description = htmlVal;
                     modalBuilderFields[idx].content = htmlVal;
                     modalBuilderFields[idx].value = htmlVal;
