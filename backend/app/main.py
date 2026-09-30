@@ -4208,7 +4208,7 @@ def get_admin_dashboard(path: str = ""):
                             html += `<div class="mb-3">
                                         <label class="fw-bold text-dark d-block mb-1 fs-7">${f.label || f.name || 'Untitled Field'} ${f.required ? '<span class="text-danger">*</span>' : ''}</label>`;
                             if (f.type === 'Open Ended' || f.type === 'Short Text' || f.type === 'text') {
-                                html += `<textarea class="form-control form-control-sm" rows="3" placeholder="Type your response here..."></textarea>`;
+                                html += `<div class="border rounded p-1 bg-white"><textarea class="form-control form-control-sm" rows="3" placeholder="Type your response here..." style="resize: none; border: none; box-shadow: none; outline: none;"></textarea></div>`;
                             } else if (f.type === 'Description') {
                                 const descHtml = f.description || f.content || f.label || '<i class="text-muted">No description provided.</i>';
                                 html += `<div class="p-3 bg-white border rounded text-dark fs-7 lh-base text-break">${descHtml}</div>`;
@@ -4217,11 +4217,16 @@ def get_admin_dashboard(path: str = ""):
                                 (f.options || []).forEach(o => { html += `<option>${o}</option>`; });
                                 html += `</select>`;
                             } else if (f.type === 'Yes/No') {
-                                html += `<div class="d-flex gap-3"><div class="form-check"><input class="form-check-input" type="radio" name="preview_radio_${idx}"><label class="form-check-label small">Yes</label></div><div class="form-check"><input class="form-check-input" type="radio" name="preview_radio_${idx}"><label class="form-check-label small">No</label></div></div>`;
+                                html += `<div class="d-flex gap-3 flex-wrap">`;
+                                const yOpts = (f.options && f.options.length > 0) ? f.options : ['Yes', 'No'];
+                                yOpts.forEach(o => {
+                                    html += `<button type="button" class="btn btn-outline-primary btn-sm me-2 fw-semibold px-4 rounded-pill">${o}</button>`;
+                                });
+                                html += `</div>`;
                             } else if (f.type === 'Signature') {
-                                html += `<div id="sig_target_${idx}" class="border border-dashed p-3 text-center text-muted small bg-white cursor-pointer rounded-3" onclick="openSignaturePadModal(${idx})">
-                                            <i class="bi bi-pencil-square me-1"></i> Click to Sign
-                                         </div>`;
+                                html += `<div class="border rounded p-2"><button type="button" id="sig_target_${idx}" class="btn btn-outline-secondary btn-sm w-100 py-2 d-flex justify-content-center align-items-center gap-2" onclick="openSignaturePadModal(${idx})">
+                                                <i class="bi bi-pencil-square"></i> Click to Sign
+                                             </button></div>`;
                             } else {
                                 html += `<input type="text" class="form-control form-control-sm" placeholder="Value...">`;
                             }
@@ -4332,7 +4337,7 @@ def get_admin_dashboard(path: str = ""):
                     type: type,
                     label: type + ' Question',
                     required: false,
-                    options: type === 'Dropdown' ? ['Option 1', 'Option 2'] : []
+                    options: type === 'Dropdown' ? ['Option 1', 'Option 2'] : (type === 'Yes/No' ? ['Yes', 'No'] : [])
                 });
                 renderModalCanvasBlocks();
             }
@@ -4661,15 +4666,16 @@ def get_admin_dashboard(path: str = ""):
                                 </div>
                             </div>`;
 
-                    if (field.type === 'Dropdown') {
-                        html += `<div class="mt-2 ps-2 border-start border-2 border-warning">
-                                    <label class="form-label text-secondary small fw-semibold mb-1">DROPDOWN OPTIONS</label>`;
+                    if (field.type === 'Dropdown' || field.type === 'Yes/No') {
+                            const borderTheme = field.type === 'Yes/No' ? 'info' : 'warning';
+                            html += `<div class="mt-2 ps-2 border-start border-2 border-${borderTheme}">
+                                        <label class="form-label text-secondary small fw-semibold mb-1 text-uppercase">${field.type} OPTIONS</label>`;
                         field.options.forEach((opt, optIdx) => {
                             html += `<div class="input-group input-group-sm mb-1">
                                         <input type="text" class="form-control" value="${opt}" onchange="updateModalBlockOption(${idx}, ${optIdx}, this.value)">
                                      </div>`;
                         });
-                        html += `<button class="btn btn-link btn-sm p-0 text-decoration-none fw-semibold" onclick="addModalBlockOption(${idx})">+ Add Option</button>`;
+                        if (field.type !== 'Yes/No') { html += `<button class="btn btn-link btn-sm p-0 text-decoration-none fw-semibold" onclick="addModalBlockOption(${idx})">+ Add Option</button>`; }
                         html += `</div>`;
                     }
 
