@@ -323,7 +323,8 @@ def get_admin_dashboard(path: str = ""):
                 cursor: pointer;
             }
         </style>
-    </head>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+</head>
     <body>
         <!-- STANDALONE LOGIN PAGE OVERLAY -->
         <div id="login-overlay-page" class="login-container" style="display:none;">
@@ -3842,7 +3843,7 @@ def get_admin_dashboard(path: str = ""):
                                             <span class="badge rounded-pill fw-normal" style="background-color: #dcfce7; color: #166534;">${sub.status || 'Submitted'}</span>
                                         </td>
                                         <td>
-                                            <button class="btn btn-sm btn-outline-custom" onclick='alert("Form Data: " + JSON.stringify(${JSON.stringify(sub.formData || [])}))'>
+                                            <button class="btn btn-sm btn-outline-custom" data-submitter="${sub.submittedBy || 'Unknown'}" data-date="${sub.dateTime || 'N/A'}" data-form-id="${validFormId}" data-form-data="${encodeURIComponent(JSON.stringify(sub.formData || []))}" onclick="viewSubmission(this)">
                                                 <i class="bi bi-eye"></i> View
                                             </button>
                                         </td>
@@ -5569,6 +5570,152 @@ def get_admin_dashboard(path: str = ""):
                 }
             }
         </script>
+
+
+    
+    <!-- View Submission Modal -->
+    <div class="modal fade" id="viewSubmissionModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header border-bottom-0 pb-0 d-flex justify-content-between align-items-center">
+                    <h5 class="modal-title fw-bold">Form Submission</h5>
+                    <div>
+                        <button type="button" class="btn btn-sm btn-outline-primary me-2" onclick="downloadSubmissionPDF()">
+                            <i class="bi bi-file-earmark-pdf"></i> Download PDF
+                        </button>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                </div>
+                <div class="modal-body pt-3">
+                    <div class="row mb-4 bg-light p-3 rounded mx-0">
+                        <div class="col-md-6 mb-2 mb-md-0">
+                            <span class="text-muted fs-7 d-block mb-1">Submitted By</span>
+                            <span id="vs-submitter" class="fw-bold fs-6 text-dark"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <span class="text-muted fs-7 d-block mb-1">Date & Time</span>
+                            <span id="vs-date" class="fw-bold fs-6 text-dark"></span>
+                        </div>
+                    </div>
+                    <div id="vs-form-content" class="bg-white" style="font-family: inherit;"></div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+    function viewSubmission(btn) {
+        const submitter = btn.getAttribute('data-submitter') || 'Unknown';
+        const date = btn.getAttribute('data-date') || 'N/A';
+        const formId = btn.getAttribute('data-form-id');
+        let formData = {};
+        
+        try {
+            formData = JSON.parse(decodeURIComponent(btn.getAttribute('data-form-data')));
+        } catch(e) {
+            console.error("Failed to parse form data", e);
+        }
+        
+        document.getElementById('vs-submitter').innerText = submitter;
+        document.getElementById('vs-date').innerText = date;
+        
+        const contentDiv = document.getElementById('vs-form-content');
+        contentDiv.innerHTML = '';
+        
+        // Match the original schema layout if available
+        let schemaFields = [];
+        if (formId && typeof mockCustomFormsData !== 'undefined') {
+            const f = mockCustomFormsData.find(x => String(x.id) === String(formId));
+            if (f) {
+                let sf = f.schemaFields || f.schema_fields;
+                if (sf) {
+                    try { schemaFields = typeof sf === 'string' ? JSON.parse(sf) : sf; } catch(e){}
+                }
+            }
+        }
+        
+        let html = '<style>#vs-form-content img { max-width: 100%; height: auto; display: block; margin: 0 auto; }</style>';
+        html += '<div class="p-2" style="max-width: 100%; color: #333;">';
+        
+        // Render exact schema layout if found
+        if (schemaFields && schemaFields.length > 0) {
+            schemaFields.forEach(field => {
+                if (field.type === 'Description') {
+                    html += `<div class="mb-4 lh-base" style="word-wrap: break-word;">${field.content || field.description || ''}</div>`;
+                } else {
+                    let ans = '';
+                    if (Array.isArray(formData)) {
+                        let item = formData.find(x => x.label === field.label || x.question === field.label);
+                        if (item) ans = item.value || item.answer || '';
+                    } else {
+                        ans = formData[field.label] || '';
+                    }
+                    if (Array.isArray(ans)) ans = ans.join(', ');
+                    
+                    html += `
+                    <div class="card mb-4 shadow-none border rounded bg-white">
+                        <div class="card-body p-4">
+                            <div class="text-secondary fs-7 mb-2">${field.label || 'Question'} ${field.required ? '<span class="text-danger">*</span>' : ''}</div>
+                            <div class="fw-bold text-dark fs-6" style="white-space: pre-wrap;">${ans || '-'}</div>
+                        </div>
+                    </div>`;
+                }
+            });
+        } else {
+            // Fallback list renderer if schema is missing
+            html += '<h6 class="border-bottom pb-2 mb-3 fw-bold text-secondary fs-7 text-uppercase">Responses</h6>';
+            html += '<div class="list-group list-group-flush border rounded">';
+            if (Array.isArray(formData) && formData.length > 0) {
+                formData.forEach(item => {
+                    let label = item.label || item.question || 'Field';
+                    let val = item.value || item.answer || item;
+                    if (Array.isArray(val)) val = val.join(', ');
+                    html += `<div class="list-group-item py-3 px-4"><div class="text-muted fs-7 mb-1">${label}</div><div class="fw-semibold text-dark">${val}</div></div>`;
+                });
+            } else if (Object.keys(formData).length > 0) {
+                for (const [key, val] of Object.entries(formData)) {
+                    let displayVal = Array.isArray(val) ? val.join(', ') : val;
+                    html += `<div class="list-group-item py-3 px-4"><div class="text-muted fs-7 mb-1">${key}</div><div class="fw-semibold text-dark">${displayVal}</div></div>`;
+                }
+            } else {
+                html += '<div class="list-group-item py-3 px-4 text-muted">No data provided.</div>';
+            }
+            html += '</div>';
+        }
+        
+        html += '</div>';
+        contentDiv.innerHTML = html;
+        
+        const modal = new bootstrap.Modal(document.getElementById('viewSubmissionModal'));
+        modal.show();
+    }
+    
+    function downloadSubmissionPDF() {
+        const element = document.getElementById('vs-form-content');
+        const submitter = document.getElementById('vs-submitter').innerText;
+        const date = document.getElementById('vs-date').innerText;
+        
+        const pdfContainer = document.createElement('div');
+        pdfContainer.innerHTML = `
+            <div style="text-align: center; margin-bottom: 20px;">
+                <h4 style="font-weight: bold; font-family: sans-serif;">Form Submission</h4>
+                <p style="color: #666; font-size: 14px; font-family: sans-serif;">Submitted by: ${submitter} <br> Date: ${date}</p>
+            </div>
+        `;
+        pdfContainer.appendChild(element.cloneNode(true));
+        
+        const opt = {
+            margin:       15,
+            filename:     `Submission_${submitter.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true, letterRendering: true },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+        html2pdf().set(opt).from(pdfContainer).save();
+    }
+    </script>
 
 </body>
     </html>
