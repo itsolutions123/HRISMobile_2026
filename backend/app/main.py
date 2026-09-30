@@ -4419,6 +4419,9 @@ if (titleEl) titleEl.innerText = activeCustomForm.name + ' - Document Preview';
                         wrapper.style.display = 'block';
                         wrapper.style.width = '100%';
                     }
+                    if (img.style.width && img.style.width !== '100%') {
+                        wrapper.style.width = img.style.width;
+                    }
 
                     img.parentNode.insertBefore(wrapper, img);
                     wrapper.appendChild(img);
@@ -4586,25 +4589,25 @@ if (titleEl) titleEl.innerText = activeCustomForm.name + ' - Document Preview';
                                 img.style.marginLeft = 'auto';
                                 img.style.marginRight = 'auto';
                                 img.style.float = 'none';
-                                img.style.width = '';
                             } else if (wrapper.style.float === 'left') {
                                 img.style.float = 'left';
                                 img.style.marginRight = '12px';
                                 img.style.marginLeft = '0';
                                 img.style.display = 'inline-block';
-                                img.style.width = '';
                             } else if (wrapper.style.float === 'right') {
                                 img.style.float = 'right';
                                 img.style.marginLeft = '12px';
                                 img.style.marginRight = '0';
                                 img.style.display = 'inline-block';
-                                img.style.width = '';
                             } else if (wrapper.style.width === '100%') {
                                 img.style.display = 'block';
                                 img.style.width = '100%';
                                 img.style.float = 'none';
                                 img.style.marginLeft = '0';
                                 img.style.marginRight = '0';
+                            }
+                            if (wrapper.style.width && wrapper.style.width !== '100%') {
+                                img.style.width = wrapper.style.width;
                             }
                             img.classList.remove('desc-wrapped');
                             wrapper.parentNode.insertBefore(img, wrapper);
