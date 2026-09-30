@@ -3811,7 +3811,51 @@ def get_admin_dashboard(path: str = ""):
 
                 const tbody = document.getElementById('form-submissions-tbody');
                 if (tbody) {
-                    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-muted fs-7">No submissions found.</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-muted fs-7">Loading submissions...</td></tr>`;
+                    
+                    try {
+                        const token = await getAdminAuthToken();
+                        const res = await fetch(`${window.location.origin}/api/forms/${validFormId}/submissions`, {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data.length === 0) {
+                                tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-muted fs-7">No submissions found.</td></tr>`;
+                            } else {
+                                const countLbl = document.getElementById('form-submission-count-label');
+                                if (countLbl) countLbl.innerText = data.length;
+                                
+                                tbody.innerHTML = data.map(sub => `
+                                    <tr style="vertical-align: middle;">
+                                        <td>
+                                            <input type="checkbox" class="form-check-input ms-2 me-3" style="width: 18px; height: 18px; border-color: #cbd5e1;">
+                                        </td>
+                                        <td>
+                                            <div class="fw-bold text-dark fs-7">${sub.submittedBy || 'Unknown'}</div>
+                                        </td>
+                                        <td class="text-muted fs-7">${sub.dateTime || 'N/A'}</td>
+                                        <td>
+                                            <span class="badge bg-light text-dark fw-normal border px-2 py-1">${sub.smartGroup || 'General'}</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge rounded-pill fw-normal" style="background-color: #dcfce7; color: #166534;">${sub.status || 'Submitted'}</span>
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-custom" onclick='alert("Form Data: " + JSON.stringify(${JSON.stringify(sub.formData || [])}))'>
+                                                <i class="bi bi-eye"></i> View
+                                            </button>
+                                        </td>
+                                    </tr>
+                                `).join('');
+                            }
+                        } else {
+                            tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-danger fs-7">Failed to load submissions.</td></tr>`;
+                        }
+                    } catch (err) {
+                        console.error('Submission fetch error:', err);
+                        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-danger fs-7">Error loading submissions.</td></tr>`;
+                    }
                 }
             }
 
@@ -5529,3 +5573,53 @@ def get_admin_dashboard(path: str = ""):
 </body>
     </html>
     """
+
+
+# === FORM SUBMISSIONS BACKEND INJECTION ===
+import fastapi
+from .database import get_db
+from .auth_utils import get_current_user
+import sqlalchemy
+import datetime
+from sqlalchemy.orm import Session
+
+class CustomFormSubmission(Base):
+    __tablename__ = "custom_form_submissions"
+    __table_args__ = {'extend_existing': True}
+    id = sqlalchemy.Column(sqlalchemy.Integer, primary_key=True, index=True)
+    form_id = sqlalchemy.Column(sqlalchemy.String, index=True)
+    employee_id = sqlalchemy.Column(sqlalchemy.String, index=True)
+    responses = sqlalchemy.Column(sqlalchemy.JSON)
+    submitted_at = sqlalchemy.Column(sqlalchemy.DateTime, default=datetime.datetime.utcnow)
+
+try:
+    CustomFormSubmission.__table__.create(bind=engine, checkfirst=True)
+except Exception as e:
+    pass
+
+@app.post("/api/forms/{form_id}/submissions")
+def submit_custom_form(form_id: str, payload: dict, db: Session = fastapi.Depends(get_db), current_user = fastapi.Depends(get_current_user)):
+    sub = CustomFormSubmission(
+        form_id=str(form_id),
+        employee_id=getattr(current_user, "employee_id", getattr(current_user, "id", "Unknown")),
+        # HARDCODE REMOVED: Identity from token, not client payload
+        responses=payload.get("responses", {})
+    )
+    db.add(sub)
+    
+    # Increment the form's entry counter
+    try:
+        form = db.query(CustomForm).filter(CustomForm.id == str(form_id)).first()
+        if form:
+            form.entries = (form.entries or 0) + 1
+    except:
+        pass
+        
+    db.commit()
+    return {"status": "success"}
+
+@app.get("/api/forms/{form_id}/submissions")
+def get_custom_form_submissions(form_id: str, db: Session = fastapi.Depends(get_db), current_user = fastapi.Depends(get_current_user)):
+    subs = db.query(CustomFormSubmission).filter(CustomFormSubmission.form_id == str(form_id)).order_by(CustomFormSubmission.submitted_at.desc()).all()
+    return subs
+# ==========================================

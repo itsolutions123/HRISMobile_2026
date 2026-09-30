@@ -7,6 +7,7 @@ import LoginScreen from './src/screens/LoginScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import TimesheetScreen from './src/screens/TimesheetScreen';
 import ManagerScreen from './src/screens/ManagerScreen';
+import FormsScreen from './src/screens/FormsScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -26,6 +27,7 @@ function MainTabNavigator() {
     >
       <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'HRIS Punch' }} />
       <Tab.Screen name="Timesheet" component={TimesheetScreen} options={{ title: 'Timesheet' }} />
+      <Tab.Screen name="Forms" component={FormsScreen} options={{ title: 'Forms' }} />
       {user && user.role === 'manager' && (
         <Tab.Screen name="Manager" component={ManagerScreen} options={{ title: 'Oversight' }} />
       )}

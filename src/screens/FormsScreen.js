@@ -73,6 +73,12 @@ export default function FormsScreen({ navigation }) {
 
   const handleSubmitForm = async () => {
     setSubmitting(true);
+    // Convert formData object into the array expected by the backend
+    const formattedData = Object.keys(formData).map(key => ({
+      label: key,
+      value: formData[key]
+    }));
+
     try {
       const res = await fetch(`${API_BASE_URL}/api/forms/${activeForm.id}/submissions`, {
         method: 'POST',
@@ -81,8 +87,8 @@ export default function FormsScreen({ navigation }) {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          employee_id: user?.employee_id,
-          responses: formData
+          smart_group: user?.department || 'Unknown',
+          form_data: formattedData
         })
       });
       

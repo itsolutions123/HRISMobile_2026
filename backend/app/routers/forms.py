@@ -39,6 +39,7 @@ class CustomFormUpdate(BaseModel):
 
 class FormSubmissionCreate(BaseModel):
     smart_group: Optional[str] = None
+    form_data: Optional[list] = None
 
 
 # CATEGORY ENDPOINTS
@@ -283,7 +284,8 @@ def list_submissions(form_id: int, db: Session = Depends(get_db), current_user: 
             "submittedBy": s.submitted_by,
             "dateTime": s.created_at.strftime("%m/%d/%Y, %I:%M %p") if s.created_at else "",
             "smartGroup": s.smart_group or "HO - I.T.",
-            "status": s.status
+            "status": s.status,
+            "formData": json.loads(s.form_data) if s.form_data else []
         }
         for s in submissions
     ]
@@ -295,7 +297,8 @@ def create_submission(form_id: int, sub_in: FormSubmissionCreate, db: Session = 
         form_id=form_id,
         submitted_by=user_name,
         smart_group=sub_in.smart_group or current_user.department or "HO - I.T.",
-        status="Submitted"
+        status="Submitted",
+        form_data=json.dumps(sub_in.form_data) if sub_in.form_data else "[]"
     )
     db.add(submission)
     db.commit()

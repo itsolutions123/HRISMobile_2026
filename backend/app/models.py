@@ -149,6 +149,7 @@ class FormSubmission(Base):
     smart_group = Column(String, nullable=True)
     status = Column(String, default="Submitted", nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    form_data = Column(String, nullable=True)
 
 class BrandLocation(Base):
     __tablename__ = "brand_locations"
