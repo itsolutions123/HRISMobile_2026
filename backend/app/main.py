@@ -1543,6 +1543,45 @@ def get_admin_dashboard(path: str = ""):
             </div>
         </div>
 
+
+        <!-- Date Element Editor Modal -->
+        <div class="modal fade" id="dateEditorModal" tabindex="-1" aria-hidden="true" style="z-index: 1070;">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 shadow-lg rounded-4">
+                    <div class="modal-header border-bottom-0 pb-0 pt-3 px-4 position-relative">
+                        <div class="w-100 text-center">
+                            <span class="modal-title fw-semibold text-secondary fs-6 d-inline-flex align-items-center gap-2">
+                                <i class="bi bi-calendar-event"></i> Date
+                            </span>
+                        </div>
+                        <button type="button" class="btn-close position-absolute end-0 me-3 top-50 translate-middle-y" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <input type="hidden" id="dateEditorFieldIndex">
+                        <div class="mb-3">
+                            <input type="text" class="form-control rounded-3" id="dateEditorTitle" placeholder="Title">
+                        </div>
+                        <div class="mb-4">
+                            <input type="text" class="form-control rounded-3" id="dateEditorDesc" placeholder="Description (optional)">
+                        </div>
+                        <hr class="text-muted opacity-25">
+                        <h6 class="fw-bold text-dark mb-3">Format</h6>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="dateEditorFormatDate">
+                            <label class="form-check-label" for="dateEditorFormatDate">Date</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="dateEditorFormatTime">
+                            <label class="form-check-label" for="dateEditorFormatTime">Time</label>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0 pt-0 pb-4 px-4 justify-content-end">
+                        <button type="button" class="btn btn-primary rounded-pill px-4 fw-semibold" onclick="confirmDateEditor()">Confirm</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Description Element Editor Modal -->
             <!-- RICH TEXT DESCRIPTION EDITOR MODAL -->
     <div class="modal fade" id="descriptionEditorModal" tabindex="-1" aria-hidden="true" style="z-index: 1070;">
@@ -4227,6 +4266,15 @@ def get_admin_dashboard(path: str = ""):
                                 html += `<div class="border rounded p-2"><button type="button" id="sig_target_${idx}" class="btn btn-outline-secondary btn-sm w-100 py-2 d-flex justify-content-center align-items-center gap-2" onclick="openSignaturePadModal(${idx})">
                                                 <i class="bi bi-pencil-square"></i> Click to Sign
                                              </button></div>`;
+                            } else if (f.type === 'Date') {
+                                let dFormat = (f.dateFormat !== false);
+                                let tFormat = (f.timeFormat === true);
+                                if (!dFormat && !tFormat) dFormat = true;
+                                if (f.description) html += `<div class="text-muted small mb-2">${f.description}</div>`;
+                                html += `<div class="d-flex gap-2">`;
+                                if (dFormat) html += `<input type="date" class="form-control form-control-sm text-secondary">`;
+                                if (tFormat) html += `<input type="time" class="form-control form-control-sm text-secondary">`;
+                                html += `</div>`;
                             } else {
                                 html += `<input type="text" class="form-control form-control-sm" placeholder="Value...">`;
                             }
@@ -4374,6 +4422,8 @@ def get_admin_dashboard(path: str = ""):
                 if (!field) return;
                 if (field.type === 'Description' || field.type === 'Dropdown' || field.type === 'Open Ended' || field.type === 'Short Text') {
                     openDescriptionModal(idx);
+                } else if (field.type === 'Date') {
+                    openDateEditorModal(idx);
                 } else {
                     showToast(field.type + ' configuration modal coming up next!');
                 }
@@ -4541,6 +4591,44 @@ def get_admin_dashboard(path: str = ""):
                         }
                     }
                 });
+            }
+
+
+            let dateEditorBsModal = null;
+            function openDateEditorModal(idx) {
+                const field = modalBuilderFields[idx];
+                if (!field) return;
+                document.getElementById('dateEditorFieldIndex').value = idx;
+                document.getElementById('dateEditorTitle').value = field.label || '';
+                document.getElementById('dateEditorDesc').value = field.description || '';
+                // Default: Date is True, Time is False
+                document.getElementById('dateEditorFormatDate').checked = field.dateFormat !== false;
+                document.getElementById('dateEditorFormatTime').checked = field.timeFormat === true;
+                
+                const modalEl = document.getElementById('dateEditorModal');
+                if (modalEl) {
+                    dateEditorBsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                    dateEditorBsModal.show();
+                }
+            }
+
+            function confirmDateEditor() {
+                const idxStr = document.getElementById('dateEditorFieldIndex').value;
+                const idx = parseInt(idxStr, 10);
+                if (!isNaN(idx) && modalBuilderFields[idx]) {
+                    modalBuilderFields[idx].label = document.getElementById('dateEditorTitle').value.trim();
+                    modalBuilderFields[idx].description = document.getElementById('dateEditorDesc').value.trim();
+                    modalBuilderFields[idx].dateFormat = document.getElementById('dateEditorFormatDate').checked;
+                    modalBuilderFields[idx].timeFormat = document.getElementById('dateEditorFormatTime').checked;
+                    
+                    // Fallback to ensure at least one is enabled
+                    if (!modalBuilderFields[idx].dateFormat && !modalBuilderFields[idx].timeFormat) {
+                        modalBuilderFields[idx].dateFormat = true;
+                    }
+                    
+                    renderModalCanvasBlocks();
+                    if (dateEditorBsModal) dateEditorBsModal.hide();
+                }
             }
 
             function openDescriptionModal(idx) {
