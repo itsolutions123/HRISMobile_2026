@@ -1757,20 +1757,12 @@ def get_admin_dashboard(path: str = ""):
             <div class="modal-dialog modal-lg modal-dialog-centered">
                 <div class="modal-content border-0 shadow-lg">
                     <div class="modal-header border-bottom px-4 py-3 bg-light">
-                        <div class="d-flex align-items-center gap-2">
-                            <i class="bi bi-file-earmark-pdf text-danger fs-4"></i>
-                            <h6 class="modal-title fw-bold text-dark m-0" id="previewModalTitle">Document Preview</h6>
-                        </div>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body p-4 bg-secondary-subtle">
                         <div class="card border shadow-sm p-4 mx-auto bg-white rounded-3" style="max-width: 680px; min-height: 500px; font-family: Arial, sans-serif;">
-                            <div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-3">
-                                <div>
-                                    <h5 class="fw-bold text-dark m-0 text-uppercase" id="previewDocHeaderTitle">BIGTIME EMPIRE CORPORATION</h5>
-                                    <small class="text-muted" id="previewDocSubCategory">Custom Form Document</small>
-                                </div>
-                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-3 py-1 fw-bold fs-7">PDF PREVIEW</span>
+                            <div class="d-flex justify-content-center align-items-center border-bottom pb-3 mb-3 text-center">
+                                <h5 class="fw-bold text-dark m-0 text-uppercase" id="previewDocHeaderTitle">BIGTIME EMPIRE CORPORATION</h5>
                             </div>
                             <div id="previewDocFieldsArea" class="d-flex flex-column gap-3 py-2">
                                 <!-- Dynamic form schema fields rendered here -->
@@ -4197,9 +4189,9 @@ def get_admin_dashboard(path: str = ""):
                 const areaEl = document.getElementById('previewDocFieldsArea');
 
                 let fields = normalizeFormSchemaFields(activeCustomForm ? (activeCustomForm.schema_fields || activeCustomForm.fields) : []);
-if (titleEl) titleEl.innerText = activeCustomForm.name + ' - Document Preview';
+                // top title element removed
                 if (headerEl) headerEl.innerText = activeCustomForm.name;
-                if (catEl) catEl.innerText = 'Category: ' + (activeCustomForm.category || 'General');
+                // category element removed
 
                 if (areaEl) {
                     if (fields.length === 0) {
@@ -4227,7 +4219,9 @@ if (titleEl) titleEl.innerText = activeCustomForm.name + ' - Document Preview';
                             } else if (f.type === 'Yes/No') {
                                 html += `<div class="d-flex gap-3"><div class="form-check"><input class="form-check-input" type="radio" name="preview_radio_${idx}"><label class="form-check-label small">Yes</label></div><div class="form-check"><input class="form-check-input" type="radio" name="preview_radio_${idx}"><label class="form-check-label small">No</label></div></div>`;
                             } else if (f.type === 'Signature') {
-                                html += `<div class="border border-dashed p-3 text-center text-muted small bg-white cursor-pointer" onclick="showToast('Signature pad opens here.')">Click to Sign</div>`;
+                                html += `<div id="sig_target_${idx}" class="border border-dashed p-3 text-center text-muted small bg-white cursor-pointer rounded-3" onclick="openSignaturePadModal(${idx})">
+                                            <i class="bi bi-pencil-square me-1"></i> Click to Sign
+                                         </div>`;
                             } else {
                                 html += `<input type="text" class="form-control form-control-sm" placeholder="Value...">`;
                             }
@@ -5179,6 +5173,254 @@ if (titleEl) titleEl.innerText = activeCustomForm.name + ' - Document Preview';
                 </div>
             </div>
         </div>
+
+
+        <!-- Signature Pad Modal -->
+        <div class="modal fade" id="signaturePadModal" tabindex="-1" aria-hidden="true" style="z-index: 1080;">
+            <div class="modal-dialog modal-dialog-centered" style="max-width: 520px;">
+                <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+                    <div class="modal-header border-0 pb-0 pt-3 px-4 justify-content-between align-items-center">
+                        <h6 class="fw-bold text-dark m-0" id="sigModalTitle"><i class="bi bi-pencil-square me-2 text-primary"></i>Provide Signature</h6>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <ul class="nav nav-pills nav-fill bg-light p-1 rounded-3 mb-3 fs-7" id="sigModeTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active py-1 rounded-3 fw-semibold" id="sig-draw-tab" data-bs-toggle="tab" data-bs-target="#sig-draw-panel" type="button" role="tab" onclick="switchSigMode('draw')">
+                                    <i class="bi bi-pen me-1"></i> Draw Signature
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link py-1 rounded-3 fw-semibold" id="sig-upload-tab" data-bs-toggle="tab" data-bs-target="#sig-upload-panel" type="button" role="tab" onclick="switchSigMode('upload')">
+                                    <i class="bi bi-upload me-1"></i> Upload Signature
+                                </button>
+                            </li>
+                        </ul>
+
+                        <div class="tab-content" id="sigTabContent">
+                            <div class="tab-pane fade show active" id="sig-draw-panel" role="tabpanel">
+                                <div class="border rounded-3 bg-light position-relative" style="touch-action: none;">
+                                    <canvas id="sigPadCanvas" width="460" height="180" class="w-100 rounded-3 bg-white cursor-crosshair" style="display: block;"></canvas>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mt-3">
+                                    <button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-3" onclick="clearSignatureCanvas()">
+                                        <i class="bi bi-eraser me-1"></i> Clear
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-primary rounded-pill px-4" onclick="confirmSignaturePad('draw')">
+                                        Save Signature
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="tab-pane fade" id="sig-upload-panel" role="tabpanel">
+                                <div class="border border-dashed rounded-3 p-4 text-center bg-light cursor-pointer" onclick="document.getElementById('sigFileInput').click()">
+                                    <i class="bi bi-cloud-arrow-up display-6 text-primary mb-2 d-block"></i>
+                                    <span class="fw-semibold text-dark fs-7 d-block">Click to upload signature image</span>
+                                    <small class="text-muted fs-8">PNG, JPG, WEBP (Auto-removes white background)</small>
+                                    <input type="file" id="sigFileInput" class="d-none" accept="image/png, image/jpeg, image/webp" onchange="handleSignatureFileUpload(event)">
+                                </div>
+
+                                <div id="sigUploadPreviewContainer" class="mt-3 text-center d-none">
+                                    <div class="p-3 border rounded-3 bg-white d-inline-block position-relative" style="max-width: 100%;">
+                                        <img id="sigUploadPreviewImg" src="" alt="Uploaded Signature" style="max-height: 120px; object-fit: contain;">
+                                    </div>
+                                    <div class="mt-3 text-end">
+                                        <button type="button" class="btn btn-sm btn-primary rounded-pill px-4" onclick="confirmSignaturePad('upload')">
+                                            Save Signature
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            let activeSigIndex = null;
+            let sigCanvas = null;
+            let sigCtx = null;
+            let isDrawingSig = false;
+            let uploadedSigDataUrl = null;
+            let activeSigMode = 'draw';
+
+            function switchSigMode(mode) { activeSigMode = mode; }
+
+            function initSignaturePadEvents() {
+                sigCanvas = document.getElementById('sigPadCanvas');
+                if (!sigCanvas) return;
+                sigCtx = sigCanvas.getContext('2d');
+                sigCtx.lineWidth = 2.5;
+                sigCtx.lineCap = 'round';
+                sigCtx.strokeStyle = '#0f172a';
+
+                function getPos(e) {
+                    const rect = sigCanvas.getBoundingClientRect();
+                    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                    return {
+                        x: (clientX - rect.left) * (sigCanvas.width / rect.width),
+                        y: (clientY - rect.top) * (sigCanvas.height / rect.height)
+                    };
+                }
+
+                function startDraw(e) {
+                    isDrawingSig = true;
+                    const pos = getPos(e);
+                    sigCtx.beginPath();
+                    sigCtx.moveTo(pos.x, pos.y);
+                }
+
+                function moveDraw(e) {
+                    if (!isDrawingSig) return;
+                    e.preventDefault();
+                    const pos = getPos(e);
+                    sigCtx.lineTo(pos.x, pos.y);
+                    sigCtx.stroke();
+                }
+
+                function stopDraw() { isDrawingSig = false; }
+
+                sigCanvas.addEventListener('mousedown', startDraw);
+                sigCanvas.addEventListener('mousemove', moveDraw);
+                sigCanvas.addEventListener('mouseup', stopDraw);
+                sigCanvas.addEventListener('mouseleave', stopDraw);
+
+                sigCanvas.addEventListener('touchstart', startDraw, { passive: false });
+                sigCanvas.addEventListener('touchmove', moveDraw, { passive: false });
+                sigCanvas.addEventListener('touchend', stopDraw);
+            }
+
+            function clearSignatureCanvas() {
+                if (sigCanvas && sigCtx) {
+                    sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
+                }
+            }
+
+            function removeWhiteBackground(imgElement, callback) {
+                const tempCanvas = document.createElement('canvas');
+                const tempCtx = tempCanvas.getContext('2d');
+                let width = imgElement.naturalWidth || imgElement.width;
+                let height = imgElement.naturalHeight || imgElement.height;
+                const maxDim = 600;
+                if (width > maxDim || height > maxDim) {
+                    if (width > height) {
+                        height = Math.round((height * maxDim) / width);
+                        width = maxDim;
+                    } else {
+                        width = Math.round((width * maxDim) / height);
+                        height = maxDim;
+                    }
+                }
+
+                tempCanvas.width = width;
+                tempCanvas.height = height;
+                tempCtx.drawImage(imgElement, 0, 0, width, height);
+
+                const imgData = tempCtx.getImageData(0, 0, width, height);
+                const data = imgData.data;
+
+                for (let i = 0; i < data.length; i += 4) {
+                    if (data[i] > 200 && data[i+1] > 200 && data[i+2] > 200) {
+                        data[i + 3] = 0;
+                    }
+                }
+
+                tempCtx.putImageData(imgData, 0, 0);
+                callback(tempCanvas.toDataURL('image/png'));
+            }
+
+            function handleSignatureFileUpload(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const validTypes = ['image/png', 'image/jpeg', 'image/webp'];
+                if (!validTypes.includes(file.type)) {
+                    showToast('Invalid file format. Please upload PNG, JPG, or WEBP images.');
+                    e.target.value = '';
+                    return;
+                }
+
+                if (file.size > 5 * 1024 * 1024) {
+                    showToast('File size too large. Please upload an image under 5MB.');
+                    e.target.value = '';
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = function(evt) {
+                    const img = new Image();
+                    img.onload = function() {
+                        removeWhiteBackground(img, function(cleanedDataUrl) {
+                            uploadedSigDataUrl = cleanedDataUrl;
+                            const prevImg = document.getElementById('sigUploadPreviewImg');
+                            const prevContainer = document.getElementById('sigUploadPreviewContainer');
+                            if (prevImg && prevContainer) {
+                                prevImg.src = cleanedDataUrl;
+                                prevContainer.classList.remove('d-none');
+                            }
+                        });
+                    };
+                    img.onerror = function() {
+                        showToast('Corrupted or malicious image file rejected.');
+                    };
+                    img.src = evt.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+
+            function openSignaturePadModal(idx) {
+                activeSigIndex = idx;
+                uploadedSigDataUrl = null;
+                activeSigMode = 'draw';
+
+                const prevContainer = document.getElementById('sigUploadPreviewContainer');
+                if (prevContainer) prevContainer.classList.add('d-none');
+                
+                const fileInput = document.getElementById('sigFileInput');
+                if (fileInput) fileInput.value = '';
+
+                const drawTab = document.getElementById('sig-draw-tab');
+                if (drawTab) bootstrap.Tab.getOrCreateInstance(drawTab).show();
+
+                const modalEl = document.getElementById('signaturePadModal');
+                if (!modalEl) return;
+                const bsModal = new bootstrap.Modal(modalEl);
+                bsModal.show();
+                setTimeout(() => {
+                    initSignaturePadEvents();
+                    clearSignatureCanvas();
+                }, 200);
+            }
+
+            function confirmSignaturePad(mode) {
+                let finalDataUrl = null;
+                if (mode === 'draw' || activeSigMode === 'draw') {
+                    if (sigCanvas) {
+                        finalDataUrl = sigCanvas.toDataURL('image/png');
+                    }
+                } else if (mode === 'upload' || activeSigMode === 'upload') {
+                    finalDataUrl = uploadedSigDataUrl;
+                }
+
+                if (!finalDataUrl) {
+                    showToast('Please draw or upload a signature first.');
+                    return;
+                }
+
+                const targetEl = document.getElementById('sig_target_' + activeSigIndex);
+                if (targetEl) {
+                    targetEl.innerHTML = `<div class="d-flex align-items-center justify-content-center p-2"><img src="${finalDataUrl}" class="img-fluid" style="max-height: 80px;" alt="Signature"><span class="badge bg-success-subtle text-success border border-success-subtle ms-2 fs-8">Signed</span></div>`;
+                }
+
+                const modalEl = document.getElementById('signaturePadModal');
+                if (modalEl) {
+                    const bsModal = bootstrap.Modal.getInstance(modalEl);
+                    if (bsModal) bsModal.hide();
+                }
+            }
+        </script>
 
 </body>
     </html>
