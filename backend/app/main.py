@@ -4216,8 +4216,8 @@ if (titleEl) titleEl.innerText = activeCustomForm.name + ' - Document Preview';
                                 html += `<div class="my-3 text-dark fs-7 lh-base text-break">${descHtml}</div>`;
                                 return;
                             }
-                            html += `<div class="p-3 border rounded bg-light mb-2">
-                                        <label class="fw-bold text-dark d-block mb-1 fs-7">${qNum++}. ${f.label || f.name || 'Untitled Field'} ${f.required ? '<span class="text-danger">*</span>' : ''}</label>`;
+                            html += `<div class="mb-3">
+                                        <label class="fw-bold text-dark d-block mb-1 fs-7">${f.label || f.name || 'Untitled Field'} ${f.required ? '<span class="text-danger">*</span>' : ''}</label>`;
                             if (f.type === 'Short Text' || f.type === 'text') {
                                 html += `<input type="text" class="form-control form-control-sm" placeholder="User response line..." disabled>`;
                             } else if (f.type === 'Description') {
@@ -4376,14 +4376,8 @@ if (titleEl) titleEl.innerText = activeCustomForm.name + ' - Document Preview';
             function openElementEditorModal(idx) {
                 const field = modalBuilderFields[idx];
                 if (!field) return;
-                if (field.type === 'Description') {
+                if (field.type === 'Description' || field.type === 'Dropdown') {
                     openDescriptionModal(idx);
-                } else if (field.type === 'Dropdown') {
-                    if (typeof openDropdownModal === 'function') {
-                        openDropdownModal(idx);
-                    } else {
-                        showToast('Dropdown choices editor coming up next!');
-                    }
                 } else {
                     showToast(field.type + ' configuration modal coming up next!');
                 }
@@ -4648,7 +4642,7 @@ if (titleEl) titleEl.innerText = activeCustomForm.name + ' - Document Preview';
                 let html = '';
                 modalBuilderFields.forEach((field, idx) => {
                     html += `
-                        <div class="card border shadow-sm p-3 rounded-3 position-relative bg-white">
+                        <div class="p-2 position-relative bg-transparent mb-2">
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <span class="badge bg-primary-subtle text-primary border border-primary-subtle fw-semibold" style="font-size:11px;">
                                     ${field.type.toUpperCase()}
