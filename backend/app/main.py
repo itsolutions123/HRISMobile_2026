@@ -5658,7 +5658,9 @@ def get_admin_dashboard(path: str = ""):
                     <div class="card mb-4 shadow-none border rounded bg-white">
                         <div class="card-body p-4">
                             <div class="text-secondary fs-7 mb-2">${field.label || 'Question'} ${field.required ? '<span class="text-danger">*</span>' : ''}</div>
-                            <div class="fw-bold text-dark fs-6" style="white-space: pre-wrap;">${ans || '-'}</div>
+                            <div class="fw-bold text-dark fs-6" style="white-space: pre-wrap;">
+                                ${ans && typeof ans === 'string' && ans.startsWith('data:image/') ? `<img src="${ans}" style="max-height: 150px; border: 1px solid #dee2e6; border-radius: 4px; padding: 4px;" alt="Signature">` : (ans || '-')}
+                            </div>
                         </div>
                     </div>`;
                 }
@@ -5672,12 +5674,12 @@ def get_admin_dashboard(path: str = ""):
                     let label = item.label || item.question || 'Field';
                     let val = item.value || item.answer || item;
                     if (Array.isArray(val)) val = val.join(', ');
-                    html += `<div class="list-group-item py-3 px-4"><div class="text-muted fs-7 mb-1">${label}</div><div class="fw-semibold text-dark">${val}</div></div>`;
+                    html += `<div class="list-group-item py-3 px-4"><div class="text-muted fs-7 mb-1">${label}</div><div class="fw-semibold text-dark">${val && typeof val === \'string\' && val.startsWith(\'data:image/\') ? `<img src="${val}" style="max-height: 150px; border: 1px solid #dee2e6; border-radius: 4px; padding: 4px;" alt="Signature">` : val}</div></div>`;
                 });
             } else if (Object.keys(formData).length > 0) {
                 for (const [key, val] of Object.entries(formData)) {
                     let displayVal = Array.isArray(val) ? val.join(', ') : val;
-                    html += `<div class="list-group-item py-3 px-4"><div class="text-muted fs-7 mb-1">${key}</div><div class="fw-semibold text-dark">${displayVal}</div></div>`;
+                    html += `<div class="list-group-item py-3 px-4"><div class="text-muted fs-7 mb-1">${key}</div><div class="fw-semibold text-dark">${displayVal && typeof displayVal === \'string\' && displayVal.startsWith(\'data:image/\') ? `<img src="${displayVal}" style="max-height: 150px; border: 1px solid #dee2e6; border-radius: 4px; padding: 4px;" alt="Signature">` : displayVal}</div></div>`;
                 }
             } else {
                 html += '<div class="list-group-item py-3 px-4 text-muted">No data provided.</div>';
