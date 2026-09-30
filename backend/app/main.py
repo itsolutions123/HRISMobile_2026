@@ -1779,7 +1779,6 @@ def get_admin_dashboard(path: str = ""):
                     </div>
                     <div class="modal-footer border-top p-3 bg-light">
                         <button type="button" class="btn btn-outline-secondary px-4 fw-semibold" data-bs-dismiss="modal">Close</button>
-                        <button type="button" class="btn btn-primary px-4 fw-semibold" onclick="window.print()"><i class="bi bi-printer me-1"></i> Print / Download PDF</button>
                     </div>
                 </div>
             </div>
@@ -4219,20 +4218,20 @@ if (titleEl) titleEl.innerText = activeCustomForm.name + ' - Document Preview';
                             html += `<div class="mb-3">
                                         <label class="fw-bold text-dark d-block mb-1 fs-7">${f.label || f.name || 'Untitled Field'} ${f.required ? '<span class="text-danger">*</span>' : ''}</label>`;
                             if (f.type === 'Short Text' || f.type === 'text') {
-                                html += `<input type="text" class="form-control form-control-sm" placeholder="User response line..." disabled>`;
+                                html += `<input type="text" class="form-control form-control-sm" placeholder="User response line...">`;
                             } else if (f.type === 'Description') {
                                 const descHtml = f.description || f.content || f.label || '<i class="text-muted">No description provided.</i>';
                                 html += `<div class="p-3 bg-white border rounded text-dark fs-7 lh-base text-break">${descHtml}</div>`;
                             } else if (f.type === 'Dropdown') {
-                                html += `<select class="form-select form-select-sm" disabled><option>Select option...</option>`;
+                                html += `<select class="form-select form-select-sm"><option>Select option...</option>`;
                                 (f.options || []).forEach(o => { html += `<option>${o}</option>`; });
                                 html += `</select>`;
                             } else if (f.type === 'Yes/No') {
-                                html += `<div class="d-flex gap-3"><div class="form-check"><input class="form-check-input" type="radio" disabled><label class="form-check-label small">Yes</label></div><div class="form-check"><input class="form-check-input" type="radio" disabled><label class="form-check-label small">No</label></div></div>`;
+                                html += `<div class="d-flex gap-3"><div class="form-check"><input class="form-check-input" type="radio" name="preview_radio_${idx}"><label class="form-check-label small">Yes</label></div><div class="form-check"><input class="form-check-input" type="radio" name="preview_radio_${idx}"><label class="form-check-label small">No</label></div></div>`;
                             } else if (f.type === 'Signature') {
-                                html += `<div class="border border-dashed p-3 text-center text-muted small bg-white">Signature Box Area</div>`;
+                                html += `<div class="border border-dashed p-3 text-center text-muted small bg-white cursor-pointer" onclick="showToast('Signature pad opens here.')">Click to Sign</div>`;
                             } else {
-                                html += `<input type="text" class="form-control form-control-sm" placeholder="Value..." disabled>`;
+                                html += `<input type="text" class="form-control form-control-sm" placeholder="Value...">`;
                             }
                             html += `</div>`;
                         });
