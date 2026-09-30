@@ -1591,7 +1591,16 @@ def get_admin_dashboard(path: str = ""):
                             <button type="button" class="btn btn-sm btn-light border-0 px-2" onclick="const i=prompt('Enter image URL:'); if(i) document.execCommand('insertImage', false, i)" title="Insert Image"><i class="bi bi-image"></i></button>
                         </div>
                         <!-- Canvas Editor -->
-                        <div id="descEditorCanvas" contenteditable="true" class="form-control border-0 shadow-none p-2" style="min-height: 280px; outline: none; font-size: 14px; color: #333;" placeholder="Start typing description..."></div>
+                        <style>
+  #descEditorCanvas img, .desc-preview-content img, .modal img, #previewModalBody img, .document-preview img {
+    max-width: 100% !important;
+    height: auto !important;
+    object-fit: contain;
+    display: block;
+    margin: 4px 0;
+  }
+</style>
+<div id="descEditorCanvas" contenteditable="true" class="form-control border-0 shadow-none p-2" style="min-height: 280px; max-height: 450px; overflow-y: auto; outline: none; font-size: 14px; color: #333;" placeholder="Start typing description..."></div>
                     </div>
                 </div>
                 <div class="modal-footer border-top-0 pt-0 px-4 pb-4 justify-content-end">
@@ -4360,7 +4369,7 @@ if (titleEl) titleEl.innerText = activeCustomForm.name + ' - Document Preview';
                             <div class="row g-2 align-items-center mb-2">
                                 <div class="col-8">
                                     ${field.type === 'Description' ? `
-                                        <div class="p-2 border rounded bg-light text-dark fs-7 lh-sm overflow-hidden text-truncate" style="max-height: 48px; cursor: pointer;" onclick="openDescriptionModal(${idx})">
+                                        <div class="p-2 border rounded bg-light text-dark fs-7 lh-sm overflow-hidden text-truncate desc-preview-content" style="max-height: 60px; cursor: pointer;" onclick="openDescriptionModal(${idx})">
                                             ${(field.description || field.content || field.value) ? (field.description || field.content || field.value) : '<span class="text-muted fst-italic">Click Edit to add rich text content...</span>'}
                                         </div>
                                     ` : `
