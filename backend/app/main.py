@@ -1722,7 +1722,7 @@ def get_admin_dashboard(path: str = ""):
                                 </div>
                                 <h6 class="fw-bold text-dark mb-3 mt-4"><i class="bi bi-plus-circle me-2"></i>Add Form Elements</h6>
                                 <div class="row g-2">
-                                    <div class="col-6"><button class="btn btn-outline-secondary btn-sm w-100 text-start fw-medium" onclick="addModalCanvasBlock('Short Text')"><i class="bi bi-input-cursor-text text-primary me-2"></i>Short Text</button></div>
+                                    <div class="col-6"><button class="btn btn-outline-secondary btn-sm w-100 text-start fw-medium" onclick="addModalCanvasBlock(\'Open Ended\')"><i class="bi bi-input-cursor-text text-primary me-2"></i>Open Ended</button></div>
                                     <div class="col-6"><button class="btn btn-outline-secondary btn-sm w-100 text-start fw-medium" onclick="addModalCanvasBlock('Description')"><i class="bi bi-text-paragraph text-success me-2"></i>Description</button></div>
                                     <div class="col-6"><button class="btn btn-outline-secondary btn-sm w-100 text-start fw-medium" onclick="addModalCanvasBlock('Dropdown')"><i class="bi bi-menu-button-wide text-warning me-2"></i>Dropdown</button></div>
                                     <div class="col-6"><button class="btn btn-outline-secondary btn-sm w-100 text-start fw-medium" onclick="addModalCanvasBlock('Yes/No')"><i class="bi bi-toggle-on text-info me-2"></i>Yes / No</button></div>
@@ -1777,9 +1777,7 @@ def get_admin_dashboard(path: str = ""):
                             </div>
                         </div>
                     </div>
-                    <div class="modal-footer border-top p-3 bg-light">
-                        <button type="button" class="btn btn-outline-secondary px-4 fw-semibold" data-bs-dismiss="modal">Close</button>
-                    </div>
+
                 </div>
             </div>
         </div>
@@ -4217,8 +4215,8 @@ if (titleEl) titleEl.innerText = activeCustomForm.name + ' - Document Preview';
                             }
                             html += `<div class="mb-3">
                                         <label class="fw-bold text-dark d-block mb-1 fs-7">${f.label || f.name || 'Untitled Field'} ${f.required ? '<span class="text-danger">*</span>' : ''}</label>`;
-                            if (f.type === 'Short Text' || f.type === 'text') {
-                                html += `<input type="text" class="form-control form-control-sm" placeholder="User response line...">`;
+                            if (f.type === 'Open Ended' || f.type === 'Short Text' || f.type === 'text') {
+                                html += `<textarea class="form-control form-control-sm" rows="3" placeholder="Type your response here..."></textarea>`;
                             } else if (f.type === 'Description') {
                                 const descHtml = f.description || f.content || f.label || '<i class="text-muted">No description provided.</i>';
                                 html += `<div class="p-3 bg-white border rounded text-dark fs-7 lh-base text-break">${descHtml}</div>`;
@@ -4264,7 +4262,7 @@ if (titleEl) titleEl.innerText = activeCustomForm.name + ' - Document Preview';
 
                 modalBuilderFields = (typeof activeCustomForm.schema_fields === 'string' ? (JSON.parse(activeCustomForm.schema_fields || '[]')) : (activeCustomForm.schema_fields || [])).map(f => ({
                     id: f.id || ('field_' + Date.now()),
-                    type: f.type || 'Short Text',
+                    type: f.type || 'Open Ended',
                     label: f.label || f.name || 'Untitled Field',
                     required: !!f.required,
                     options: f.options || [],
@@ -4375,7 +4373,7 @@ if (titleEl) titleEl.innerText = activeCustomForm.name + ' - Document Preview';
             function openElementEditorModal(idx) {
                 const field = modalBuilderFields[idx];
                 if (!field) return;
-                if (field.type === 'Description' || field.type === 'Dropdown') {
+                if (field.type === 'Description' || field.type === 'Dropdown' || field.type === 'Open Ended' || field.type === 'Short Text') {
                     openDescriptionModal(idx);
                 } else {
                     showToast(field.type + ' configuration modal coming up next!');
