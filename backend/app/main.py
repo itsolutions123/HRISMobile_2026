@@ -4262,6 +4262,16 @@ def get_admin_dashboard(path: str = ""):
                                     html += `<button type="button" class="btn btn-outline-primary btn-sm me-2 fw-semibold px-4 rounded-pill">${o}</button>`;
                                 });
                                 html += `</div>`;
+                            } else if (f.type === 'Task') {
+                                html += `<div class="d-flex flex-column gap-2 mt-1">`;
+                                const tOpts = (f.options && f.options.length > 0) ? f.options : ['Task 1', 'Task 2'];
+                                tOpts.forEach((o, oIdx) => {
+                                    html += `<div class="form-check">
+                                                <input class="form-check-input shadow-none" type="checkbox" id="preview_chk_${idx}_${oIdx}">
+                                                <label class="form-check-label small text-dark text-break lh-base" for="preview_chk_${idx}_${oIdx}">${o}</label>
+                                             </div>`;
+                                });
+                                html += `</div>`;
                             } else if (f.type === 'Signature') {
                                 html += `<div class="border rounded p-2"><button type="button" id="sig_target_${idx}" class="btn btn-outline-secondary btn-sm w-100 py-2 d-flex justify-content-center align-items-center gap-2" onclick="openSignaturePadModal(${idx})">
                                                 <i class="bi bi-pencil-square"></i> Click to Sign
@@ -4385,7 +4395,7 @@ def get_admin_dashboard(path: str = ""):
                     type: type,
                     label: type + ' Question',
                     required: false,
-                    options: type === 'Dropdown' ? ['Option 1', 'Option 2'] : (type === 'Yes/No' ? ['Yes', 'No'] : [])
+                    options: (type === 'Dropdown' || type === 'Task') ? ['Option 1', 'Option 2'] : (type === 'Yes/No' ? ['Yes', 'No'] : [])
                 });
                 renderModalCanvasBlocks();
             }
@@ -4754,8 +4764,8 @@ def get_admin_dashboard(path: str = ""):
                                 </div>
                             </div>`;
 
-                    if (field.type === 'Dropdown' || field.type === 'Yes/No') {
-                            const borderTheme = field.type === 'Yes/No' ? 'info' : 'warning';
+                    if (field.type === 'Dropdown' || field.type === 'Yes/No' || field.type === 'Task') {
+                            const borderTheme = field.type === 'Yes/No' ? 'info' : (field.type === 'Task' ? 'success' : 'warning');
                             html += `<div class="mt-2 ps-2 border-start border-2 border-${borderTheme}">
                                         <label class="form-label text-secondary small fw-semibold mb-1 text-uppercase">${field.type} OPTIONS</label>`;
                         field.options.forEach((opt, optIdx) => {
