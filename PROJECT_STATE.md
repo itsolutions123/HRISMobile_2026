@@ -87,3 +87,6 @@ Source of truth: this file was rebuilt from an audit of the actual repo code, no
 * **Mobile:** no change
 * **Hardcodes:** none found or removed
 * **Docs:** no change
+
+## Recent Fixes
+- Fixed Android APK cleartext network error: Updated EXPO_PUBLIC_API_BASE_URL to production domain in .env.local, removing the hardcoded 10.0.10.37 fallback. App now correctly communicates over mobile data.
