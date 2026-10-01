@@ -329,9 +329,9 @@ export default function ManagerScreen() {
 
   const filteredTeam = team.filter(t => {
     const match = (t.name || '').toLowerCase().includes(teamSearchQuery.toLowerCase()) || String(t.employee_id || '').includes(teamSearchQuery);
-    if (teamTab === 'USERS') return match && !t.is_archived && !t.is_pending;
-    if (teamTab === 'ARCHIVED') return match && t.is_archived;
-    if (teamTab === 'PENDING') return match && t.is_pending;
+    if (teamTab === 'USERS') return match && t.status !== 'ARCHIVED' && t.status !== 'PENDING' && t.status !== 'DENIED';
+    if (teamTab === 'ARCHIVED') return match && t.status === 'ARCHIVED';
+    if (teamTab === 'PENDING') return match && (t.status === 'PENDING' || t.status === 'DENIED');
     return match;
   });
 

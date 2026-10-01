@@ -65,7 +65,8 @@ def get_team_members(
             "department": emp.department,
             "role": emp.role,
             "email": emp.email,
-            "mobile_phone": emp.mobile_phone
+            "mobile_phone": emp.mobile_phone,
+            "status": emp.status
         }
         for emp in team
     ]
