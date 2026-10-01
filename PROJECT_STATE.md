@@ -1,5 +1,5 @@
 # DTR App - Project State
-Last updated: September 29, 2026
+Last updated: October 1, 2026
 Source of truth: this file was rebuilt from an audit of the actual repo code, not from memory.
 
 ## Stack (confirmed, do not change without discussion)
@@ -52,6 +52,7 @@ Source of truth: this file was rebuilt from an audit of the actual repo code, no
 - Timesheet: calendar, per-day punches, Google Maps link, revision request
 - Manager Hub: Revisions (approve/reject with signature), Team, Groups, Export
 - `HomeScreen.js` exists but is NOT wired into `App.js` (orphaned; decide keep or remove)
+- Android APK (`preview` profile in `eas.json`, package `com.bigtime.hrismobileapp.test`) is built with `EXPO_PUBLIC_API_BASE_URL=https://app.bigtimeempire.com`. Confirmed working over mobile data against the web app and API, same as Expo.
 
 ## KNOWN BROKEN / MISMATCHES (found in audit, not yet fixed)
 1. `POST /api/auth/users` does not exist (`UserCreateRequest` is unused). The web "Add users" modal calls it and fails.
@@ -62,10 +63,9 @@ Source of truth: this file was rebuilt from an audit of the actual repo code, no
 6. Web "Rename group" is broken (`setStoredGroups` undefined, async `getStoredGroups` used as sync). Group-admin dropdown helpers are not defined. The rename-group API expects `new_name`.
 7. No auth on `/api/punch/*`, `/api/jobs` GET/POST/DELETE, `/api/manager/schedules` GET. `employee_id` is trusted from the client.
 8. Stray empty files committed: `-H`, `-d`, `backend/-H`, `backend/-d`.
-9. Two `PROJECT_STATE.md` copies (root and `backend/`) had diverged. `backend/PROJECT_STATE.md` is stale.
 
 ## HARDCODE BACKLOG (violates dynamic-by-default; some need Architect schema/contract changes)
-- Mobile: `API_BASE_URL` in `AuthContext.js`; deep-link prefixes in `App.js`; default map coordinates; "8:00 AM - 5:00 PM" schedule text; fallback job-title lists per department in `DashboardScreen`; fallback department list in `LoginScreen`; fixed "8.0 hrs" in `TimesheetScreen`
+- Mobile: deep-link prefixes in `App.js`; default map coordinates; "8:00 AM - 5:00 PM" schedule text; fallback job-title lists per department in `DashboardScreen`; fallback department list in `LoginScreen`; fixed "8.0 hrs" in `TimesheetScreen`
 - Web (`main.py`): brand "Head Office" on history rows; fake total fallbacks ("0.5 hrs", "8.0 hrs"); default new-user password; assignments modal with fixed groups, fixed users and fixed counts; fixed form counts, date range and "created" date; static Employment tab; `defaultBrandsInitial` / `defaultGroupsInitial`; department jobs stored in localStorage instead of the database
 - Backend: fallback JWT secret (`auth_utils.py`) and fallback DB URL with credentials (`database.py`); grace period (15) and break (60) in `dtr.py`; default brands/groups seeded in `jobs.py`; role and status strings scattered across routers; CORS origins in `main.py`
 
@@ -73,12 +73,10 @@ Source of truth: this file was rebuilt from an audit of the actual repo code, no
 - Passwords for `xinxaola`, `3286` and the DB user were stored in plaintext in earlier versions of this file, so they exist in git history. Rotate all three, and remove the default fallback secrets in code.
 - Remove the default new-user password from the web panel.
 - Add auth to the open endpoints listed in item 7 above.
+- Review `usesCleartextTraffic: true` in `app.json`. The APK now uses HTTPS, so it is probably no longer needed. Confirm, then remove it.
 
 ## IN PROGRESS / NEXT (pick one at a time)
-- [ ] Mobile/tablet responsive layout fix for `/admin`
-- [ ] Manager approval dashboard for DTR revisions on web (mobile version exists in `ManagerScreen`)
-- [ ] Fix the Known Broken items above (suggested order: 3, 4, 1, 5, 2, 6, 7)
-- [ ] Locate the `hris-mobile-bundler` definition and add it to version control
+- [ ] Mobile UI Revamp
 
 ### Recent Fixes
 * **Work mode:** bug fix
