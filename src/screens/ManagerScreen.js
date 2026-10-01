@@ -28,6 +28,11 @@ export default function ManagerScreen() {
   const [showActionModal, setShowActionModal] = useState(false);
   const [actionType, setActionType] = useState('APPROVED');
   const [managerSignature, setManagerSignature] = useState('');
+  
+  // Pending User Modal State
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [userActionType, setUserActionType] = useState('APPROVED');
   const [managerNote, setManagerNote] = useState('');
   const [submittingAction, setSubmittingAction] = useState(false);
 
@@ -163,6 +168,32 @@ export default function ManagerScreen() {
     }
   };
 
+  const handleUserStatusUpdate = async () => {
+    if (!selectedUser) return;
+    setSubmittingAction(true);
+    try {
+      const payload = { status: userActionType };
+      const res = await fetch(`${API_BASE_URL}/api/auth/users/${selectedUser.employee_id}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error('Failed to update user status');
+      
+      Alert.alert("Success", `User has been ${userActionType === 'APPROVED' ? 'approved' : 'denied (archived)'}.`);
+      setShowUserModal(false);
+      fetchData(); // Refresh the list
+    } catch (error) {
+      console.error('Update User Status Error:', error);
+      Alert.alert('Error', 'Could not update user status.');
+    } finally {
+      setSubmittingAction(false);
+    }
+  };
+
   const handleArchiveUser = (userItem) => {
     Alert.alert(
       "Archive User",
@@ -249,6 +280,22 @@ export default function ManagerScreen() {
           </TouchableOpacity>
         )}
       </View>
+      {teamTab === 'PENDING' && (
+        <View style={styles.actionRow}>
+          <TouchableOpacity 
+            style={[styles.actionBtn, styles.approveBtn]} 
+            onPress={() => { setSelectedUser(item); setUserActionType('APPROVED'); setShowUserModal(true); }}
+          >
+            <Text style={styles.btnText}>Approve</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.actionBtn, styles.rejectBtn]} 
+            onPress={() => { setSelectedUser(item); setUserActionType('ARCHIVED'); setShowUserModal(true); }}
+          >
+            <Text style={styles.btnText}>Deny</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 
@@ -446,6 +493,44 @@ export default function ManagerScreen() {
                 ) : (
                   <Text style={styles.btnText}>
                     {actionType === 'APPROVED' ? 'Confirm Approval' : 'Confirm Rejection'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Pending User Approval Modal */}
+      <Modal visible={showUserModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              {userActionType === 'APPROVED' ? 'Approve User' : 'Deny User'}
+            </Text>
+            <Text style={styles.modalSub}>
+              Employee: {selectedUser?.name} ({selectedUser?.employee_id})
+            </Text>
+            <Text style={{fontSize: 14, color: '#334155', marginBottom: 24, lineHeight: 20}}>
+              {userActionType === 'APPROVED' 
+                ? 'This user will be granted access to the system and moved to the active Users directory.'
+                : 'This user request will be denied and their account will be moved to the Archived tab. They will not have access.'}
+            </Text>
+
+            <View style={styles.modalActionRow}>
+              <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#cbd5e1' }]} onPress={() => setShowUserModal(false)}>
+                <Text style={{ color: '#334155', fontWeight: 'bold' }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionBtn, userActionType === 'APPROVED' ? styles.approveBtn : styles.rejectBtn]}
+                onPress={handleUserStatusUpdate}
+                disabled={submittingAction}
+              >
+                {submittingAction ? (
+                  <ActivityIndicator color="#ffffff" />
+                ) : (
+                  <Text style={styles.btnText}>
+                    {userActionType === 'APPROVED' ? 'Confirm Approval' : 'Confirm Denial'}
                   </Text>
                 )}
               </TouchableOpacity>
