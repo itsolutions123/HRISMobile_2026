@@ -364,9 +364,11 @@ export default function DashboardScreen({ navigation }) {
 
           <View style={styles.bottomActions}>
             <TouchableOpacity style={styles.switchJobBtn} onPress={() => setShowJobModal(true)}>
+              <Ionicons name="swap-horizontal" size={18} color="#2563eb" style={{marginRight: 6}} />
               <Text style={styles.switchJobText}>Switch Role</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.endShiftBtn} onPress={handleOpenClockOutReview} disabled={loading}>
+              <Ionicons name="exit-outline" size={18} color="#ffffff" style={{marginRight: 6}} />
               <Text style={styles.endShiftText}>Clock Out</Text>
             </TouchableOpacity>
           </View>
@@ -422,18 +424,6 @@ export default function DashboardScreen({ navigation }) {
           </View>
         </>
       )}
-
-      {/* FIXED BOTTOM NAVIGATION BAR */}
-      <View style={styles.fixedBottomTabBar}>
-        <TouchableOpacity style={styles.tabBarItem} onPress={() => {}}>
-          <Ionicons name="stopwatch" size={20} color="#2563eb" />
-          <Text style={[styles.tabBarLabel, { color: '#2563eb', fontWeight: '700' }]}>HRIS Punch</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabBarItem} onPress={() => navigation.navigate('Timesheet')}>
-          <Ionicons name="calendar-outline" size={20} color="#64748b" />
-          <Text style={styles.tabBarLabel}>Timesheet</Text>
-        </TouchableOpacity>
-      </View>
 
       {/* CLOCK OUT REVIEW & GPS CONFIRMATION MODAL */}
       <Modal visible={showClockOutReviewModal} transparent animationType="slide">
@@ -605,16 +595,13 @@ const styles = StyleSheet.create({
   detailText: { fontSize: 14, color: '#334155', fontWeight: '500' },
   uploadBtn: { borderWidth: 1, borderColor: '#cbd5e1', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 14, backgroundColor: '#ffffff' },
   uploadText: { fontSize: 12, color: '#2563eb', fontWeight: '600' },
-  bottomActions: { flexDirection: 'row', padding: 20, gap: 12, backgroundColor: '#ffffff', borderTopWidth: 1, borderColor: '#f1f5f9' },
-  switchJobBtn: { flex: 1, backgroundColor: '#f1f5f9', height: 50, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
-  switchJobText: { color: '#2563eb', fontWeight: '700' },
-  endShiftBtn: { flex: 1.5, backgroundColor: '#ef4444', height: 50, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
-  endShiftText: { color: '#ffffff', fontWeight: '700' },
+  bottomActions: { flexDirection: 'row', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24, gap: 12, backgroundColor: '#ffffff', borderTopWidth: 1, borderColor: '#f1f5f9', elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.05, shadowRadius: 8 },
+  switchJobBtn: { flex: 1, backgroundColor: '#eff6ff', height: 54, borderRadius: 16, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', borderWidth: 1, borderColor: '#bfdbfe' },
+  switchJobText: { color: '#2563eb', fontWeight: '800', fontSize: 15 },
+  endShiftBtn: { flex: 1.5, backgroundColor: '#ef4444', height: 54, borderRadius: 16, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', shadowColor: '#ef4444', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 4 },
+  endShiftText: { color: '#ffffff', fontWeight: '800', fontSize: 15 },
 
-  // Fixed Bottom Navigation Tab Bar
-  fixedBottomTabBar: { position: 'absolute', bottom: 0, width: '100%', height: 60, backgroundColor: '#ffffff', borderTopWidth: 1, borderColor: '#e2e8f0', flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', zIndex: 100 },
-  tabBarItem: { alignItems: 'center', justifyContent: 'center' },
-  tabBarLabel: { fontSize: 11, color: '#64748b', marginTop: 2 },
+  // Fixed Bottom Navigation Tab Bar (Removed)
 
   // Modal Sheet & Review Modal
   modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
