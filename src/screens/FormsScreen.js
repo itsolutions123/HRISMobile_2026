@@ -532,8 +532,8 @@ export default function FormsScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
-  viewContainer: { flex: 1, padding: 20, paddingTop: Platform.OS === 'ios' ? 50 : 20 },
+  container: { flex: 1, backgroundColor: '#f8fafc', paddingTop: Platform.OS === 'ios' ? 60 : 40 },
+  viewContainer: { flex: 1, paddingHorizontal: 20, paddingBottom: 20 },
   headerTitle: { fontSize: 24, fontWeight: '800', color: '#0f172a', marginBottom: 4 },
   headerSubtitle: { fontSize: 14, color: '#64748b', marginBottom: 20 },
   

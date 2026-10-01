@@ -545,12 +545,12 @@ export default function ManagerScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc', paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : 40 },
-  pageTitle: { fontSize: 32, fontWeight: '800', color: '#0f172a', marginBottom: 24 },
+  pageTitle: { fontSize: 26, fontWeight: '700', color: '#0f172a', marginBottom: 24 },
   
   menuContainer: { flex: 1 },
   attendanceCard: { backgroundColor: '#ffffff', borderRadius: 16, padding: 24, marginBottom: 20, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 3 },
-  cardHeaderTitle: { fontSize: 13, fontWeight: '800', color: '#64748b', marginBottom: 16, textTransform: 'uppercase', letterSpacing: 0.5 },
-  attendanceStatsText: { fontSize: 36, fontWeight: '800', color: '#0f172a', textAlign: 'center' },
+  cardHeaderTitle: { fontSize: 13, fontWeight: '700', color: '#64748b', marginBottom: 16, textTransform: 'uppercase', letterSpacing: 0.5 },
+  attendanceStatsText: { fontSize: 28, fontWeight: '700', color: '#0f172a', textAlign: 'center' },
   pendingAlertBadge: { backgroundColor: '#fef3c7', alignSelf: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, marginTop: 16 },
   pendingAlertText: { color: '#d97706', fontWeight: '700', fontSize: 12 },
 
@@ -559,18 +559,18 @@ const styles = StyleSheet.create({
 
   subViewHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
   backBtn: { padding: 8, marginRight: 8 },
-  subViewTitle: { fontSize: 22, fontWeight: '800', color: '#0f172a' },
+  subViewTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a' },
 
   itemCard: { backgroundColor: '#ffffff', padding: 18, borderRadius: 16, marginBottom: 12, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 4, elevation: 2 },
   brandCard: { backgroundColor: '#ffffff', borderRadius: 16, paddingVertical: 40, paddingHorizontal: 20, marginBottom: 16, borderWidth: 1, borderColor: '#0f172a', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 3 },
-  brandCardText: { fontSize: 20, fontWeight: '800', color: '#0f172a', textTransform: 'uppercase', letterSpacing: 1, textAlign: 'center' },
+  brandCardText: { fontSize: 15, fontWeight: '700', color: '#0f172a', textTransform: 'uppercase', letterSpacing: 1, textAlign: 'center' },
   subGroupsContainer: { backgroundColor: '#f8fafc', padding: 16, borderBottomLeftRadius: 16, borderBottomRightRadius: 16, borderWidth: 1, borderTopWidth: 0, borderColor: '#0f172a' },
   subGroupRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
   subGroupDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#2563eb', marginRight: 12 },
   subGroupText: { fontSize: 15, fontWeight: '600', color: '#334155' },
   
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  cardTitle: { fontWeight: '800', fontSize: 16, color: '#1e293b' },
+  cardTitle: { fontWeight: '700', fontSize: 16, color: '#1e293b' },
   cardDetail: { fontSize: 13, color: '#475569', marginTop: 4 },
   boldText: { fontWeight: '700', color: '#0f172a' },
   pendingBadge: { backgroundColor: '#fef3c7', color: '#d97706', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, fontWeight: '700', fontSize: 11 },
@@ -581,23 +581,23 @@ const styles = StyleSheet.create({
   actionBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   approveBtn: { backgroundColor: '#16a34a' },
   rejectBtn: { backgroundColor: '#dc2626' },
-  btnText: { color: '#ffffff', fontWeight: '800', fontSize: 14 },
+  btnText: { color: '#ffffff', fontWeight: '700', fontSize: 14 },
   
   emptyText: { textAlign: 'center', color: '#94a3b8', marginTop: 40, fontSize: 15, fontWeight: '500' },
   
   exportCard: { backgroundColor: '#ffffff', padding: 24, borderRadius: 16, borderWidth: 1, borderColor: '#e2e8f0' },
-  exportTitle: { fontSize: 18, fontWeight: '800', color: '#0f172a', marginBottom: 8 },
+  exportTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a', marginBottom: 8 },
   exportSubtitle: { fontSize: 14, color: '#64748b', marginBottom: 24 },
   inputGroup: { marginBottom: 16 },
-  label: { fontSize: 12, fontWeight: '800', color: '#334155', marginBottom: 8, textTransform: 'uppercase' },
+  label: { fontSize: 12, fontWeight: '700', color: '#334155', marginBottom: 8, textTransform: 'uppercase' },
   input: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, backgroundColor: '#f8fafc', color: '#0f172a' },
   exportBtn: { backgroundColor: '#2563eb', paddingVertical: 16, borderRadius: 12, alignItems: 'center', marginTop: 12 },
   disabledBtn: { opacity: 0.6 },
-  exportBtnText: { color: '#ffffff', fontWeight: '800', fontSize: 15 },
+  exportBtnText: { color: '#ffffff', fontWeight: '700', fontSize: 15 },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.7)', justifyContent: 'center', padding: 20 },
   modalContent: { backgroundColor: '#ffffff', borderRadius: 24, padding: 24 },
-  modalTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a', marginBottom: 6 },
+  modalTitle: { fontSize: 15, fontWeight: '700', color: '#0f172a', marginBottom: 6 },
   modalSub: { fontSize: 14, color: '#64748b', marginBottom: 24 },
 
   searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 12, borderWidth: 1, borderColor: '#cbd5e1', marginBottom: 16, height: 48 },
@@ -606,5 +606,5 @@ const styles = StyleSheet.create({
   teamTabBtn: { flex: 1, paddingVertical: 12, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
   teamTabBtnActive: { borderBottomColor: '#2563eb' },
   teamTabText: { fontSize: 13, fontWeight: '600', color: '#64748b' },
-  teamTabTextActive: { color: '#2563eb', fontWeight: '800' },
+  teamTabTextActive: { color: '#2563eb', fontWeight: '700' },
 });

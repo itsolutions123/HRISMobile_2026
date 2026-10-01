@@ -37,11 +37,11 @@ function MainTabNavigator() {
         },
       })}
     >
-      <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Home' }} />
-      <Tab.Screen name="Forms" component={FormsScreen} options={{ title: 'Forms' }} />
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
+      <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Home', headerShown: false }} />
+      <Tab.Screen name="Forms" component={FormsScreen} options={{ title: 'Forms', headerShown: false }} />
+      <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile', headerShown: false }} />
       {user && ['manager', 'admin', 'superadmin'].includes(String(user.role || '').toLowerCase()) && (
-        <Tab.Screen name="Admin" component={ManagerScreen} options={{ title: 'Admin' }} />
+        <Tab.Screen name="Admin" component={ManagerScreen} options={{ title: 'Admin', headerShown: false }} />
       )}
     </Tab.Navigator>
   );
