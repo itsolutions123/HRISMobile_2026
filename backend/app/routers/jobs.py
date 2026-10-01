@@ -36,8 +36,23 @@ class GroupRename(BaseModel):
     new_name: str
 
 # 1. LEGACY JOB CATEGORIES & SUB-ITEMS
+@router.get("/public")
+def get_all_jobs_public(db: Session = Depends(get_db)):
+    categories = db.query(JobCategory).all()
+    result = []
+    for cat in categories:
+        subs = db.query(JobSubItem).filter(JobSubItem.category_id == cat.id).all()
+        result.append({
+            "id": cat.id,
+            "name": cat.name,
+            "code": cat.code,
+            "description": cat.description,
+            "sub_items": [{"id": s.id, "name": s.name, "code": s.code} for s in subs]
+        })
+    return result
+
 @router.get("")
-def get_all_jobs(db: Session = Depends(get_db)):
+def get_all_jobs(db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
     categories = db.query(JobCategory).all()
     result = []
     for cat in categories:
@@ -52,7 +67,9 @@ def get_all_jobs(db: Session = Depends(get_db)):
     return result
 
 @router.post("")
-def create_job_category(payload: JobCategoryCreate, db: Session = Depends(get_db)):
+def create_job_category(payload: JobCategoryCreate, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
+    if current_user.role not in ["Admin", "Superadmin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
     cat = db.query(JobCategory).filter(JobCategory.name == payload.name).first()
     if not cat:
         cat = JobCategory(name=payload.name, code=payload.code, description=payload.description)
@@ -74,7 +91,9 @@ def create_job_category(payload: JobCategoryCreate, db: Session = Depends(get_db
     return {"status": "success", "category_id": cat.id}
 
 @router.delete("/{category_id}")
-def delete_job_category(category_id: int, db: Session = Depends(get_db)):
+def delete_job_category(category_id: int, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
+    if current_user.role not in ["Admin", "Superadmin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
     cat = db.query(JobCategory).filter(JobCategory.id == category_id).first()
     if not cat:
         raise HTTPException(status_code=404, detail="Job category not found")

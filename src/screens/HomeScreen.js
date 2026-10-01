@@ -38,7 +38,7 @@ export default function HomeScreen() {
 
   const fetchJobs = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/jobs`);
+      const res = await fetch(`${API_BASE_URL}/api/jobs`, { headers: { 'Authorization': 'Bearer ' + token } });
       if (res.ok) {
         const data = await res.json();
         let items = [];
@@ -114,7 +114,7 @@ export default function HomeScreen() {
   const fetchActiveStatus = useCallback(async () => {
     if (!user || !user.employee_id) return;
     try {
-      const response = await fetch(`${API_BASE_URL}/api/punch/active/${user.employee_id}`);
+      const response = await fetch(`${API_BASE_URL}/api/punch/active/me`, { headers: { 'Authorization': 'Bearer ' + token } });
       if (response.ok) {
         const data = await response.json();
         setIsClockedIn(data.is_clocked_in);
@@ -206,7 +206,7 @@ export default function HomeScreen() {
     try {
       const response = await fetch(`${API_BASE_URL}/api/punch`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
         body: JSON.stringify({
           employee_id: user.employee_id,
           punch_type: punchType,

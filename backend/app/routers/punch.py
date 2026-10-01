@@ -9,6 +9,7 @@ import io
 import csv
 from ..database import get_db
 from ..models import PunchLog, Employee
+from .auth import get_current_user, require_roles
 
 router = APIRouter(prefix="/api/punch", tags=["DTR Punch"])
 
@@ -26,10 +27,10 @@ class PunchRequest(BaseModel):
     address: Optional[str] = None
     is_mock: Optional[bool] = False  # Client spoof detection flag
 
-@router.get("/active/{employee_id}")
-def get_active_punch(employee_id: str, db: Session = Depends(get_db)):
+@router.get("/active/me")
+def get_active_punch(db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
     last_punch = db.query(PunchLog).filter(
-        PunchLog.employee_id == employee_id
+        PunchLog.employee_id == current_user.employee_id
     ).order_by(PunchLog.id.desc()).first()
 
     if not last_punch or last_punch.punch_type.upper() == "CLOCK_OUT":
@@ -47,7 +48,7 @@ def get_active_punch(employee_id: str, db: Session = Depends(get_db)):
     }
 
 @router.get("/logs")
-def get_all_punch_logs(db: Session = Depends(get_db)):
+def get_all_punch_logs(db: Session = Depends(get_db), current_user: Employee = Depends(require_roles(["Admin", "Superadmin", "Manager"]))):
     logs = db.query(PunchLog).order_by(PunchLog.id.desc()).all()
     results = []
     for log in logs:
@@ -64,7 +65,7 @@ def get_all_punch_logs(db: Session = Depends(get_db)):
     return results
 
 @router.post("")
-def record_punch(payload: PunchRequest, db: Session = Depends(get_db)):
+def record_punch(payload: PunchRequest, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
     # 1. Reject if GPS data is missing/denied
     if payload.latitude is None or payload.longitude is None:
         raise HTTPException(
@@ -88,7 +89,7 @@ def record_punch(payload: PunchRequest, db: Session = Depends(get_db)):
 
     # 4. Strict duplicate / sequence validation ordering by primary key ID
     last_punch = db.query(PunchLog).filter(
-        PunchLog.employee_id == payload.employee_id
+        PunchLog.employee_id == current_user.employee_id
     ).order_by(PunchLog.id.desc()).first()
 
     requested_type = payload.punch_type.strip().upper()
@@ -103,7 +104,7 @@ def record_punch(payload: PunchRequest, db: Session = Depends(get_db)):
     now_pst = get_manila_now().replace(tzinfo=None)
 
     new_punch = PunchLog(
-        employee_id=payload.employee_id,
+        employee_id=current_user.employee_id,
         punch_type=requested_type,
         timestamp=now_pst,
         latitude=payload.latitude,
@@ -117,7 +118,7 @@ def record_punch(payload: PunchRequest, db: Session = Depends(get_db)):
     return {"status": "success", "punch_id": new_punch.id, "timestamp": now_pst.isoformat()}
 
 @router.get("/export")
-def export_punch_logs(db: Session = Depends(get_db)):
+def export_punch_logs(db: Session = Depends(get_db), current_user: Employee = Depends(require_roles(["Admin", "Superadmin", "Manager"]))):
     logs = db.query(PunchLog).order_by(PunchLog.id.desc()).all()
 
     output = io.StringIO()

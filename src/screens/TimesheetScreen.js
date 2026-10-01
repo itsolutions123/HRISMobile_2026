@@ -81,7 +81,7 @@ export default function TimesheetScreen() {
         setMarkedDates(marks);
       }
 
-      const logsRes = await fetch(`${API_BASE_URL}/api/punch/logs`);
+      const logsRes = await fetch(`${API_BASE_URL}/api/punch/logs`, { headers: { 'Authorization': 'Bearer ' + token } });
       if (logsRes.ok) {
         const logs = await logsRes.json();
         const userPunches = logs.filter(p => p.employee_id === user?.employee_id);

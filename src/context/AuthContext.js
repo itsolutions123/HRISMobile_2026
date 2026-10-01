@@ -5,7 +5,7 @@ export const AuthContext = createContext();
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
-  const API_BASE_URL = 'http://10.0.10.37:8089';
+  const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
   const parseErrorMessage = (detail, fallbackMsg) => {
     if (!detail) return fallbackMsg;

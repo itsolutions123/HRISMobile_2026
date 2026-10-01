@@ -9,6 +9,12 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.bigtime.hrismobileapp.test",
+      "versionCode": 1,
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ],
       "userInterfaceStyle": "light"
     }
   }

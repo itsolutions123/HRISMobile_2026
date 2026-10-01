@@ -57,7 +57,7 @@ export default function DashboardScreen({ navigation }) {
   const fetchJobs = useCallback(async () => {
     setJobsLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/jobs`);
+      const res = await fetch(`${API_BASE_URL}/api/jobs`, { headers: { 'Authorization': 'Bearer ' + token } });
       let titles = [];
       if (res.ok) {
         const data = await res.json();
@@ -165,7 +165,7 @@ export default function DashboardScreen({ navigation }) {
   const fetchStatus = useCallback(async () => {
     if (!user || !user.employee_id) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/api/punch/active/${user.employee_id}`);
+      const res = await fetch(`${API_BASE_URL}/api/punch/active/me`, { headers: { 'Authorization': 'Bearer ' + token } });
       if (res.ok) {
         const data = await res.json();
         setIsClockedIn(data.is_clocked_in);
@@ -219,7 +219,7 @@ export default function DashboardScreen({ navigation }) {
     try {
       const res = await fetch(`${API_BASE_URL}/api/punch`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
         body: JSON.stringify({
           employee_id: user.employee_id,
           full_name: user?.name || (user?.first_name ? `${user?.first_name} ${user?.last_name || ''}` : user.employee_id),

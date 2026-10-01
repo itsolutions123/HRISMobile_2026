@@ -2345,7 +2345,7 @@ def get_admin_dashboard(path: str = ""):
 
             async function loadPunchMap() {
                 try {
-                    const res = await fetch('/api/punch/logs');
+                    const res = await fetch('/api/punch/logs', { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('atwork_jwt_token') } });
                     const logs = await res.json();
                     rawFullPunchesLogs = logs || [];
                     if (markersGroup) markersGroup.clearLayers();
@@ -2439,7 +2439,7 @@ def get_admin_dashboard(path: str = ""):
                 const filterMMDDYYYY = `${parts[1]}/${parts[2]}/${parts[0]}`;
 
                 try {
-                    const res = await fetch('/api/punch/logs');
+                    const res = await fetch('/api/punch/logs', { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('atwork_jwt_token') } });
                     const logs = await res.json();
                     rawFullPunchesLogs = logs || [];
 
@@ -2873,7 +2873,7 @@ def get_admin_dashboard(path: str = ""):
 
                 let clockedInCount = 0;
                 try {
-                    const activeRes = await fetch('/api/punch/logs');
+                    const activeRes = await fetch('/api/punch/logs', { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('atwork_jwt_token') } });
                     if (activeRes.ok) {
                         const logs = await activeRes.json();
                         const activeEmpIds = logs.filter(p => p.punch_type === 'CLOCK_IN').map(p => p.employee_id);
@@ -3157,7 +3157,7 @@ def get_admin_dashboard(path: str = ""):
 
             async function loadUserActivityPunches(empId) {
                 try {
-                    const res = await fetch('/api/punch/logs');
+                    const res = await fetch('/api/punch/logs', { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('atwork_jwt_token') } });
                     if (res.ok) {
                         const logs = await res.json();
                         const userLogs = logs.filter(p => p.employee_id === empId);

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, RefreshControl, TextInput, Linking, Modal } from 'react-native';
 import { AuthContext } from '../context/AuthContext';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 
 export default function ManagerScreen() {
   const { user, API_BASE_URL } = useContext(AuthContext);
@@ -119,12 +121,22 @@ export default function ManagerScreen() {
     }
     setExporting(true);
     try {
-      const exportUrl = `${API_BASE_URL}/api/dtr/export?start_date=${startDate}&end_date=${endDate}`;
-      const supported = await Linking.canOpenURL(exportUrl);
-      if (supported) {
-        await Linking.openURL(exportUrl);
+      const exportUrl = `${API_BASE_URL}/api/punch/export?start_date=${startDate}&end_date=${endDate}`;
+      const fileUri = FileSystem.documentDirectory + `timesheet_export_${Date.now()}.csv`;
+      
+      const downloadRes = await FileSystem.downloadAsync(exportUrl, fileUri, {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+
+      if (downloadRes.status === 200) {
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(downloadRes.uri);
+        } else {
+          Alert.alert('Success', 'File downloaded to: ' + downloadRes.uri);
+        }
       } else {
-        Alert.alert('Error', `Cannot open download URL: ${exportUrl}`);
+        Alert.alert('Export Error', 'Download failed with status: ' + downloadRes.status);
       }
     } catch (err) {
       Alert.alert('Export Error', 'Failed to trigger file download.');

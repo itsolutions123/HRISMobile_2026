@@ -34,7 +34,7 @@ export default function LoginScreen() {
 
   const fetchDynamicDepartments = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/jobs`);
+      const response = await fetch(`${API_BASE_URL}/api/jobs/public`);
       if (response.ok) {
         const data = await response.json();
         if (Array.isArray(data) && data.length > 0) {
