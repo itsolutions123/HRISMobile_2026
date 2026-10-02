@@ -769,12 +769,15 @@ def get_admin_dashboard(path: str = ""):
                 async function loadHomeHistory() {
                     let selDateInput = document.getElementById('homeHistoryDateFilter').value;
                     if (!selDateInput) {
-                        const todayStr = new Date().toISOString().split('T')[0];
-                        document.getElementById('homeHistoryDateFilter').value = todayStr;
-                        selDateInput = todayStr;
+                        const d = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Manila"}));
+                        const yyyy = d.getFullYear();
+                        const mm = String(d.getMonth() + 1).padStart(2, '0');
+                        const dd = String(d.getDate()).padStart(2, '0');
+                        selDateInput = `${yyyy}-${mm}-${dd}`;
+                        document.getElementById('homeHistoryDateFilter').value = selDateInput;
                     }
                     const parts = selDateInput.split('-');
-                    const filterMMDDYYYY = `${parts[1]}/${parts[2]}/${parts[0]}`;
+                    const filterMMDDYYYY = parts.length === 3 ? `${parts[1]}/${parts[2]}/${parts[0]}` : selDateInput;
 
                     document.getElementById('home-history-list').innerHTML = '<p class="text-muted fs-7 text-center py-3">Loading historical records...</p>';
 
@@ -2315,6 +2318,9 @@ def get_admin_dashboard(path: str = ""):
                     if (updateUrl) history.pushState(null, '', '/admin/home');
                     document.getElementById('page-title').innerText = 'Home';
                     loadHomeDashboardData();
+                    if (typeof loadHomeHistory === 'function') {
+                        setTimeout(() => loadHomeHistory(), 300);
+                    }
                 } else if (tab === 'clock') {
                     if (updateUrl) history.pushState(null, '', '/admin/timeclock');
                     document.getElementById('page-title').innerText = 'Time Clock';
