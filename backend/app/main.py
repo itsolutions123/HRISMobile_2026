@@ -432,46 +432,47 @@ def get_admin_dashboard(path: str = ""):
                     <div class="p-4">
                         <!-- TAB 0: HOME LANDING -->
                         <div id="tab-home">
-                            <!-- ATTENDANCE CARD -->
-                            <div class="card-custom mb-4">
-                                <div class="d-flex justify-content-between align-items-center mb-3">
-                                    <h6 class="fw-bold m-0 text-dark"><i class="bi bi-person-check me-2 text-warning"></i> Attendance</h6>
-                                    <div class="input-group input-group-sm" style="width: 250px;">
-                                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
-                                        <input type="text" class="form-control border-start-0" id="homeAttendanceSearch" placeholder="SEARCH" onkeyup="filterHomeAttendance(this.value)">
-                                    </div>
-                                </div>
-                                <ul class="nav nav-tabs mb-3 border-bottom" role="tablist">
-                                    <li class="nav-item">
-                                        <button class="nav-link active fw-bold text-dark px-3 py-2" id="home-clocked-in-tab" data-bs-toggle="tab" data-bs-target="#home-clocked-in" type="button"><span class="badge bg-warning text-dark me-2">CLOCKED IN NOW</span> <span id="home-clocked-in-count">(0)</span></button>
-                                    </li>
-                                    <li class="nav-item">
-                                        <button class="nav-link fw-bold text-dark px-3 py-2" id="home-clock-out-tab" data-bs-toggle="tab" data-bs-target="#home-clock-out" type="button">NEED TO CLOCK OUT <span id="home-clock-out-count">(0)</span></button>
-                                    </li>
-                                </ul>
-                                <div class="tab-content">
-                                    <div class="tab-pane fade show active" id="home-clocked-in">
-                                        <div class="table-responsive">
-                                            <table class="table table-hover align-middle mb-0" style="font-size: 13px;">
-                                                <tbody id="homeClockedInTableBody">
-                                                    <tr><td colspan="2" class="text-muted text-center py-3">Loading active attendance...</td></tr>
-                                                </tbody>
-                                            </table>
+                            <div class="row g-4 mb-4">
+                                <!-- Left: Attendance (Historical Data) -->
+                                <div class="col-md-5">
+                                    <div class="card-custom h-100 d-flex flex-column">
+                                        <h6 class="fw-bold mb-3 text-dark"><i class="bi bi-person-check me-2 text-warning"></i> Attendance</h6>
+                                        
+                                        <!-- Filters (Relocated to upper part) -->
+                                        <div class="d-flex flex-column gap-2 mb-3">
+                                            <div class="d-flex gap-2">
+                                                <div class="input-group input-group-sm flex-grow-1">
+                                                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                                                    <input type="text" class="form-control border-start-0" id="homeHistorySearch" placeholder="SEARCH" onkeyup="filterHomeHistory()">
+                                                </div>
+                                                <input type="date" class="form-control form-control-sm text-muted" id="homeHistoryDateFilter" style="max-width: 150px;" onchange="loadHomeHistory()">
+                                            </div>
+                                            <select class="form-select form-select-sm text-muted w-100" id="homeHistoryGroupFilter" onchange="filterHomeHistory()">
+                                                <option value="">Smart Group (All)</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="flex-grow-1" style="max-height: 440px; overflow-y: auto;" id="home-history-list">
+                                            <p class="text-muted fs-7 text-center py-3">Loading historical records...</p>
                                         </div>
                                     </div>
-                                    <div class="tab-pane fade" id="home-clock-out">
-                                        <div class="table-responsive">
-                                            <table class="table table-hover align-middle mb-0" style="font-size: 13px;">
-                                                <tbody id="homeClockOutTableBody">
-                                                    <tr><td colspan="2" class="text-muted text-center py-3">Loading records...</td></tr>
-                                                </tbody>
-                                            </table>
+                                </div>
+
+                                <!-- Right: Map -->
+                                <div class="col-md-7">
+                                    <div class="card-custom h-100 p-0 overflow-hidden bg-light border" style="min-height: 400px; position: relative;">
+                                        <div id="home-map" style="width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1;"></div>
+                                        <div class="d-flex justify-content-center align-items-center h-100 w-100" id="home-map-placeholder" style="position: absolute; top: 0; left: 0; z-index: 0;">
+                                            <div class="text-muted text-center">
+                                                <i class="bi bi-geo-alt fs-1 d-block mb-2"></i>
+                                                <span class="fw-bold">MAPS PIN LOCATION</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- FEED CARD -->
+                            <!-- Bottom Container -->
                             <div class="card-custom">
                                 <h6 class="fw-bold mb-3 text-dark"><i class="bi bi-newspaper me-2 text-warning"></i> Feed</h6>
                                 <div class="p-3 border rounded-3 bg-light shadow-sm" style="max-width: 320px;">
@@ -759,7 +760,170 @@ def get_admin_dashboard(path: str = ""):
                                 document.getElementById('form-creator-view').style.display = 'none';
                                 document.getElementById('tab-forms-view').style.display = 'block';
                             }
-                        </script>
+                
+            // --- NEW HOME HISTORY JS ---
+                let homeMapInstance = null;
+                let homeMarkersGroup = null;
+                let homeHistoryData = [];
+
+                async function loadHomeHistory() {
+                    let selDateInput = document.getElementById('homeHistoryDateFilter').value;
+                    if (!selDateInput) {
+                        const todayStr = new Date().toISOString().split('T')[0];
+                        document.getElementById('homeHistoryDateFilter').value = todayStr;
+                        selDateInput = todayStr;
+                    }
+                    const parts = selDateInput.split('-');
+                    const filterMMDDYYYY = `${parts[1]}/${parts[2]}/${parts[0]}`;
+
+                    document.getElementById('home-history-list').innerHTML = '<p class="text-muted fs-7 text-center py-3">Loading historical records...</p>';
+
+                    try {
+                        // NOTE: We may need to pass ?date= parameters here if the API defaults to today only.
+                        const res = await fetch('/api/punch/logs', { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('atwork_jwt_token') } });
+                        const logs = await res.json();
+                        
+                        const token = await getAdminAuthToken();
+                        let usersMap = {};
+                        try {
+                            const uRes = await fetch('/api/auth/users', { headers: { 'Authorization': 'Bearer ' + token } });
+                            if (uRes.ok) {
+                                const uList = await uRes.json();
+                                uList.forEach(u => { usersMap[u.employee_id] = u; });
+                            }
+                        } catch(err) {}
+
+                        const filteredLogs = (logs || []).filter(l => {
+                            const ts = String(l.timestamp || l.created_at || '');
+                            return ts.includes(filterMMDDYYYY) || ts.includes(selDateInput);
+                        });
+
+                        let empGrouped = {};
+                        filteredLogs.forEach(l => {
+                            if (!empGrouped[l.employee_id]) empGrouped[l.employee_id] = [];
+                            empGrouped[l.employee_id].push(l);
+                        });
+
+                        homeHistoryData = [];
+                        Object.keys(empGrouped).forEach(empId => {
+                            const empPunches = empGrouped[empId].sort((a,b) => a.id - b.id);
+                            const empInfo = usersMap[empId] || {};
+                            const fullName = empInfo.name || (empInfo.first_name ? `${empInfo.first_name} ${empInfo.last_name || ''}` : empId);
+                            
+                            let inPunches = empPunches.filter(p => p.punch_type === 'CLOCK_IN');
+                            let outPunches = empPunches.filter(p => p.punch_type === 'CLOCK_OUT');
+                            let clockInPunch = inPunches.length > 0 ? inPunches[0] : null;
+                            let clockOutPunch = outPunches.length > 0 ? outPunches[outPunches.length - 1] : null;
+
+                            homeHistoryData.push({
+                                employee_id: empId,
+                                full_name: fullName,
+                                sub_group: empInfo.department || 'General',
+                                job_title: empInfo.position || empInfo.role || 'Staff',
+                                clock_in: clockInPunch ? clockInPunch.timestamp : '--',
+                                clock_out: clockOutPunch ? clockOutPunch.timestamp : '--',
+                                ci_lat: clockInPunch ? clockInPunch.latitude : null,
+                                ci_lng: clockInPunch ? clockInPunch.longitude : null,
+                                co_lat: clockOutPunch ? clockOutPunch.latitude : null,
+                                co_lng: clockOutPunch ? clockOutPunch.longitude : null
+                            });
+                        });
+
+                        renderHomeHistoryAndMap();
+                    } catch(e) {
+                        document.getElementById('home-history-list').innerHTML = '<p class="text-danger fs-7 text-center py-3">Failed to load history</p>';
+                    }
+                }
+
+                function filterHomeHistory() {
+                    renderHomeHistoryAndMap();
+                }
+
+                function renderHomeHistoryAndMap() {
+                    const searchQ = document.getElementById('homeHistorySearch').value.toLowerCase();
+                    const groupQ = document.getElementById('homeHistoryGroupFilter').value;
+                    
+                    let filtered = homeHistoryData.filter(d => {
+                        const matchS = d.full_name.toLowerCase().includes(searchQ) || d.employee_id.toLowerCase().includes(searchQ);
+                        const matchG = groupQ ? d.sub_group === groupQ : true;
+                        return matchS && matchG;
+                    });
+
+                    const listEl = document.getElementById('home-history-list');
+                    if (filtered.length === 0) {
+                        listEl.innerHTML = '<p class="text-muted fs-7 text-center py-3">No records found for this date.</p>';
+                    } else {
+                        let html = '';
+                        filtered.forEach(d => {
+                            let ciStr = d.clock_in !== '--' ? new Date(d.clock_in).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '--';
+                            let coStr = d.clock_out !== '--' ? new Date(d.clock_out).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '--';
+                            
+                            html += `
+                            <div class="p-3 border rounded mb-2 bg-white shadow-sm">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="fw-bold text-dark">${d.full_name}</span>
+                                    <span class="badge bg-light text-dark border border-secondary">${d.employee_id}</span>
+                                </div>
+                                <div class="text-muted fs-7 mb-2"><i class="bi bi-briefcase me-1"></i> ${d.job_title}</div>
+                                <div class="d-flex bg-light rounded border overflow-hidden">
+                                    <div class="w-50 p-2 border-end text-start" style="cursor:${d.ci_lat ? 'pointer' : 'default'}; transition: background 0.2s;" ${d.ci_lat ? `onclick="panHomeMapTo(${d.ci_lat}, ${d.ci_lng}, '${d.full_name}')"` : ''} onmouseover="if(${d.ci_lat}) this.style.backgroundColor='#e9ecef'" onmouseout="this.style.backgroundColor=''">
+                                        <small class="text-muted d-block" style="font-size:10px;">TIME IN</small>
+                                        <span class="fw-semibold text-success fs-7">${ciStr}</span>
+                                    </div>
+                                    <div class="w-50 p-2 text-end" style="cursor:${d.co_lat ? 'pointer' : 'default'}; transition: background 0.2s;" ${d.co_lat ? `onclick="panHomeMapTo(${d.co_lat}, ${d.co_lng}, '${d.full_name}')"` : ''} onmouseover="if(${d.co_lat}) this.style.backgroundColor='#e9ecef'" onmouseout="this.style.backgroundColor=''">
+                                        <small class="text-muted d-block" style="font-size:10px;">TIME OUT</small>
+                                        <span class="fw-semibold text-danger fs-7">${coStr}</span>
+                                    </div>
+                                </div>
+                            </div>`;
+                        });
+                        listEl.innerHTML = html;
+                    }
+
+                    if (!homeMapInstance) {
+                        document.getElementById('home-map-placeholder').style.display = 'none';
+                        homeMapInstance = L.map('home-map').setView([14.5995, 120.9842], 12);
+                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                            attribution: '&copy; OpenStreetMap contributors'
+                        }).addTo(homeMapInstance);
+                        homeMarkersGroup = L.featureGroup().addTo(homeMapInstance);
+                    }
+                    
+                    homeMarkersGroup.clearLayers();
+                    let hasPins = false;
+                    filtered.forEach(d => {
+                        if (d.ci_lat && d.ci_lng) {
+                            let popup = `<b>${d.full_name}</b><br>ID: ${d.employee_id}<br>In: ${d.clock_in !== '--' ? new Date(d.clock_in).toLocaleTimeString() : '--'}`;
+                            let m = L.marker([d.ci_lat, d.ci_lng]).bindPopup(popup);
+                            homeMarkersGroup.addLayer(m);
+                            hasPins = true;
+                        }
+                        if (d.co_lat && d.co_lng) {
+                            let popup = `<b>${d.full_name}</b><br>ID: ${d.employee_id}<br>Out: ${d.clock_out !== '--' ? new Date(d.clock_out).toLocaleTimeString() : '--'}`;
+                            let m = L.marker([d.co_lat, d.co_lng]).bindPopup(popup);
+                            homeMarkersGroup.addLayer(m);
+                            hasPins = true;
+                        }
+                    });
+                    
+                    if (hasPins) {
+                        try { homeMapInstance.fitBounds(homeMarkersGroup.getBounds(), { padding: [30, 30] }); } catch(e){}
+                    }
+                }
+
+                function panHomeMapTo(lat, lng, name) {
+                    if (homeMapInstance && lat && lng) {
+                        homeMapInstance.setView([lat, lng], 17);
+                        homeMarkersGroup.eachLayer(layer => {
+                            if (layer.getPopup() && layer.getPopup().getContent().includes(name)) {
+                                layer.openPopup();
+                            }
+                        });
+                    }
+                }
+
+
+        </script>
                         <div id="form-creator-view" style="display:none;" class="container-fluid py-3 h-100">
                             <div class="d-flex justify-content-between align-items-center mb-3">
                                 <h4 class="mb-0 fw-bold">Custom Form Creator</h4>
@@ -2263,17 +2427,78 @@ def get_admin_dashboard(path: str = ""):
                 }
             }
 
-            function filterHomeAttendance(query) {
-                const q = query.toLowerCase().trim();
-                if (!q) {
-                    renderHomeAttendanceTables(homeAttendanceCache);
-                    return;
+            let currentUsersMap = {};
+            
+            function filterHomeAttendance() {
+                const searchEl = document.getElementById('homeAttendanceSearch');
+                const dateEl = document.getElementById('homeGlobalDateFilter');
+                const q = searchEl ? searchEl.value.toLowerCase().trim() : '';
+                const dateVal = dateEl ? dateEl.value : '';
+
+                let targetDateStr = "";
+                if (dateVal) {
+                    const [y, m, d] = dateVal.split("-");
+                    targetDateStr = `${m}/${d}/${y}`; // Matches API log %m/%d/%Y format
                 }
-                const filtered = homeAttendanceCache.filter(r => 
-                    (r.full_name && r.full_name.toLowerCase().includes(q)) ||
-                    (r.employee_id && r.employee_id.toLowerCase().includes(q))
-                );
+
+                // 1. Filter Attendance Tables
+                let filtered = homeAttendanceCache || [];
+                if (targetDateStr) {
+                    filtered = filtered.filter(r => r.timestamp && r.timestamp.startsWith(targetDateStr));
+                }
+                if (q) {
+                    filtered = filtered.filter(r =>
+                        (r.full_name && r.full_name.toLowerCase().includes(q)) ||
+                        (r.employee_id && r.employee_id.toLowerCase().includes(q))
+                    );
+                }
                 renderHomeAttendanceTables(filtered);
+
+                // 2. Filter Map & Live Feed Sidebar
+                if (typeof rawFullPunchesLogs !== 'undefined') {
+                    let filteredPunches = rawFullPunchesLogs;
+                    let isHistory = false;
+                    
+                    if (targetDateStr) {
+                        filteredPunches = rawFullPunchesLogs.filter(p => p.timestamp && p.timestamp.startsWith(targetDateStr));
+                        isHistory = true;
+                    }
+                    
+                    if (q) {
+                        filteredPunches = filteredPunches.filter(p => {
+                            const emp = currentUsersMap[p.employee_id] || {};
+                            const fname = (emp.name || emp.first_name || '').toLowerCase();
+                            const eid = (p.employee_id || '').toLowerCase();
+                            return fname.includes(q) || eid.includes(q);
+                        });
+                    }
+                    
+                    renderMapFeed(filteredPunches, isHistory);
+                }
+            }
+
+            function renderMapFeed(punches, isHistory = false) {
+                if (markersGroup) markersGroup.clearLayers();
+                mapMarkerDict = {};
+                
+                let punchesToRender = [];
+                if (isHistory) {
+                    // Show all matching logs (IN and OUT) for the requested date
+                    punchesToRender = punches;
+                } else {
+                    // Default live behaviour: only active clock-ins
+                    let latest = {};
+                    punches.forEach(log => {
+                        const empId = log.employee_id;
+                        if (!latest[empId] || log.id > latest[empId].id) {
+                            latest[empId] = log;
+                        }
+                    });
+                    punchesToRender = Object.values(latest).filter(p => p.punch_type === 'CLOCK_IN');
+                }
+                
+                rawActivePunchesList = punchesToRender;
+                renderLiveClockSidebar(punchesToRender, currentUsersMap, isHistory);
             }
 
             async function handleUrlRoutingOnLoad() {
@@ -2361,28 +2586,21 @@ def get_admin_dashboard(path: str = ""):
                         }
                     } catch(err) {}
 
-                    let latestPunchByEmp = {};
-                    logs.forEach(log => {
-                        const empId = log.employee_id;
-                        if (!latestPunchByEmp[empId] || log.id > latestPunchByEmp[empId].id) {
-                            latestPunchByEmp[empId] = log;
-                        }
-                    });
-
-                    rawActivePunchesList = Object.values(latestPunchByEmp).filter(p => p.punch_type === 'CLOCK_IN');
-                    renderLiveClockSidebar(rawActivePunchesList, usersMap);
+                    currentUsersMap = usersMap;
+                    filterHomeAttendance();
                 } catch(e) {}
             }
 
-            function renderLiveClockSidebar(activePunches, usersMap = {}) {
+            function renderLiveClockSidebar(activePunches, usersMap = {}, isHistory = false) {
                 let sidebarHtml = '';
                 if (!activePunches || activePunches.length === 0) {
-                    sidebarHtml = '<p class="text-muted fs-7 py-3">No employees currently clocked in.</p>';
+                    sidebarHtml = `<p class="text-muted fs-7 py-3">${isHistory ? 'No punch logs found for this date.' : 'No employees currently clocked in.'}</p>`;
                 } else {
                     activePunches.forEach(log => {
                         const emp = usersMap[log.employee_id] || {};
                         const fullName = emp.name || (emp.first_name ? `${emp.first_name} ${emp.last_name || ''}` : `Emp ID: ${log.employee_id}`);
                         const jobTitle = emp.position || emp.role || 'Staff';
+                        const badgeClass = log.punch_type === 'CLOCK_IN' ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger';
 
                         sidebarHtml += `
                             <div class="p-3 mb-2 rounded-3 bg-white border feed-card-hover" onclick="focusMapMarker(${log.latitude}, ${log.longitude}, '${log.employee_id}')">
@@ -2391,7 +2609,7 @@ def get_admin_dashboard(path: str = ""):
                                         <strong class="text-dark d-block" style="font-size: 13px;">${fullName}</strong>
                                         <small class="text-muted" style="font-size: 11px;">${jobTitle} (${log.employee_id})</small>
                                     </div>
-                                    <span class="badge bg-success-subtle text-success" style="font-size: 10px;">CLOCK_IN</span>
+                                    <span class="badge ${badgeClass}" style="font-size: 10px;">${log.punch_type}</span>
                                 </div>
                                 <small class="text-muted d-block mt-1" style="font-size: 11px;"><i class="bi bi-clock me-1"></i>${log.timestamp}</small>
                                 <small class="text-secondary text-truncate d-block" style="font-size: 11px;"><i class="bi bi-geo-alt me-1"></i>${log.address || 'Duty Shift'}</small>
@@ -2399,7 +2617,7 @@ def get_admin_dashboard(path: str = ""):
 
                         if (markersGroup && log.latitude && log.longitude) {
                             const marker = L.marker([log.latitude, log.longitude])
-                                .bindPopup(`<b>${fullName}</b><br>Job: ${jobTitle}<br>Time: ${log.timestamp}`)
+                                .bindPopup(`<b>${fullName}</b><br>Type: ${log.punch_type}<br>Job: ${jobTitle}<br>Time: ${log.timestamp}`)
                                 .addTo(markersGroup);
                             mapMarkerDict[log.employee_id] = marker;
                         }
