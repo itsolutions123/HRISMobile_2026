@@ -306,6 +306,17 @@ def create_submission(form_id: int, sub_in: FormSubmissionCreate, db: Session = 
     return {"status": "success", "id": submission.id}
 
 
+@router.delete("/submissions/{sub_id}")
+def delete_submission(sub_id: int, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
+    if current_user.role not in ["Admin", "Superadmin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    submission = db.query(FormSubmission).filter(FormSubmission.id == sub_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    db.delete(submission)
+    db.commit()
+    return {"status": "success"}
+
 # USER SIGNATURE ENDPOINTS
 class SignaturePayload(BaseModel):
     signature: str

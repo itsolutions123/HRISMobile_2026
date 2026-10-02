@@ -44,3 +44,19 @@ Affects: backend no | web panel no | mobile yes
 Hardcodes removed / remaining: Removed hardcoded API URL http://10.0.10.37:8089 in src/context/AuthContext.js.
 Hand back to: Full-Stack (implement) -> API Gem / Database Gem (record)
 Docs to update: docs/API.md
+
+## D-003 - Add Endpoint to Delete Form Submissions
+Date: 2026-10-02   Status: PROPOSED
+Mode: new feature
+Context: The web panel needs a way to delete custom form submissions (either single or bulk from a table selection). Evidence: backend/app/routers/forms.py lacks a DELETE endpoint for FormSubmission.
+Decision: Implement a single-resource RESTful deletion endpoint. The web panel will handle batch deletions by issuing concurrent requests (e.g., via `Promise.all`).
+Alternatives rejected: A custom batch endpoint (`POST /api/forms/submissions/batch-delete` or `DELETE` with a JSON body) was rejected to keep the API surface strictly RESTful and avoid HTTP client edge cases with DELETE bodies, as admin deletion volumes are small enough for concurrent fetches.
+Contract: `DELETE /api/forms/submissions/{submission_id}` - Auth: Token (Depends(get_current_user)) + role check for "Admin" or "Superadmin". Request: path parameter `submission_id` (int). Response: `{"detail": "Submission deleted successfully"}`. Errors: 404 if not found, 403 if insufficient permissions.
+Schema: no change
+Migration: none
+Config: none
+Security impact: Data deletion endpoint created. Secured by token authentication and restricted strictly to Admin/Superadmin roles, matching existing form management endpoints.
+Affects: backend yes | web panel yes | mobile no
+Hardcodes removed / remaining: none
+Hand back to: Full-Stack (implement) -> API Gem (record)
+Docs to update: docs/API.md

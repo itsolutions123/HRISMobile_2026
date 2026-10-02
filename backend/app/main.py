@@ -918,8 +918,12 @@ def get_admin_dashboard(path: str = ""):
                     if (homeMapInstance && lat && lng) {
                         homeMapInstance.setView([lat, lng], 17);
                         homeMarkersGroup.eachLayer(layer => {
-                            if (layer.getPopup() && layer.getPopup().getContent().includes(name)) {
-                                layer.openPopup();
+                            const pos = layer.getLatLng();
+                            // Check name AND ensure coordinates match (allowing tiny float conversion tolerance)
+                            if (pos && Math.abs(pos.lat - lat) < 0.0001 && Math.abs(pos.lng - lng) < 0.0001) {
+                                if (layer.getPopup() && layer.getPopup().getContent().includes(name)) {
+                                    layer.openPopup();
+                                }
                             }
                         });
                     }
@@ -1159,6 +1163,7 @@ def get_admin_dashboard(path: str = ""):
 
                                         <div class="d-flex align-items-center gap-3">
                                             <span class="fw-bold text-dark fs-7"><span id="form-submission-count-label">151</span> submissions</span>
+                                            <button class="btn btn-outline-danger btn-sm ms-2 me-2" id="btn-delete-submissions" style="display: none;" onclick="deleteSelectedSubmissions()"><i class="bi bi-trash"></i></button>
                                             <button class="btn btn-outline-custom btn-sm" onclick="showToast('Exporting submissions report...')"><i class="bi bi-box-arrow-up"></i></button>
                                         </div>
                                     </div>
@@ -1167,7 +1172,7 @@ def get_admin_dashboard(path: str = ""):
                                         <table class="table table-hover align-middle m-0 fs-7">
                                             <thead>
                                                 <tr>
-                                                    <th width="30"><input type="checkbox" class="form-check-input"></th>
+                                                    <th width="30"><input type="checkbox" class="form-check-input" id="select-all-submissions" onchange="const cb = document.querySelectorAll(\'.submission-checkbox\'); cb.forEach(c => c.checked = this.checked); document.getElementById(\'btn-delete-submissions\').style.display = Array.from(cb).some(c => c.checked) ? \'inline-block\' : \'none\';"></th>
                                                     <th>Submitted By</th>
                                                     <th>Date & Time</th>
                                                     <th>Smart Group</th>
@@ -4057,7 +4062,7 @@ def get_admin_dashboard(path: str = ""):
                                 tbody.innerHTML = data.map(sub => `
                                     <tr style="vertical-align: middle;">
                                         <td>
-                                            <input type="checkbox" class="form-check-input ms-2 me-3" style="width: 18px; height: 18px; border-color: #cbd5e1;">
+                                            <input type="checkbox" class="form-check-input submission-checkbox" value="${sub.id || ''}" style="width: 18px; height: 18px; border-color: #cbd5e1;" onchange="const cb = document.querySelectorAll('.submission-checkbox'); document.getElementById('select-all-submissions').checked = cb.length > 0 && Array.from(cb).every(c => c.checked); document.getElementById('btn-delete-submissions').style.display = Array.from(cb).some(c => c.checked) ? 'inline-block' : 'none';">
                                         </td>
                                         <td>
                                             <div class="fw-bold text-dark fs-7">${sub.submittedBy || 'Unknown'}</div>
@@ -4066,9 +4071,7 @@ def get_admin_dashboard(path: str = ""):
                                         <td>
                                             <span class="badge bg-light text-dark fw-normal border px-2 py-1">${sub.smartGroup || 'General'}</span>
                                         </td>
-                                        <td>
-                                            <span class="badge rounded-pill fw-normal" style="background-color: #dcfce7; color: #166534;">${sub.status || 'Submitted'}</span>
-                                        </td>
+                                        <td></td>
                                         <td>
                                             <button class="btn btn-sm btn-outline-custom" data-submitter="${sub.submittedBy || 'Unknown'}" data-date="${sub.dateTime || 'N/A'}" data-form-id="${validFormId}" data-form-data="${encodeURIComponent(JSON.stringify(sub.formData || []))}" onclick="viewSubmission(this)">
                                                 <i class="bi bi-eye"></i> View
@@ -5833,6 +5836,42 @@ def get_admin_dashboard(path: str = ""):
         </div>
     </div>
     <script>
+    async function deleteSelectedSubmissions() {
+        const checkedBoxes = document.querySelectorAll('.submission-checkbox:checked');
+        if (checkedBoxes.length === 0) return;
+        if (!confirm(`Are you sure you want to delete ${checkedBoxes.length} submission(s)?`)) return;
+        
+        try {
+            const token = await getAdminAuthToken();
+            let deletedCount = 0;
+            for (const cb of checkedBoxes) {
+                const subId = cb.value;
+                if (!subId) continue;
+                const res = await fetch(`${window.location.origin}/api/forms/submissions/${subId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    deletedCount++;
+                    const row = cb.closest('tr');
+                    if (row) row.remove();
+                }
+            }
+            showToast(`Deleted ${deletedCount} submission(s)`);
+            const countLbl = document.getElementById('form-submission-count-label');
+            if (countLbl) {
+                const currentCount = parseInt(countLbl.innerText, 10);
+                if (!isNaN(currentCount)) countLbl.innerText = currentCount - deletedCount;
+            }
+            document.getElementById('btn-delete-submissions').style.display = 'none';
+            const selectAll = document.getElementById('select-all-submissions');
+            if (selectAll) selectAll.checked = false;
+        } catch (err) {
+            console.error('Error deleting submissions:', err);
+            alert('Error deleting submissions.');
+        }
+    }
+
     function viewSubmission(btn) {
         const submitter = btn.getAttribute('data-submitter') || 'Unknown';
         const date = btn.getAttribute('data-date') || 'N/A';
