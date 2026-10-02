@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useContext, useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Modal, ScrollView, Animated, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Modal, ScrollView, Animated, TextInput , Platform } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { WebView } from 'react-native-webview';
@@ -184,7 +185,8 @@ export default function DashboardScreen({ navigation }) {
     fetchJobs();
     fetchStatus();
     const poller = setInterval(fetchStatus, 4000);
-    return () => clearInterval(poller);
+  
+  return () => clearInterval(poller);
   }, [fetchStatus, fetchJobs]));
 
   useEffect(() => {
@@ -192,6 +194,38 @@ export default function DashboardScreen({ navigation }) {
     if (isClockedIn) timerRef.current = setInterval(() => setElapsedSeconds(p => p + 1), 1000);
     return () => clearInterval(timerRef.current);
   }, [isClockedIn]);
+
+  const [tempEditDate, setTempEditDate] = useState(new Date());
+  const [showPicker, setShowPicker] = useState(false);
+  const [activePickerType, setActivePickerType] = useState('IN');
+
+  const openTimePicker = (type, currentStr) => {
+    setActivePickerType(type);
+    let d = new Date();
+    try {
+      const match = (currentStr || '').match(/(\d+):(\d+)\s*(AM|PM)/i);
+      if (match) {
+        let hrs = parseInt(match[1]);
+        const mins = parseInt(match[2]);
+        const isPM = match[3].toUpperCase() === 'PM';
+        if (isPM && hrs < 12) hrs += 12;
+        if (!isPM && hrs === 12) hrs = 0;
+        d.setHours(hrs, mins, 0);
+      }
+    } catch(e) {}
+    setTempEditDate(d);
+    setShowPicker(true);
+  };
+
+  const handleTimeChange = (event, selectedDate) => {
+    if (Platform.OS === 'android') setShowPicker(false);
+    if (selectedDate) {
+      setTempEditDate(selectedDate);
+      const str = selectedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      if (activePickerType === 'IN') setRequestedInTime(str);
+      else setRequestedOutTime(str);
+    }
+  };
 
   const handleOpenClockOutReview = () => {
     const now = new Date();
@@ -310,19 +344,7 @@ export default function DashboardScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* HEADER PROFILE INFO */}
-      <View style={styles.headerAbsolute}>
-        <View style={styles.headerInfo}>
-          <View style={styles.avatar}><Text style={{color:'#fff', fontWeight: '700'}}>{user?.name?.charAt(0) || 'U'}</Text></View>
-          <View>
-            <Text style={styles.greeting}>{user?.name}</Text>
-            <Text style={styles.subGreeting}>{user?.position || 'Staff'} • {userDept}</Text>
-          </View>
-        </View>
-        <TouchableOpacity onPress={logout} style={styles.logoutIconBtn}>
-          <Ionicons name="log-out-outline" size={22} color="#475569"/>
-        </TouchableOpacity>
-      </View>
+      {/* HEADER PROFILE INFO REMOVED */}
 
       {/* CLOCKED IN / ACTIVE SHIFT VIEW */}
       {isClockedIn ? (
@@ -341,8 +363,15 @@ export default function DashboardScreen({ navigation }) {
           </View>
 
           <ScrollView style={styles.detailsList}>
-            <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16}}>
-              <Text style={styles.detailsTitle}>Shift Actions & Log</Text>
+            <Text style={styles.sectionTitle}>Attachments</Text>
+            <TouchableOpacity style={styles.addNoteBtn}>
+              <Text style={styles.addNoteText}>{'>'} Add note</Text>
+            </TouchableOpacity>
+
+            <View style={styles.contentDivider} />
+
+            <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12}}>
+              <Text style={styles.sectionTitle}>Shift Logs</Text>
               {isShiftEdited && (
                 <TouchableOpacity style={styles.editedBadge} onPress={() => setShowEditHistoryModal(true)}>
                   <Ionicons name="alert-circle-outline" size={13} color="#d97706" />
@@ -350,21 +379,12 @@ export default function DashboardScreen({ navigation }) {
                 </TouchableOpacity>
               )}
             </View>
-
-            {['Location Verification', 'Duty Note', 'Break Log'].map((item, i) => (
-              <View key={i} style={styles.detailItem}>
-                <View style={{flexDirection: 'row', alignItems: 'center', gap: 10}}>
-                  <Ionicons name="checkmark-circle-outline" size={20} color="#2563eb" />
-                  <Text style={styles.detailText}>{item}</Text>
-                </View>
-                <TouchableOpacity style={styles.uploadBtn}><Text style={styles.uploadText}>Update</Text></TouchableOpacity>
-              </View>
-            ))}
+            <Text style={styles.logPlaceholderText}>{/* {user activity} */}User clocked in.</Text>
           </ScrollView>
 
           <View style={styles.bottomActions}>
             <TouchableOpacity style={styles.switchJobBtn} onPress={() => setShowJobModal(true)}>
-              <Ionicons name="swap-horizontal" size={18} color="#2563eb" style={{marginRight: 6}} />
+              <Ionicons name="swap-horizontal" size={18} color="#3b82f6" style={{marginRight: 6}} />
               <Text style={styles.switchJobText}>Switch Role</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.endShiftBtn} onPress={handleOpenClockOutReview} disabled={loading}>
@@ -384,11 +404,11 @@ export default function DashboardScreen({ navigation }) {
             scrollEnabled={true}
           />
 
-          <TouchableOpacity style={styles.recenterFab} onPress={() => requestGpsLocation(false, true)}>
-            {gpsLoading ? <ActivityIndicator size="small" color="#2563eb" /> : <Ionicons name="locate" size={24} color="#2563eb" />}
-          </TouchableOpacity>
-
           <View style={styles.bottomDrawer}>
+            <TouchableOpacity style={styles.recenterFab} onPress={() => requestGpsLocation(false, true)}>
+              {gpsLoading ? <ActivityIndicator size="small" color="#0f172a" /> : <Ionicons name="locate" size={24} color="#0f172a" />}
+            </TouchableOpacity>
+
             <Animated.View style={[styles.clockBtnWrapper, { transform: [{ scale: pulseAnim }] }]}>
               <TouchableOpacity
                 style={[styles.bigClockBtn, !location && { backgroundColor: '#94a3b8' }]}
@@ -408,12 +428,6 @@ export default function DashboardScreen({ navigation }) {
 
             <View style={styles.quickStatsRow}>
               <View style={styles.statBox}>
-                <Ionicons name="time-outline" size={18} color="#2563eb" />
-                <Text style={styles.statLabel}>Schedule</Text>
-                <Text style={styles.statVal}>8:00 AM - 5:00 PM</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statBox}>
                 <Ionicons name="location-outline" size={18} color={location ? "#16a34a" : "#ef4444"} />
                 <Text style={styles.statLabel}>Location Status</Text>
                 <Text style={[styles.statVal, { color: location ? "#16a34a" : "#ef4444" }]}>
@@ -428,13 +442,13 @@ export default function DashboardScreen({ navigation }) {
       {/* CLOCK OUT REVIEW & GPS CONFIRMATION MODAL */}
       <Modal visible={showClockOutReviewModal} transparent animationType="slide">
         <View style={styles.modalBg}>
-          <View style={[styles.modalSheet, { height: '80%' }]}>
+          <View style={[styles.modalSheet, { height: '85%' }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Review Your Shift</Text>
+              <Text style={styles.modalTitle}>Shift Review</Text>
               <TouchableOpacity onPress={() => setShowClockOutReviewModal(false)}><Ionicons name="close" size={24} color="#475569" /></TouchableOpacity>
             </View>
 
-            <ScrollView style={{ width: '100%' }}>
+            <ScrollView style={{ width: '100%' }} showsVerticalScrollIndicator={false}>
               <View style={styles.clockOutMapCard}>
                 <WebView
                   ref={clockOutWebViewRef}
@@ -448,22 +462,28 @@ export default function DashboardScreen({ navigation }) {
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.shiftReviewRow}>
-                <Text style={styles.reviewLabel}>Clock in = <Text style={styles.reviewVal}>{clockInTimestampStr || '08:00 AM'}</Text></Text>
-                <TouchableOpacity style={styles.editBtnInline} onPress={() => { setRequestedInTime(clockInTimestampStr); setShowEditInModal(true); }}>
-                  <Text style={styles.editBtnInlineText}>| Edit</Text>
-                </TouchableOpacity>
+              <View style={styles.punchReviewBlock}>
+                <Text style={styles.punchReviewLabel}>CLOCK IN</Text>
+                <View style={styles.punchReviewDataRow}>
+                  <Text style={styles.punchReviewVal}>{new Date().toISOString().split('T')[0]}, {clockInTimestampStr || '08:00 AM'}</Text>
+                  <TouchableOpacity style={styles.editBtnBox} onPress={() => { setRequestedInTime(clockInTimestampStr); setShowEditInModal(true); }}>
+                    <Text style={styles.editBtnBoxText}>EDIT</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
-              <View style={styles.shiftReviewRow}>
-                <Text style={styles.reviewLabel}>Clock out = <Text style={styles.reviewVal}>{clockOutTimestampStr || '05:00 PM'}</Text></Text>
-                <TouchableOpacity style={styles.editBtnInline} onPress={() => { setRequestedOutTime(clockOutTimestampStr); setShowEditOutModal(true); }}>
-                  <Text style={styles.editBtnInlineText}>| Edit</Text>
-                </TouchableOpacity>
+              <View style={styles.punchReviewBlock}>
+                <Text style={styles.punchReviewLabel}>CLOCK OUT</Text>
+                <View style={styles.punchReviewDataRow}>
+                  <Text style={styles.punchReviewVal}>{new Date().toISOString().split('T')[0]}, {clockOutTimestampStr || '05:00 PM'}</Text>
+                  <TouchableOpacity style={styles.editBtnBox} onPress={() => { setRequestedOutTime(clockOutTimestampStr); setShowEditOutModal(true); }}>
+                    <Text style={styles.editBtnBoxText}>EDIT</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               <TouchableOpacity style={styles.confirmClockOutBtn} onPress={() => submitPunch(selectedJob)} disabled={loading}>
-                {loading ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.confirmClockOutText}>Confirm Clock Out</Text>}
+                {loading ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.confirmClockOutText}>CONFIRM SHIFT</Text>}
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -474,12 +494,23 @@ export default function DashboardScreen({ navigation }) {
       <Modal visible={showEditInModal} transparent animationType="fade">
         <View style={styles.modalBg}>
           <View style={[styles.modalSheet, { height: 'auto', paddingBottom: 30 }]}>
-            <Text style={styles.modalTitle}>Edit Clock In Request</Text>
-            <TextInput style={styles.modalInput} value={requestedInTime} onChangeText={setRequestedInTime} placeholder="HH:MM:SS AM/PM" />
-            <TextInput style={[styles.modalInput, { height: 60 }]} value={editReason} onChangeText={setEditReason} placeholder="Reason for edit..." multiline />
-            <TextInput style={styles.modalInput} value={attachedFileName} onChangeText={setAttachedFileName} placeholder="Attach File / Note description..." />
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Edit Clock In</Text>
+              <TouchableOpacity onPress={() => setShowEditInModal(false)}><Ionicons name="close" size={24} color="#475569" /></TouchableOpacity>
+            </View>
+            
+            <TouchableOpacity style={[styles.modalInput, { justifyContent: 'center' }]} onPress={() => openTimePicker('IN', requestedInTime)}>
+              <Text style={{ fontSize: 14, color: '#0f172a' }}>{requestedInTime || 'Tap to select time'}</Text>
+            </TouchableOpacity>
+            {(showPicker && Platform.OS === 'ios' && activePickerType === 'IN') && (
+              <DateTimePicker value={tempEditDate} mode="time" display="spinner" onChange={handleTimeChange} style={{alignSelf: 'center', width: '100%', height: 120}} />
+            )}
+
+            <Text style={styles.editModalLabel}>Note:</Text>
+            <TextInput style={[styles.modalInput, { height: 80 }]} value={editReason} onChangeText={setEditReason} placeholder="Enter note / reason..." multiline />
+            
             <TouchableOpacity style={styles.confirmClockOutBtn} onPress={() => handleSendShiftRevision('CLOCK_IN')}>
-              <Text style={styles.confirmClockOutText}>Send to Manager for Approval</Text>
+              <Text style={styles.confirmClockOutText}>SAVE EDIT</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -489,16 +520,32 @@ export default function DashboardScreen({ navigation }) {
       <Modal visible={showEditOutModal} transparent animationType="fade">
         <View style={styles.modalBg}>
           <View style={[styles.modalSheet, { height: 'auto', paddingBottom: 30 }]}>
-            <Text style={styles.modalTitle}>Edit Clock Out Request</Text>
-            <TextInput style={styles.modalInput} value={requestedOutTime} onChangeText={setRequestedOutTime} placeholder="HH:MM:SS AM/PM" />
-            <TextInput style={[styles.modalInput, { height: 60 }]} value={editReason} onChangeText={setEditReason} placeholder="Reason for edit..." multiline />
-            <TextInput style={styles.modalInput} value={attachedFileName} onChangeText={setAttachedFileName} placeholder="Attach File / Note description..." />
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Edit Clock Out</Text>
+              <TouchableOpacity onPress={() => setShowEditOutModal(false)}><Ionicons name="close" size={24} color="#475569" /></TouchableOpacity>
+            </View>
+            
+            <TouchableOpacity style={[styles.modalInput, { justifyContent: 'center' }]} onPress={() => openTimePicker('OUT', requestedOutTime)}>
+              <Text style={{ fontSize: 14, color: '#0f172a' }}>{requestedOutTime || 'Tap to select time'}</Text>
+            </TouchableOpacity>
+            {(showPicker && Platform.OS === 'ios' && activePickerType === 'OUT') && (
+              <DateTimePicker value={tempEditDate} mode="time" display="spinner" onChange={handleTimeChange} style={{alignSelf: 'center', width: '100%', height: 120}} />
+            )}
+
+            <Text style={styles.editModalLabel}>Note:</Text>
+            <TextInput style={[styles.modalInput, { height: 80 }]} value={editReason} onChangeText={setEditReason} placeholder="Enter note / reason..." multiline />
+            
             <TouchableOpacity style={styles.confirmClockOutBtn} onPress={() => handleSendShiftRevision('CLOCK_OUT')}>
-              <Text style={styles.confirmClockOutText}>Send to Manager for Approval</Text>
+              <Text style={styles.confirmClockOutText}>SAVE EDIT</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
+
+      {/* ANDROID FLOATING TIME PICKER */}
+      {(showPicker && Platform.OS === 'android') && (
+        <DateTimePicker value={tempEditDate} mode="time" display="spinner" onChange={handleTimeChange} />
+      )}
 
       {/* EDIT HISTORY POPUP MODAL */}
       <Modal visible={showEditHistoryModal} transparent animationType="slide">
@@ -570,10 +617,10 @@ const styles = StyleSheet.create({
   subGreeting: { fontSize: 11, color: '#64748b' },
   logoutIconBtn: { padding: 8, borderRadius: 12, backgroundColor: '#f1f5f9' },
   mapFullscreen: { flex: 1, width: '100%' },
-  recenterFab: { position: 'absolute', right: 20, bottom: 230, width: 48, height: 48, borderRadius: 24, backgroundColor: '#ffffff', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, elevation: 8, zIndex: 12 },
-  bottomDrawer: { position: 'absolute', bottom: 60, width: '100%', backgroundColor: '#ffffff', borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingBottom: 24, paddingTop: 50, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 12, elevation: 12 },
-  clockBtnWrapper: { position: 'absolute', top: -55, alignSelf: 'center', backgroundColor: '#ffffff', borderRadius: 70, padding: 8, shadowColor: '#2563eb', shadowOpacity: 0.35, shadowRadius: 12, elevation: 10 },
-  bigClockBtn: { width: 124, height: 124, borderRadius: 62, backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center' },
+  recenterFab: { position: 'absolute', right: 24, top: -24, width: 48, height: 48, borderRadius: 24, backgroundColor: '#ffffff', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 6, elevation: 10, zIndex: 12 },
+  bottomDrawer: { position: 'absolute', bottom: 0, width: '100%', backgroundColor: '#ffffff', borderTopWidth: 1, borderColor: '#e2e8f0', paddingBottom: 34, paddingTop: 55, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 12, elevation: 12 },
+  clockBtnWrapper: { position: 'absolute', top: -65, alignSelf: 'center', backgroundColor: '#ffffff', borderRadius: 75, padding: 8, shadowColor: '#2563eb', shadowOpacity: 0.2, shadowRadius: 12, elevation: 10 },
+  bigClockBtn: { width: 130, height: 130, borderRadius: 65, backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#ffffff' },
   bigClockText: { color: '#ffffff', fontWeight: '800', fontSize: 14, marginTop: 4, letterSpacing: 0.5 },
   quickStatsRow: { flexDirection: 'row', width: '90%', justifyContent: 'space-around', marginTop: 16, backgroundColor: '#f8fafc', padding: 14, borderRadius: 18, alignItems: 'center' },
   statBox: { alignItems: 'center', flex: 1 },
@@ -582,24 +629,24 @@ const styles = StyleSheet.create({
   statVal: { fontSize: 12, fontWeight: '700', color: '#0f172a', marginTop: 2 },
 
   // Shift Active Layout
-  activeShiftContainer: { flex: 1, backgroundColor: '#f8fafc', paddingTop: 110, paddingBottom: 60 },
-  activeCard: { backgroundColor: '#0f172a', marginHorizontal: 20, borderRadius: 24, padding: 24, alignItems: 'center' },
-  jobPill: { backgroundColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20, marginBottom: 14 },
-  jobPillText: { color: '#38bdf8', fontSize: 12, fontWeight: '700' },
-  activeTimer: { fontSize: 44, fontWeight: '800', color: '#ffffff', marginBottom: 14, letterSpacing: 1 },
+  activeShiftContainer: { flex: 1, backgroundColor: '#ffffff', paddingTop: 24 },
+  activeCard: { backgroundColor: '#0f172a', marginHorizontal: 16, borderRadius: 20, paddingVertical: 28, paddingHorizontal: 24, alignItems: 'center' },
+  jobPill: { backgroundColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16, marginBottom: 16 },
+  jobPillText: { color: '#60a5fa', fontSize: 12, fontWeight: '500' },
+  activeTimer: { fontSize: 46, fontWeight: '700', color: '#ffffff', marginBottom: 16, letterSpacing: 1 },
   locRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   locText: { color: '#94a3b8', fontSize: 12 },
-  detailsList: { flex: 1, padding: 20 },
-  detailsTitle: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
-  detailItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderColor: '#e2e8f0' },
-  detailText: { fontSize: 14, color: '#334155', fontWeight: '500' },
-  uploadBtn: { borderWidth: 1, borderColor: '#cbd5e1', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 14, backgroundColor: '#ffffff' },
-  uploadText: { fontSize: 12, color: '#2563eb', fontWeight: '600' },
-  bottomActions: { flexDirection: 'row', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24, gap: 12, backgroundColor: '#ffffff', borderTopWidth: 1, borderColor: '#f1f5f9', elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.05, shadowRadius: 8 },
-  switchJobBtn: { flex: 1, backgroundColor: '#eff6ff', height: 54, borderRadius: 16, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', borderWidth: 1, borderColor: '#bfdbfe' },
-  switchJobText: { color: '#2563eb', fontWeight: '800', fontSize: 15 },
-  endShiftBtn: { flex: 1.5, backgroundColor: '#ef4444', height: 54, borderRadius: 16, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', shadowColor: '#ef4444', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 4 },
-  endShiftText: { color: '#ffffff', fontWeight: '800', fontSize: 15 },
+  detailsList: { flex: 1, paddingHorizontal: 20, paddingTop: 24 },
+  sectionTitle: { fontSize: 16, fontWeight: '600', color: '#0f172a' },
+  addNoteBtn: { paddingVertical: 8, marginTop: 4 },
+  addNoteText: { fontSize: 15, color: '#334155', fontWeight: '400' },
+  contentDivider: { height: 1, backgroundColor: '#e2e8f0', marginVertical: 20 },
+  logPlaceholderText: { fontSize: 14, color: '#64748b', fontStyle: 'italic', marginTop: 4 },
+  bottomActions: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 24, gap: 12, backgroundColor: '#ffffff', borderTopWidth: 1, borderColor: '#f1f5f9' },
+  switchJobBtn: { flex: 1, backgroundColor: '#f8fafc', height: 50, borderRadius: 12, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', borderWidth: 1, borderColor: '#e2e8f0' },
+  switchJobText: { color: '#3b82f6', fontWeight: '600', fontSize: 14 },
+  endShiftBtn: { flex: 1.5, backgroundColor: '#ef4444', height: 50, borderRadius: 12, justifyContent: 'center', alignItems: 'center', flexDirection: 'row' },
+  endShiftText: { color: '#ffffff', fontWeight: '600', fontSize: 14 },
 
   // Fixed Bottom Navigation Tab Bar (Removed)
 
@@ -616,11 +663,13 @@ const styles = StyleSheet.create({
   clockOutMapCard: { height: 200, width: '100%', borderRadius: 16, overflow: 'hidden', marginBottom: 16, borderWidth: 1, borderColor: '#e2e8f0' },
   refreshLocBtn: { position: 'absolute', bottom: 12, right: 12, backgroundColor: '#ffffff', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
   refreshLocText: { color: '#2563eb', fontWeight: '700', fontSize: 11 },
-  shiftReviewRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginVertical: 8 },
-  reviewLabel: { fontSize: 15, fontWeight: '600', color: '#0f172a' },
-  reviewVal: { fontWeight: '800', color: '#2563eb' },
-  editBtnInline: { paddingHorizontal: 8, paddingVertical: 4 },
-  editBtnInlineText: { color: '#d97706', fontWeight: '800', fontSize: 14 },
+  punchReviewBlock: { borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, padding: 16, marginBottom: 16 },
+  punchReviewLabel: { fontSize: 12, fontWeight: '700', color: '#64748b', letterSpacing: 1, marginBottom: 8 },
+  punchReviewDataRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  punchReviewVal: { fontSize: 15, fontWeight: '600', color: '#0f172a' },
+  editBtnBox: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#f8fafc', borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0' },
+  editBtnBoxText: { color: '#3b82f6', fontWeight: '700', fontSize: 12 },
+  editModalLabel: { fontSize: 14, fontWeight: '600', color: '#334155', alignSelf: 'flex-start', marginBottom: 6, marginTop: 4 },
   confirmClockOutBtn: { backgroundColor: '#ef4444', width: '100%', paddingVertical: 14, borderRadius: 16, alignItems: 'center', marginTop: 16 },
   confirmClockOutText: { color: '#ffffff', fontWeight: '800', fontSize: 15 },
   modalInput: { width: '100%', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, padding: 12, marginBottom: 12, fontSize: 14 },

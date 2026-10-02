@@ -17,6 +17,9 @@
       ],
       "userInterfaceStyle": "light",
       "usesCleartextTraffic": true
-    }
+    },
+    "plugins": [
+      "@react-native-community/datetimepicker"
+    ]
   }
 }
