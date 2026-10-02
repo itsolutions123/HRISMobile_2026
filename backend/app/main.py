@@ -2454,7 +2454,10 @@ def get_admin_dashboard(path: str = ""):
                     } catch(err) {}
 
                     // Filter logs matching selected date
-                    const filteredLogs = logs.filter(l => (l.timestamp && l.timestamp.includes(filterMMDDYYYY)) || (l.created_at && l.created_at.includes(selDateInput)));
+                    const filteredLogs = logs.filter(l => {
+                        const ts = String(l.timestamp || l.created_at || '');
+                        return ts.includes(filterMMDDYYYY) || ts.includes(selDateInput);
+                    });
                     
                     let empGrouped = {};
                     filteredLogs.forEach(l => {

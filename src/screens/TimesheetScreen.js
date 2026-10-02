@@ -81,7 +81,7 @@ export default function TimesheetScreen() {
         setMarkedDates(marks);
       }
 
-      const logsRes = await fetch(`${API_BASE_URL}/api/punch/logs`, { headers: { 'Authorization': 'Bearer ' + token } });
+      const logsRes = await fetch(`${API_BASE_URL}/api/punch/my-logs`, { headers: { 'Authorization': 'Bearer ' + token } });
       if (logsRes.ok) {
         const logs = await logsRes.json();
         const userPunches = logs.filter(p => p.employee_id === user?.employee_id);
@@ -171,11 +171,20 @@ export default function TimesheetScreen() {
     }
   };
 
+  const normalizeDate = (ts) => {
+    if (!ts) return '';
+    if (ts.includes('T')) return ts.split('T')[0];
+    if (ts.includes(',')) {
+      const parts = ts.split(',')[0].split('/');
+      if (parts.length === 3) return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
+    }
+    const first = ts.split(' ')[0];
+    if (first.includes('-')) return first;
+    return ts;
+  };
+
   const selectedDayPunches = allPunches.filter(p => {
-    const pDate = (p.timestamp || '').split('T')[0] || (p.timestamp || '').split(' ')[0] || (p.created_at || '').split('T')[0];
-    const parts = (p.timestamp || '').split(',')[0].split('/');
-    const mmddyyyy = parts.length === 3 ? `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}` : '';
-    return pDate === selectedDate || mmddyyyy === selectedDate;
+    return normalizeDate(p.timestamp) === selectedDate;
   }).sort((a,b) => a.id - b.id);
 
   // Compute exact shift range for the selected day
@@ -267,21 +276,34 @@ export default function TimesheetScreen() {
           }
           renderItem={({ item }) => {
             const isClockIn = item.punch_type === 'CLOCK_IN';
+            const actionText = isClockIn ? 'SHIFT STARTED' : 'SHIFT ENDED';
+            
+            const nDate = normalizeDate(item.timestamp) || selectedDate;
+            const dateParts = nDate.split('-');
+            const formattedDate = dateParts.length === 3 ? `${dateParts[1]}-${dateParts[2]}-${dateParts[0].slice(-2)}` : selectedDate;
+            
+            let timeFormatted = 'Missing';
+            try {
+              if (item.timestamp) {
+                const dateObj = new Date(item.timestamp);
+                if (!isNaN(dateObj)) {
+                  timeFormatted = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                } else {
+                  timeFormatted = item.timestamp.includes(',') ? item.timestamp.split(', ')[1] : item.timestamp.split('T')[1].split('.')[0];
+                }
+              }
+            } catch(e) {
+               timeFormatted = formatCleanTime(item.timestamp) || 'Missing';
+            }
+            
+            const displayText = `${actionText} | ${formattedDate} | ${timeFormatted} |`;
+
             return (
               <View style={styles.punchCard}>
                 <View style={styles.cardTopRow}>
-                  <View style={[styles.statusBadge, isClockIn ? styles.badgeIn : styles.badgeOut]}>
-                    <Ionicons
-                      name={isClockIn ? "arrow-down-circle-outline" : "arrow-up-circle-outline"}
-                      size={14}
-                      color={isClockIn ? "#166534" : "#991b1b"}
-                    />
-                    <Text style={[styles.statusBadgeText, isClockIn ? styles.textIn : styles.textOut]}>
-                      {isClockIn ? 'CLOCK IN' : 'CLOCK OUT'}
-                    </Text>
-                  </View>
-
-                  <Text style={styles.timestampText}>{formatCleanTime(item.timestamp)}</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: isClockIn ? '#166534' : '#991b1b', letterSpacing: 0.5 }}>
+                    {displayText}
+                  </Text>
                 </View>
 
                 <View style={styles.locationRow}>

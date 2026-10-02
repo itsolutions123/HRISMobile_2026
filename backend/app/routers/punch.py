@@ -47,6 +47,23 @@ def get_active_punch(db: Session = Depends(get_db), current_user: Employee = Dep
         "job_name": last_punch.address
     }
 
+@router.get("/my-logs")
+def get_my_punch_logs(db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
+    logs = db.query(PunchLog).filter(PunchLog.employee_id == current_user.employee_id).order_by(PunchLog.timestamp.desc()).all()
+    return [
+        {
+            "id": log.id,
+            "employee_id": log.employee_id,
+            "punch_type": log.punch_type,
+            "timestamp": log.timestamp.isoformat() if log.timestamp else None,
+            "latitude": log.latitude,
+            "longitude": log.longitude,
+            "accuracy": log.accuracy,
+            "address": log.address
+        }
+        for log in logs
+    ]
+
 @router.get("/logs")
 def get_all_punch_logs(db: Session = Depends(get_db), current_user: Employee = Depends(require_roles(["Admin", "Superadmin", "Manager"]))):
     logs = db.query(PunchLog).order_by(PunchLog.id.desc()).all()

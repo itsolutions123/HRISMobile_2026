@@ -171,7 +171,11 @@ export default function DashboardScreen({ navigation }) {
         const data = await res.json();
         setIsClockedIn(data.is_clocked_in);
         setElapsedSeconds(data.is_clocked_in ? (data.elapsed_seconds || 0) : 0);
-        if (data.clock_in_time) setClockInTimestampStr(data.clock_in_time);
+        if (data.is_clocked_in && data.clock_in_time) {
+          setClockInTimestampStr(prev => prev || data.clock_in_time);
+        } else if (!data.is_clocked_in) {
+          setClockInTimestampStr('');
+        }
         if (data.job_name) {
           const cleanJob = data.job_name.replace('Job: ', '').split(' (')[0];
           setSelectedJob(cleanJob);
@@ -276,38 +280,25 @@ export default function DashboardScreen({ navigation }) {
     setLoading(false);
   };
 
-  const handleSendShiftRevision = async (punchType) => {
+  const handleSendShiftRevision = (punchType) => {
     const timeVal = punchType === 'CLOCK_IN' ? requestedInTime : requestedOutTime;
-    if (!timeVal.trim() || !editReason.trim()) {
-      Alert.alert('Missing Fields', 'Please enter the requested time and reason for the edit.');
+    if (!timeVal.trim()) {
+      Alert.alert('Missing Field', 'Please select or enter the requested time.');
       return;
     }
 
-    try {
-      const headers = { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) };
-      const res = await fetch(`${API_BASE_URL}/api/manager/revisions/request`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          requested_punch_type: punchType,
-          requested_timestamp: timeVal,
-          reason: editReason,
-          attachment_note: attachedFileName
-        })
-      });
-
-      if (res.ok) {
-        Alert.alert('Edit Shift Request Sent', 'Your shift edit request has been sent to your sub-group manager/admin for approval.');
-        setIsShiftEdited(true);
-        const newLog = `${punchType}: Requested ${timeVal} — Reason: ${editReason} ${attachedFileName ? `(Attached: ${attachedFileName})` : ''}`;
-        setEditHistoryModalLogs(prev => [newLog, ...prev]);
-        setShowEditInModal(false);
-        setShowEditOutModal(false);
-      } else {
-        Alert.alert('Request Failed', 'Failed to submit shift edit request.');
-      }
-    } catch(e) {
-      Alert.alert('Error', 'Could not connect to backend server.');
+    if (punchType === 'CLOCK_IN') {
+      setClockInTimestampStr(timeVal);
+      setShowEditInModal(false);
+    } else {
+      setClockOutTimestampStr(timeVal);
+      setShowEditOutModal(false);
+    }
+    
+    setIsShiftEdited(true);
+    if (editReason.trim()) {
+      const newLog = `${punchType}: Edited to ${timeVal} — Reason: ${editReason}`;
+      setEditHistoryModalLogs(prev => [newLog, ...prev]);
     }
   };
 
