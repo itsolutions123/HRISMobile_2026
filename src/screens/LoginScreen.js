@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../context/AuthContext';
@@ -129,14 +129,8 @@ export default function LoginScreen() {
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.card}>
-          <View style={styles.logoBadge}>
-            <Ionicons name="shield-checkmark" size={32} color="#ffffff" />
-          </View>
-
-          <Text style={styles.title}>HRIS Portal</Text>
-          <Text style={styles.subtitle}>
-            {isRegisterMode ? 'Request to join your organization' : 'Sign in to access your attendance workspace'}
-          </Text>
+          
+          <Image source={require('../../assets/logo_gray.png')} style={styles.logo} resizeMode="contain" />
 
           {isRegisterMode ? (
             /* REGISTRATION FORM */
@@ -253,7 +247,7 @@ export default function LoginScreen() {
                     <Text style={[styles.dropdownItemText, department === dept && styles.dropdownItemTextActive]}>
                       {dept}
                     </Text>
-                    {department === dept && <Ionicons name="checkmark" size={16} color="#2563eb" />}
+                    {department === dept && <Ionicons name="checkmark" size={16} color="#3b82f6" />}
                   </TouchableOpacity>
                 ))}
               </View>
@@ -287,8 +281,8 @@ export default function LoginScreen() {
             >
               <Ionicons
                 name={rememberMe ? "checkbox" : "square-outline"}
-                size={20}
-                color={rememberMe ? "#2563eb" : "#64748b"}
+                size={22}
+                color={rememberMe ? "#3b82f6" : "#64748b"}
               />
               <Text style={styles.rememberText}>Remember password on this device</Text>
             </TouchableOpacity>
@@ -329,29 +323,172 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
-  scrollContent: { flexGrow: 1, justifyContent: 'center', padding: 20 },
-  card: { backgroundColor: '#ffffff', borderRadius: 20, padding: 24, borderWidth: 1, borderColor: '#f1f5f9', elevation: 3 },
-  logoBadge: { width: 56, height: 56, borderRadius: 16, backgroundColor: '#2563eb', justifyContent: 'center', alignItems: 'center', alignSelf: 'center', marginBottom: 12 },
-  title: { fontSize: 22, fontWeight: '800', color: '#0f172a', textAlign: 'center' },
-  subtitle: { fontSize: 13, color: '#64748b', textAlign: 'center', marginBottom: 24 },
-  inputGroup: { marginBottom: 16 },
-  label: { fontSize: 12, fontWeight: '700', color: '#475569', marginBottom: 6 },
-  inputWrapper: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, paddingHorizontal: 12, height: 46, backgroundColor: '#ffffff' },
-  inputIcon: { marginRight: 8 },
-  eyeBtn: { padding: 4 },
-  input: { flex: 1, fontSize: 14, color: '#0f172a' },
-  dropdownTrigger: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, paddingHorizontal: 12, height: 46, backgroundColor: '#ffffff' },
-  dropdownValueText: { flex: 1, fontSize: 14, color: '#0f172a' },
-  dropdownMenu: { marginTop: 4, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, backgroundColor: '#ffffff', elevation: 4, overflow: 'hidden' },
-  dropdownItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
-  dropdownItemActive: { backgroundColor: '#eff6ff' },
-  dropdownItemText: { fontSize: 13, color: '#334155' },
-  dropdownItemTextActive: { color: '#2563eb', fontWeight: '700' },
-  rememberRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
-  rememberText: { fontSize: 13, color: '#475569', fontWeight: '500' },
-  submitBtn: { backgroundColor: '#2563eb', height: 48, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginTop: 8 },
-  submitBtnText: { color: '#ffffff', fontWeight: '700', fontSize: 15 },
-  toggleBtn: { marginTop: 16, paddingVertical: 8, alignItems: 'center' },
-  toggleBtnText: { color: '#0284c7', fontWeight: '700', fontSize: 13 },
+  container: { 
+    flex: 1, 
+    backgroundColor: '#e2e8f0' // Soft clay backdrop
+  },
+  scrollContent: { 
+    flexGrow: 1, 
+    justifyContent: 'center', 
+    padding: 20 
+  },
+  card: { 
+    backgroundColor: '#f8fafc', 
+    borderRadius: 32, 
+    padding: 24, 
+    borderWidth: 2, 
+    borderColor: '#ffffff', 
+    shadowColor: '#94a3b8', 
+    shadowOffset: { width: 8, height: 8 }, 
+    shadowOpacity: 0.4, 
+    shadowRadius: 16, 
+    elevation: 10 
+  },
+  logo: { 
+    width: 140, 
+    height: 140, 
+    alignSelf: 'center', 
+    marginBottom: 16 
+  },
+  subtitle: { 
+    fontSize: 14, 
+    color: '#64748b', 
+    textAlign: 'center', 
+    marginBottom: 24,
+    fontWeight: '500'
+  },
+  inputGroup: { 
+    marginBottom: 18 
+  },
+  label: { 
+    fontSize: 12, 
+    fontWeight: '700', 
+    color: '#475569', 
+    marginBottom: 8,
+    marginLeft: 4
+  },
+  inputWrapper: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    borderWidth: 2, 
+    borderColor: '#ffffff', 
+    borderRadius: 20, 
+    paddingHorizontal: 16, 
+    height: 54, 
+    backgroundColor: '#f1f5f9',
+    shadowColor: '#94a3b8',
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3
+  },
+  inputIcon: { 
+    marginRight: 10 
+  },
+  eyeBtn: { 
+    padding: 4 
+  },
+  input: { 
+    flex: 1, 
+    fontSize: 15, 
+    color: '#0f172a',
+    fontWeight: '500'
+  },
+  dropdownTrigger: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    borderWidth: 2, 
+    borderColor: '#ffffff', 
+    borderRadius: 20, 
+    paddingHorizontal: 16, 
+    height: 54, 
+    backgroundColor: '#f1f5f9',
+    shadowColor: '#94a3b8',
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3
+  },
+  dropdownValueText: { 
+    flex: 1, 
+    fontSize: 15, 
+    color: '#0f172a',
+    fontWeight: '500'
+  },
+  dropdownMenu: { 
+    marginTop: 8, 
+    borderWidth: 2, 
+    borderColor: '#ffffff', 
+    borderRadius: 20, 
+    backgroundColor: '#f8fafc', 
+    shadowColor: '#94a3b8',
+    shadowOffset: { width: 4, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 6, 
+    overflow: 'hidden' 
+  },
+  dropdownItem: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    paddingVertical: 14, 
+    paddingHorizontal: 16, 
+    borderBottomWidth: 1, 
+    borderBottomColor: '#f1f5f9' 
+  },
+  dropdownItemActive: { 
+    backgroundColor: '#eff6ff' 
+  },
+  dropdownItemText: { 
+    fontSize: 14, 
+    color: '#334155',
+    fontWeight: '500'
+  },
+  dropdownItemTextActive: { 
+    color: '#3b82f6', 
+    fontWeight: '700' 
+  },
+  rememberRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 10, 
+    marginBottom: 20,
+    marginLeft: 4
+  },
+  rememberText: { 
+    fontSize: 14, 
+    color: '#475569', 
+    fontWeight: '600' 
+  },
+  submitBtn: { 
+    backgroundColor: '#3b82f6', 
+    height: 54, 
+    borderRadius: 20, 
+    borderTopWidth: 1,
+    borderTopColor: '#93c5fd', // Clay inner highlight
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginTop: 8,
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 4, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8
+  },
+  submitBtnText: { 
+    color: '#ffffff', 
+    fontWeight: '800', 
+    fontSize: 16 
+  },
+  toggleBtn: { 
+    marginTop: 20, 
+    paddingVertical: 10, 
+    alignItems: 'center' 
+  },
+  toggleBtnText: { 
+    color: '#0ea5e9', 
+    fontWeight: '700', 
+    fontSize: 14 
+  },
 });
