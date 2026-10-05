@@ -490,40 +490,82 @@ await Notifications.scheduleNotificationAsync({
                 <Text style={styles.shiftReviewJobPillText}>{selectedJob?.job_name || 'System Administrator'}</Text>
               </View>
 
-              <View style={styles.timeBoxesContainer}>
-                <View style={styles.timeBox}>
-                  <Text style={styles.timeBoxTitle}>{clockInTimestampStr || '08:00 AM'}</Text>
-                  <View style={styles.timeBoxAddressRow}>
-                    <Ionicons name="location-outline" size={12} color="#94a3b8" />
-                    <Text style={styles.timeBoxAddressText} numberOfLines={2}>{location?.coords ? `GPS: ${location.coords.latitude.toFixed(4)}, ${location.coords.longitude.toFixed(4)}` : 'Location saved'}</Text>
-                  </View>
-                </View>
+              {(() => {
+                const parseTime = (t) => {
+                  if (!t) return null;
+                  if (t.includes('T')) return new Date(t);
+                  const d = new Date();
+                  const match = t.match(/(\d+):(\d+)(?::(\d+))?\s*(AM|PM)?/i);
+                  if (match) {
+                    let [_, h, m, s, ampm] = match;
+                    h = parseInt(h, 10);
+                    m = parseInt(m, 10);
+                    s = parseInt(s || 0, 10);
+                    if (ampm) {
+                      if (ampm.toUpperCase() === 'PM' && h < 12) h += 12;
+                      if (ampm.toUpperCase() === 'AM' && h === 12) h = 0;
+                    }
+                    d.setHours(h, m, s, 0);
+                    return d;
+                  }
+                  return null;
+                };
 
-                <Text style={styles.timeArrow}>→</Text>
+                const dIn = parseTime(clockInTimestampStr);
+                const dOut = parseTime(clockOutTimestampStr);
 
-                <View style={styles.timeBox}>
-                  <Text style={styles.timeBoxTitle}>{clockOutTimestampStr || '05:00 PM'}</Text>
-                  <View style={styles.timeBoxAddressRow}>
-                    <Ionicons name="location-outline" size={12} color="#94a3b8" />
-                    <Text style={styles.timeBoxAddressText} numberOfLines={2}>{location?.coords ? `GPS: ${location.coords.latitude.toFixed(4)}, ${location.coords.longitude.toFixed(4)}` : 'Location saved'}</Text>
-                  </View>
-                </View>
-              </View>
+                const displayIn = (dIn && clockInTimestampStr && clockInTimestampStr.includes('T')) 
+                  ? dIn.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) 
+                  : (clockInTimestampStr || '08:00 AM');
 
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 15 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Ionicons name={(isClockedIn ? clockOutLocation : location) ? "checkmark-circle" : "warning"} size={20} color={(isClockedIn ? clockOutLocation : location) ? "#10b981" : "#f59e0b"} />
-                  <Text style={{ marginLeft: 6, color: (isClockedIn ? clockOutLocation : location) ? "#10b981" : "#f59e0b", fontWeight: '500' }}>
-                    {(isClockedIn ? clockOutLocation : location) ? "Location acquired" : "Waiting for location..."}
-                  </Text>
-                </View>
-                <TouchableOpacity onPress={() => requestGpsLocation(true, true)} style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#f1f5f9', borderRadius: 8, flexDirection: 'row', alignItems: 'center' }}>
-                  <Ionicons name="refresh" size={16} color="#3b82f6" />
-                  <Text style={{ color: '#3b82f6', marginLeft: 4, fontWeight: '600' }}>Refresh</Text>
-                </TouchableOpacity>
-              </View>
+                let totalStr = '--:--';
+                if (dIn && dOut) {
+                  let diffMs = dOut - dIn;
+                  if (diffMs < 0) diffMs += 24 * 60 * 60 * 1000; // handle overnight
+                  const diffHrs = Math.floor(diffMs / 3600000);
+                  const diffMins = Math.floor((diffMs % 3600000) / 60000);
+                  totalStr = `${diffHrs}:${diffMins.toString().padStart(2, '0')}`;
+                }
 
-              <Text style={styles.totalHoursText}>Total hours {clockInTimestampStr ? '8:00' : '--:--'}</Text>
+                return (
+                  <>
+                    <View style={styles.timeBoxesContainer}>
+                      <View style={styles.timeBox}>
+                        <Text style={styles.timeBoxTitle}>{displayIn}</Text>
+                        <View style={styles.timeBoxAddressRow}>
+                          <Ionicons name="location-outline" size={12} color="#94a3b8" />
+                          <Text style={styles.timeBoxAddressText} numberOfLines={2}>{location?.coords ? `GPS: ${location.coords.latitude.toFixed(4)}, ${location.coords.longitude.toFixed(4)}` : 'Location saved'}</Text>
+                        </View>
+                      </View>
+
+                      <Text style={styles.timeArrow}>→</Text>
+
+                      <View style={styles.timeBox}>
+                        <Text style={styles.timeBoxTitle}>{clockOutTimestampStr || '05:00 PM'}</Text>
+                        <View style={styles.timeBoxAddressRow}>
+                          <Ionicons name="location-outline" size={12} color="#94a3b8" />
+                          <Text style={styles.timeBoxAddressText} numberOfLines={2}>{location?.coords ? `GPS: ${location.coords.latitude.toFixed(4)}, ${location.coords.longitude.toFixed(4)}` : 'Location saved'}</Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 15 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Ionicons name={(isClockedIn ? clockOutLocation : location) ? "checkmark-circle" : "warning"} size={20} color={(isClockedIn ? clockOutLocation : location) ? "#10b981" : "#f59e0b"} />
+                        <Text style={{ marginLeft: 6, color: (isClockedIn ? clockOutLocation : location) ? "#10b981" : "#f59e0b", fontWeight: '500' }}>
+                          {(isClockedIn ? clockOutLocation : location) ? "Location acquired" : "Waiting for location..."}
+                        </Text>
+                      </View>
+                      <TouchableOpacity onPress={() => requestGpsLocation(true, true)} style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#f1f5f9', borderRadius: 8, flexDirection: 'row', alignItems: 'center' }}>
+                        <Ionicons name="refresh" size={16} color="#3b82f6" />
+                        <Text style={{ color: '#3b82f6', marginLeft: 4, fontWeight: '600' }}>Refresh</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <Text style={styles.totalHoursText}>Total hours {totalStr}</Text>
+                  </>
+                );
+              })()}
 
               <View style={styles.formsContainer}>
                 <View style={styles.formRow}>
