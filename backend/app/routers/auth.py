@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
 from ..database import get_db
-from ..models import Employee
+from ..models import Employee, SmartGroup
 from ..auth_utils import (
     verify_password,
     get_password_hash,
@@ -59,6 +59,11 @@ class UserUpdateRequest(BaseModel):
 
 class UserStatusUpdateRequest(BaseModel):
     status: str  # 'APPROVED', 'DENIED', 'PENDING', 'ARCHIVED'
+
+@router.get("/departments")
+def get_public_departments(db: Session = Depends(get_db)):
+    groups = db.query(SmartGroup.name).order_by(SmartGroup.name.asc()).all()
+    return [g[0] for g in groups]
 
 @router.post("/register")
 def register_user(payload: UserRegisterRequest, db: Session = Depends(get_db)):

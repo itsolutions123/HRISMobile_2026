@@ -23,7 +23,7 @@ export default function LoginScreen() {
 
   // Department Dropdown States
   const [department, setDepartment] = useState('IT Operations');
-  const [departmentsList, setDepartmentsList] = useState(['Admin', 'IT Operations', 'Executive', 'Operations', 'Sales', 'HR']);
+  const [departmentsList, setDepartmentsList] = useState([]);
   const [showDeptDropdown, setShowDeptDropdown] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -34,16 +34,16 @@ export default function LoginScreen() {
 
   const fetchDynamicDepartments = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/jobs/public`);
+      const response = await fetch(`${API_BASE_URL}/api/auth/departments`);
       if (response.ok) {
         const data = await response.json();
         if (Array.isArray(data) && data.length > 0) {
-          const catNames = data.map(cat => cat.name);
-          setDepartmentsList(Array.from(new Set([...catNames, 'Admin', 'HR', 'IT Operations'])));
+          setDepartmentsList(data);
+          setDepartment(data[0]); // Auto-select the first valid group
         }
       }
     } catch (e) {
-      console.log('Using default department list fallback:', e);
+      console.log('Failed to fetch departments:', e);
     }
   };
 
@@ -221,38 +221,40 @@ export default function LoginScreen() {
           )}
 
           {/* DEPARTMENT DROPDOWN */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Department Assignment</Text>
-            <TouchableOpacity
-              style={styles.dropdownTrigger}
-              activeOpacity={0.8}
-              onPress={() => setShowDeptDropdown(!showDeptDropdown)}
-            >
-              <Ionicons name="business-outline" size={18} color="#64748b" style={styles.inputIcon} />
-              <Text style={styles.dropdownValueText}>{department}</Text>
-              <Ionicons name={showDeptDropdown ? "chevron-up" : "chevron-down"} size={18} color="#64748b" />
-            </TouchableOpacity>
-
-            {showDeptDropdown && (
-              <View style={styles.dropdownMenu}>
-                {departmentsList.map((dept) => (
-                  <TouchableOpacity
-                    key={dept}
-                    style={[styles.dropdownItem, department === dept && styles.dropdownItemActive]}
-                    onPress={() => {
-                      setDepartment(dept);
-                      setShowDeptDropdown(false);
-                    }}
-                  >
-                    <Text style={[styles.dropdownItemText, department === dept && styles.dropdownItemTextActive]}>
-                      {dept}
-                    </Text>
-                    {department === dept && <Ionicons name="checkmark" size={16} color="#3b82f6" />}
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </View>
+          {isRegisterMode && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Department Assignment</Text>
+              <TouchableOpacity
+                style={styles.dropdownTrigger}
+                activeOpacity={0.8}
+                onPress={() => setShowDeptDropdown(!showDeptDropdown)}
+              >
+                <Ionicons name="business-outline" size={18} color="#64748b" style={styles.inputIcon} />
+                <Text style={styles.dropdownValueText}>{department}</Text>
+                <Ionicons name={showDeptDropdown ? "chevron-up" : "chevron-down"} size={18} color="#64748b" />
+              </TouchableOpacity>
+  
+              {showDeptDropdown && (
+                <View style={styles.dropdownMenu}>
+                  {departmentsList.map((dept) => (
+                    <TouchableOpacity
+                      key={dept}
+                      style={[styles.dropdownItem, department === dept && styles.dropdownItemActive]}
+                      onPress={() => {
+                        setDepartment(dept);
+                        setShowDeptDropdown(false);
+                      }}
+                    >
+                      <Text style={[styles.dropdownItemText, department === dept && styles.dropdownItemTextActive]}>
+                        {dept}
+                      </Text>
+                      {department === dept && <Ionicons name="checkmark" size={16} color="#3b82f6" />}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+          )}
 
           {/* PASSWORD FIELD */}
           <View style={styles.inputGroup}>
