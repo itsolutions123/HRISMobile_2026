@@ -14,6 +14,7 @@ export default function TimesheetScreen() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editTimeIn, setEditTimeIn] = useState('');
   const [editTimeOut, setEditTimeOut] = useState('');
+  const [editNote, setEditNote] = useState('');
   const [submittingRevision, setSubmittingRevision] = useState(false);
 
   const getLocalDateString = (d = new Date()) => {
@@ -118,7 +119,25 @@ export default function TimesheetScreen() {
   const handleOpenEditShiftModal = () => {
     setEditTimeIn(inPunch ? inPunch.timestamp : `${selectedDate} 08:00:00`);
     setEditTimeOut(outPunch ? outPunch.timestamp : `${selectedDate} 17:00:00`);
+    setEditNote('');
     setShowEditModal(true);
+  };
+
+  const calculateTotalHours = (startStr, endStr) => {
+    try {
+      if (!startStr || !endStr) return '8:00';
+      const d1 = new Date(startStr.includes('T') || startStr.includes('-') ? startStr : startStr.replace(' ', 'T'));
+      const d2 = new Date(endStr.includes('T') || endStr.includes('-') ? endStr : endStr.replace(' ', 'T'));
+      if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return '8:00';
+      const diffMs = d2 - d1;
+      if (diffMs <= 0) return '0:00';
+      const totalMins = Math.floor(diffMs / (1000 * 60));
+      const hrs = Math.floor(totalMins / 60);
+      const mins = totalMins % 60;
+      return `${hrs}:${String(mins).padStart(2, '0')}`;
+    } catch (e) {
+      return '8:00';
+    }
   };
 
   const handleSubmitShiftRevision = async () => {
@@ -223,26 +242,95 @@ export default function TimesheetScreen() {
         )}
       </ScrollView>
 
-      {/* EDIT SHIFT MODAL */}
+      {/* EDIT SHIFT CLAY MODAL */}
       <Modal visible={showEditModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={styles.clayModalContainer}>
+            {/* Header */}
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>SHIFT EDIT</Text>
-              <TouchableOpacity onPress={() => setShowEditModal(false)} style={styles.closeBtn}>
-                <Ionicons name="close" size={24} color="#64748b" />
+              <Text style={styles.modalTitle}>Edit shift</Text>
+              <TouchableOpacity onPress={() => setShowEditModal(false)} style={styles.closeBtnPill}>
+                <Ionicons name="close" size={20} color="#64748b" />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.inputLabel}>CLOCK IN (YYYY-MM-DD HH:MM:SS)</Text>
-            <TextInput style={styles.inputField} value={editTimeIn} onChangeText={setEditTimeIn} />
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 10 }}>
+              {/* Job Row */}
+              <View style={styles.clayRow}>
+                <Text style={styles.rowLabel}>Job</Text>
+                <View style={styles.jobPillsContainer}>
+                  <View style={styles.clayPillTag}>
+                    <Text style={styles.clayPillText}>{user?.department || 'HO IT'}</Text>
+                  </View>
+                  <View style={styles.clayPillTag}>
+                    <Text style={styles.clayPillText}>{user?.job_title || 'IT Assistant'}</Text>
+                  </View>
+                </View>
+              </View>
 
-            <Text style={styles.inputLabel}>CLOCK OUT (YYYY-MM-DD HH:MM:SS)</Text>
-            <TextInput style={styles.inputField} value={editTimeOut} onChangeText={setEditTimeOut} />
+              {/* Starts Row */}
+              <View style={styles.clayRow}>
+                <Text style={styles.rowLabel}>Starts</Text>
+                <TextInput
+                  style={styles.clayTimeInput}
+                  value={editTimeIn}
+                  onChangeText={setEditTimeIn}
+                  placeholder="YYYY-MM-DD HH:MM:SS"
+                  placeholderTextColor="#94a3b8"
+                />
+              </View>
 
-            <TouchableOpacity style={styles.saveBtn} onPress={handleSubmitShiftRevision} disabled={submittingRevision}>
-              {submittingRevision ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.saveBtnText}>SAVE SHIFT</Text>}
-            </TouchableOpacity>
+              {/* Ends Row */}
+              <View style={styles.clayRow}>
+                <Text style={styles.rowLabel}>Ends</Text>
+                <TextInput
+                  style={styles.clayTimeInput}
+                  value={editTimeOut}
+                  onChangeText={setEditTimeOut}
+                  placeholder="YYYY-MM-DD HH:MM:SS"
+                  placeholderTextColor="#94a3b8"
+                />
+              </View>
+
+              {/* Total Hours */}
+              <View style={styles.totalHoursRow}>
+                <Text style={styles.totalHoursText}>
+                  Total hours <Text style={styles.totalHoursValue}>{calculateTotalHours(editTimeIn, editTimeOut)}</Text>
+                </Text>
+              </View>
+
+              {/* Note / Reason Section */}
+              <View style={styles.noteHeaderRow}>
+                <Ionicons name="create-outline" size={18} color="#0284c7" />
+                <Text style={styles.noteHeaderTitle}>Add a note</Text>
+              </View>
+
+              <TextInput
+                style={styles.clayTextArea}
+                value={editNote}
+                onChangeText={setEditNote}
+                placeholder="Attach a note to your request"
+                placeholderTextColor="#94a3b8"
+                multiline
+                numberOfLines={3}
+              />
+
+              <Text style={styles.disclaimerText}>All requests will be sent for a manager's approval</Text>
+
+              {/* Action Button */}
+              <TouchableOpacity
+                style={styles.claySubmitBtn}
+                onPress={handleSubmitShiftRevision}
+                disabled={submittingRevision}
+                activeOpacity={0.8}
+              >
+                {submittingRevision ? (
+                  <ActivityIndicator color="#ffffff" />
+                ) : (
+                  <Text style={styles.claySubmitBtnText}>Send for approval</Text>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -269,13 +357,171 @@ const styles = StyleSheet.create({
   emptyContainer: { alignItems: 'center', marginTop: 40, gap: 8 },
   emptyText: { color: '#94a3b8', fontSize: 14, fontWeight: '500' },
   
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalContent: { backgroundColor: '#ffffff', borderRadius: 24, padding: 24, width: '100%', maxWidth: 360, ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 12 }, android: { elevation: 10 } }) },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  modalTitle: { fontSize: 18, fontWeight: '800', color: '#0f172a' },
-  closeBtn: { backgroundColor: '#f1f5f9', padding: 6, borderRadius: 20 },
-  inputLabel: { fontSize: 12, fontWeight: '700', color: '#64748b', marginBottom: 8 },
-  inputField: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 16, padding: 14, marginBottom: 20, fontSize: 14, color: '#0f172a' },
-  saveBtn: { backgroundColor: '#0284c7', paddingVertical: 16, borderRadius: 16, alignItems: 'center', marginTop: 10, ...Platform.select({ ios: { shadowColor: '#0284c7', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 }, android: { elevation: 4 } }) },
-  saveBtnText: { color: '#ffffff', fontWeight: '800', fontSize: 15, letterSpacing: 0.5 }
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.4)',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  clayModalContainer: {
+    width: '100%',
+    maxHeight: '85%',
+    backgroundColor: '#f8fafc',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingTop: 24,
+    paddingHorizontal: 22,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderTopColor: '#ffffff',
+    borderLeftColor: '#ffffff',
+    shadowColor: '#64748b',
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justify: 'space-between',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  closeBtnPill: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderTopColor: '#ffffff',
+    borderLeftColor: '#ffffff',
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    borderRightColor: '#e2e8f0',
+    borderBottomColor: '#e2e8f0',
+    shadowColor: '#94a3b8',
+    shadowOffset: { width: 2, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  clayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  rowLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#334155',
+    width: 60,
+  },
+  jobPillsContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+  },
+  clayPillTag: {
+    backgroundColor: '#dbeafe',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderTopColor: '#ffffff',
+    borderLeftColor: '#ffffff',
+  },
+  clayPillText: {
+    color: '#1d4ed8',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  clayTimeInput: {
+    flex: 1,
+    textAlign: 'right',
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0284c7',
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  totalHoursRow: {
+    marginVertical: 16,
+  },
+  totalHoursText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  totalHoursValue: {
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  noteHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  noteHeaderTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  clayTextArea: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 14,
+    fontSize: 14,
+    color: '#0f172a',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    minHeight: 80,
+    textAlignVertical: 'top',
+    marginBottom: 12,
+  },
+  disclaimerText: {
+    fontSize: 12,
+    color: '#94a3b8',
+    textAlign: 'center',
+    marginBottom: 18,
+  },
+  claySubmitBtn: {
+    backgroundColor: '#3b82f6',
+    borderRadius: 24,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderTopColor: '#93c5fd',
+    borderLeftColor: '#93c5fd',
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  claySubmitBtnText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
 });
