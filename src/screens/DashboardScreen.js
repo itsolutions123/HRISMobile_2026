@@ -510,6 +510,19 @@ await Notifications.scheduleNotificationAsync({
                 </View>
               </View>
 
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 15 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name={(isClockedIn ? clockOutLocation : location) ? "checkmark-circle" : "warning"} size={20} color={(isClockedIn ? clockOutLocation : location) ? "#10b981" : "#f59e0b"} />
+                  <Text style={{ marginLeft: 6, color: (isClockedIn ? clockOutLocation : location) ? "#10b981" : "#f59e0b", fontWeight: '500' }}>
+                    {(isClockedIn ? clockOutLocation : location) ? "Location acquired" : "Waiting for location..."}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => requestGpsLocation(true, true)} style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#f1f5f9', borderRadius: 8, flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name="refresh" size={16} color="#3b82f6" />
+                  <Text style={{ color: '#3b82f6', marginLeft: 4, fontWeight: '600' }}>Refresh</Text>
+                </TouchableOpacity>
+              </View>
+
               <Text style={styles.totalHoursText}>Total hours {clockInTimestampStr ? '8:00' : '--:--'}</Text>
 
               <View style={styles.formsContainer}>
