@@ -18,6 +18,9 @@ MANILA_TZ = zoneinfo.ZoneInfo("Asia/Manila")
 def get_manila_now():
     return datetime.now(MANILA_TZ)
 
+class SwitchJobRequest(BaseModel):
+    job_title: str
+
 class PunchRequest(BaseModel):
     employee_id: str
     punch_type: str  # CLOCK_IN, CLOCK_OUT, BREAK_IN, BREAK_OUT
@@ -46,6 +49,21 @@ def get_active_punch(db: Session = Depends(get_db), current_user: Employee = Dep
         "clock_in_time": last_ts.isoformat(),
         "job_name": last_punch.address
     }
+
+@router.put("/switch-job")
+def switch_active_job(payload: SwitchJobRequest, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
+    last_punch = db.query(PunchLog).filter(
+        PunchLog.employee_id == current_user.employee_id
+    ).order_by(PunchLog.id.desc()).first()
+
+    if not last_punch or last_punch.punch_type.upper() == "CLOCK_OUT":
+        raise HTTPException(status_code=400, detail="No active clock-in shift found to update job role.")
+
+    user_dept = current_user.department or "General"
+    last_punch.address = f"Job: {payload.job_title} ({user_dept})"
+    db.commit()
+    db.refresh(last_punch)
+    return {"status": "success", "job_name": last_punch.address}
 
 @router.get("/my-logs")
 def get_my_punch_logs(db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):

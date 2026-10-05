@@ -705,7 +705,32 @@ await Notifications.scheduleNotificationAsync({
                     <TouchableOpacity
                       key={idx}
                       style={styles.jobRow}
-                      onPress={() => { setSelectedJob(jobTitle); submitPunch(jobTitle); }}
+                      onPress={async () => {
+                        setSelectedJob(jobTitle);
+                        if (isClockedIn) {
+                          setLoading(true);
+                          try {
+                            const res = await fetch(`${API_BASE_URL}/api/punch/switch-job`, {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                              body: JSON.stringify({ job_title: jobTitle }),
+                            });
+                            if (res.ok) {
+                              await fetchStatus();
+                            } else {
+                              const errData = await res.json().catch(() => ({}));
+                              Alert.alert('Error', errData.detail || 'Failed to switch duty role.');
+                            }
+                          } catch (err) {
+                            Alert.alert('Error', 'Network error while switching role.');
+                          } finally {
+                            setLoading(false);
+                            setShowJobModal(false);
+                          }
+                        } else {
+                          submitPunch(jobTitle);
+                        }
+                      }}
                     >
                       <View style={styles.jobDot}/>
                       <Text style={styles.jobText}>{jobTitle}</Text>
