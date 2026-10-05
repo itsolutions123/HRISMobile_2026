@@ -80,23 +80,61 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc', paddingTop: Platform.OS === 'ios' ? 60 : 40 },
+  container: { flex: 1, backgroundColor: '#eef2f6', paddingTop: Platform.OS === 'ios' ? 60 : 40 },
   content: { padding: 20, paddingTop: 40, paddingBottom: 40 },
-  profileCard: { backgroundColor: '#ffffff', borderRadius: 16, padding: 24, marginBottom: 32, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 3 },
+  
+  clayElement: {
+    backgroundColor: '#eef2f6',
+    borderRadius: 24,
+    shadowColor: '#a3b1c6',
+    shadowOffset: { width: 8, height: 8 },
+    shadowOpacity: 0.6,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+
+  profileCard: { 
+    backgroundColor: '#eef2f6', 
+    borderRadius: 24, 
+    padding: 24, 
+    marginBottom: 32, 
+    shadowColor: '#a3b1c6',
+    shadowOffset: { width: 8, height: 8 },
+    shadowOpacity: 0.6,
+    shadowRadius: 16,
+    elevation: 8,
+  },
   profileHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
-  logoPlaceholder: { width: 50, height: 50, borderRadius: 12, backgroundColor: '#eff6ff', justifyContent: 'center', alignItems: 'center' },
-  avatar: { width: 64, height: 64, borderRadius: 16, backgroundColor: '#2563eb', justifyContent: 'center', alignItems: 'center' },
+  
+  logoPlaceholder: { 
+    width: 50, height: 50, borderRadius: 16, backgroundColor: '#eef2f6', 
+    justifyContent: 'center', alignItems: 'center',
+    shadowColor: '#a3b1c6', shadowOffset: { width: 4, height: 4 }, shadowOpacity: 0.6, shadowRadius: 8, elevation: 4
+  },
+  avatar: { 
+    width: 64, height: 64, borderRadius: 20, backgroundColor: '#3b82f6', 
+    justifyContent: 'center', alignItems: 'center',
+    shadowColor: '#3b82f6', shadowOffset: { width: 4, height: 8 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 6
+  },
   avatarText: { color: '#ffffff', fontSize: 28, fontWeight: '800' },
-  employeeName: { fontSize: 20, fontWeight: '800', color: '#0f172a', marginBottom: 4 },
-  employeeTitle: { fontSize: 13, color: '#64748b', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
-  
-  sectionTitle: { fontSize: 13, fontWeight: '800', color: '#64748b', marginBottom: 12, letterSpacing: 0.5 },
+  employeeName: { fontSize: 22, fontWeight: '800', color: '#1e293b', marginBottom: 4 },
+  employeeTitle: { fontSize: 13, color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  sectionTitle: { fontSize: 13, fontWeight: '800', color: '#64748b', marginBottom: 16, letterSpacing: 1, paddingLeft: 8 },
   leaveRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 32 },
-  leaveBox: { flex: 1, backgroundColor: '#ffffff', borderRadius: 16, paddingVertical: 20, alignItems: 'center', marginHorizontal: 4, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 4, elevation: 2 },
-  leaveCount: { fontSize: 24, fontWeight: '800', color: '#0f172a', marginBottom: 4 },
-  leaveLabel: { fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' },
   
-  listCard: { backgroundColor: '#ffffff', borderRadius: 16, marginBottom: 32, borderWidth: 1, borderColor: '#e2e8f0', overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 4, elevation: 2 },
-  listItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 18, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
-  listItemText: { fontSize: 15, fontWeight: '700', color: '#1e293b' },
+  leaveBox: { 
+    flex: 1, backgroundColor: '#eef2f6', borderRadius: 20, paddingVertical: 24, 
+    alignItems: 'center', marginHorizontal: 6,
+    shadowColor: '#a3b1c6', shadowOffset: { width: 5, height: 5 }, shadowOpacity: 0.5, shadowRadius: 10, elevation: 5
+  },
+  leaveCount: { fontSize: 28, fontWeight: '800', color: '#3b82f6', marginBottom: 6 },
+  leaveLabel: { fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  listCard: { 
+    backgroundColor: '#eef2f6', borderRadius: 24, marginBottom: 32, overflow: 'hidden',
+    shadowColor: '#a3b1c6', shadowOffset: { width: 6, height: 6 }, shadowOpacity: 0.5, shadowRadius: 12, elevation: 6
+  },
+  listItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#dde4ee' },
+  listItemText: { fontSize: 16, fontWeight: '700', color: '#334155' },
 });

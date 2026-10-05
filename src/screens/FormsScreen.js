@@ -532,68 +532,110 @@ export default function FormsScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc', paddingTop: Platform.OS === 'ios' ? 60 : 40 },
+  container: { flex: 1, backgroundColor: '#eef2f6', paddingTop: Platform.OS === 'ios' ? 60 : 40 },
   viewContainer: { flex: 1, paddingHorizontal: 20, paddingBottom: 20 },
-  headerTitle: { fontSize: 24, fontWeight: '800', color: '#0f172a', marginBottom: 4 },
+  headerTitle: { fontSize: 24, fontWeight: '800', color: '#1e293b', marginBottom: 4 },
   headerSubtitle: { fontSize: 14, color: '#64748b', marginBottom: 20 },
-  
-  categoryCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff', padding: 16, borderRadius: 16, marginBottom: 12, borderWidth: 1, borderColor: '#f1f5f9' },
-  iconContainer: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
-  categoryName: { flex: 1, fontSize: 16, fontWeight: '700', color: '#1e293b' },
-  
+
+  categoryCard: { 
+    flexDirection: 'row', alignItems: 'center', 
+    backgroundColor: '#eef2f6', padding: 16, borderRadius: 20, marginBottom: 16, 
+    shadowColor: '#a3b1c6', shadowOffset: { width: 6, height: 6 }, shadowOpacity: 0.5, shadowRadius: 10, elevation: 6
+  },
+  iconContainer: { 
+    width: 48, height: 48, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginRight: 16,
+    backgroundColor: '#eef2f6', shadowColor: '#a3b1c6', shadowOffset: { width: 4, height: 4 }, shadowOpacity: 0.5, shadowRadius: 8, elevation: 4
+  },
+  categoryName: { flex: 1, fontSize: 16, fontWeight: '700', color: '#334155' },
+
   backBtn: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 4 },
-  backBtnText: { color: '#2563eb', fontWeight: '600', fontSize: 15 },
-  formCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff', padding: 18, borderRadius: 16, marginBottom: 12, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 4, elevation: 2 },
-  formName: { fontSize: 16, fontWeight: '700', color: '#0f172a', marginBottom: 4 },
+  backBtnText: { color: '#3b82f6', fontWeight: '700', fontSize: 15 },
+  
+  formCard: { 
+    flexDirection: 'row', alignItems: 'center', 
+    backgroundColor: '#eef2f6', padding: 18, borderRadius: 20, marginBottom: 16, 
+    shadowColor: '#a3b1c6', shadowOffset: { width: 6, height: 6 }, shadowOpacity: 0.5, shadowRadius: 10, elevation: 6
+  },
+  formName: { fontSize: 16, fontWeight: '800', color: '#1e293b', marginBottom: 4 },
   formDesc: { fontSize: 13, color: '#64748b' },
+  
   emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: -50 },
-  emptyStateText: { marginTop: 12, color: '#94a3b8', fontSize: 15, fontWeight: '500' },
-  
-  formHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, borderBottomWidth: 1, borderColor: '#e2e8f0', paddingBottom: 16 },
+  emptyStateText: { marginTop: 12, color: '#94a3b8', fontSize: 15, fontWeight: '600' },
+
+  formHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, paddingBottom: 16 },
   backBtnInline: { padding: 4 },
-  formFillTitle: { flex: 1, fontSize: 18, fontWeight: '800', color: '#0f172a', textAlign: 'center' },
+  formFillTitle: { flex: 1, fontSize: 18, fontWeight: '800', color: '#1e293b', textAlign: 'center' },
   formScroll: { flex: 1 },
-  formMainDesc: { fontSize: 14, color: '#475569', marginBottom: 20, lineHeight: 20 },
+  formMainDesc: { fontSize: 14, color: '#475569', marginBottom: 24, lineHeight: 22 },
+
+  fieldContainer: { marginBottom: 28 },
+  fieldLabel: { fontSize: 13, fontWeight: '800', color: '#64748b', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5, paddingLeft: 6 },
   
-  fieldContainer: { marginBottom: 24 },
-  fieldLabel: { fontSize: 13, fontWeight: '700', color: '#334155', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
-  input: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, padding: 14, fontSize: 15, color: '#0f172a' },
-  
+  input: { 
+    backgroundColor: '#eef2f6', borderRadius: 16, padding: 16, fontSize: 15, color: '#1e293b',
+    shadowColor: '#ffffff', shadowOffset: { width: -4, height: -4 }, shadowOpacity: 0.8, shadowRadius: 8,
+    // Outer shadow only since React Native can't do inset. Using light top-left to mimic a soft depression.
+    elevation: 2 
+  },
+
   yesNoContainer: { flexDirection: 'row', gap: 12 },
-  yesNoBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: '#cbd5e1', backgroundColor: '#ffffff', alignItems: 'center' },
-  yesNoBtnActive: { borderColor: '#0284c7', backgroundColor: '#eff6ff' },
-  yesNoText: { fontWeight: '600', color: '#475569', fontSize: 15 },
-  yesNoTextActive: { color: '#0284c7' },
-  
-  dropdownFakeContainer: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, overflow: 'hidden' },
-  radioRow: { flexDirection: 'row', alignItems: 'center', padding: 14, borderBottomWidth: 1, borderColor: '#f1f5f9' },
-  radioRowActive: { backgroundColor: '#f8fafc' },
-  radioCircle: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: '#cbd5e1', marginRight: 12 },
-  radioCircleActive: { borderColor: '#0284c7', backgroundColor: '#0284c7' },
-  radioText: { fontSize: 15, color: '#334155' },
-  
+  yesNoBtn: { 
+    flex: 1, paddingVertical: 14, borderRadius: 16, backgroundColor: '#eef2f6', alignItems: 'center',
+    shadowColor: '#a3b1c6', shadowOffset: { width: 4, height: 4 }, shadowOpacity: 0.5, shadowRadius: 6, elevation: 4
+  },
+  yesNoBtnActive: { 
+    backgroundColor: '#e0e7ff', shadowColor: '#818cf8', shadowOpacity: 0.3 
+  },
+  yesNoText: { fontWeight: '700', color: '#64748b', fontSize: 15 },
+  yesNoTextActive: { color: '#4f46e5' },
+
+  dropdownFakeContainer: { 
+    backgroundColor: '#eef2f6', borderRadius: 16, overflow: 'hidden',
+    shadowColor: '#a3b1c6', shadowOffset: { width: 4, height: 4 }, shadowOpacity: 0.5, shadowRadius: 6, elevation: 4
+  },
+  radioRow: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderColor: '#dde4ee' },
+  radioRowActive: { backgroundColor: '#e0e7ff' },
+  radioCircle: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: '#94a3b8', marginRight: 12 },
+  radioCircleActive: { borderColor: '#4f46e5', backgroundColor: '#4f46e5' },
+  radioText: { fontSize: 15, fontWeight: '600', color: '#334155' },
+
   checkboxGroup: { marginTop: 4 },
-  checkboxRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  checkboxBox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: '#cbd5e1', marginRight: 12, justifyContent: 'center', alignItems: 'center', backgroundColor: '#ffffff' },
-  checkboxBoxActive: { borderColor: '#0284c7', backgroundColor: '#0284c7' },
-  checkboxText: { fontSize: 15, color: '#334155' },
+  checkboxRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, paddingHorizontal: 6 },
+  checkboxBox: { 
+    width: 24, height: 24, borderRadius: 8, borderWidth: 2, borderColor: '#94a3b8', marginRight: 14, 
+    justifyContent: 'center', alignItems: 'center', backgroundColor: '#eef2f6' 
+  },
+  checkboxBoxActive: { borderColor: '#4f46e5', backgroundColor: '#4f46e5' },
+  checkboxText: { fontSize: 15, fontWeight: '600', color: '#334155' },
 
   dateInputContainer: { position: 'relative', justifyContent: 'center' },
-  dateIcon: { position: 'absolute', right: 14 },
-  
-  signatureBtn: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#cbd5e1', borderStyle: 'dashed', borderRadius: 12, padding: 24, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 },
-  signatureBtnText: { color: '#64748b', fontWeight: '600', fontSize: 15 },
-  signedContainer: { alignItems: 'center', padding: 16, backgroundColor: '#f8fafc', borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0' },
-  signedImage: { width: '100%', height: 100, resizeMode: 'contain' },
-  editSigText: { color: '#2563eb', fontWeight: '600', marginTop: 12 },
-  
-  submitBtn: { backgroundColor: '#2563eb', borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 10 },
-  submitBtnText: { color: '#ffffff', fontSize: 16, fontWeight: '800' },
-  
+  dateIcon: { position: 'absolute', right: 16 },
+
+  signatureBtn: { 
+    backgroundColor: '#eef2f6', borderRadius: 16, padding: 24, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 10,
+    shadowColor: '#a3b1c6', shadowOffset: { width: 4, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 3
+  },
+  signatureBtnText: { color: '#64748b', fontWeight: '700', fontSize: 15 },
+  signedContainer: { 
+    alignItems: 'center', padding: 20, backgroundColor: '#eef2f6', borderRadius: 16,
+    shadowColor: '#a3b1c6', shadowOffset: { width: 4, height: 4 }, shadowOpacity: 0.5, shadowRadius: 8, elevation: 4 
+  },
+  signedImage: { width: '100%', height: 120, resizeMode: 'contain' },
+  editSigText: { color: '#4f46e5', fontWeight: '700', marginTop: 12 },
+
+  submitBtn: { 
+    backgroundColor: '#4f46e5', borderRadius: 20, paddingVertical: 18, alignItems: 'center', marginTop: 16,
+    shadowColor: '#4f46e5', shadowOffset: { width: 4, height: 8 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 6
+  },
+  submitBtnText: { color: '#ffffff', fontSize: 16, fontWeight: '800', letterSpacing: 0.5 },
+
   // Modal Layout
-  modalBg: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.7)', justifyContent: 'center', padding: 16 },
-  sigModalSheet: { backgroundColor: '#ffffff', borderRadius: 20, padding: 20, height: 420 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  modalTitle: { fontSize: 18, fontWeight: '800', color: '#0f172a' },
-  sigWebView: { flex: 1, backgroundColor: 'transparent' }
+  modalBg: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', padding: 16 },
+  sigModalSheet: { 
+    backgroundColor: '#eef2f6', borderRadius: 24, padding: 24, height: 420,
+    shadowColor: '#a3b1c6', shadowOffset: { width: 8, height: 8 }, shadowOpacity: 0.6, shadowRadius: 16, elevation: 8 
+  },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalTitle: { fontSize: 18, fontWeight: '800', color: '#1e293b' },
+  sigWebView: { flex: 1, backgroundColor: 'transparent', borderRadius: 12, overflow: 'hidden' }
 });

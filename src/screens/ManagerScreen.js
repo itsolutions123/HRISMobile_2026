@@ -544,67 +544,120 @@ export default function ManagerScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc', paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : 40 },
-  pageTitle: { fontSize: 26, fontWeight: '700', color: '#0f172a', marginBottom: 24 },
-  
+  container: { flex: 1, backgroundColor: '#eef2f6', paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : 40 },
+  pageTitle: { fontSize: 26, fontWeight: '800', color: '#1e293b', marginBottom: 24 },
+
   menuContainer: { flex: 1 },
-  attendanceCard: { backgroundColor: '#ffffff', borderRadius: 16, padding: 24, marginBottom: 20, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 3 },
-  cardHeaderTitle: { fontSize: 13, fontWeight: '700', color: '#64748b', marginBottom: 16, textTransform: 'uppercase', letterSpacing: 0.5 },
-  attendanceStatsText: { fontSize: 28, fontWeight: '700', color: '#0f172a', textAlign: 'center' },
-  pendingAlertBadge: { backgroundColor: '#fef3c7', alignSelf: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, marginTop: 16 },
-  pendingAlertText: { color: '#d97706', fontWeight: '700', fontSize: 12 },
+  
+  // Dashboard Card
+  attendanceCard: { 
+    backgroundColor: '#eef2f6', borderRadius: 24, padding: 24, marginBottom: 24, 
+    shadowColor: '#a3b1c6', shadowOffset: { width: 8, height: 8 }, shadowOpacity: 0.6, shadowRadius: 16, elevation: 8 
+  },
+  cardHeaderTitle: { fontSize: 13, fontWeight: '800', color: '#64748b', marginBottom: 16, textTransform: 'uppercase', letterSpacing: 0.5 },
+  attendanceStatsText: { fontSize: 32, fontWeight: '800', color: '#1e293b', textAlign: 'center' },
+  
+  pendingAlertBadge: { 
+    backgroundColor: '#fef3c7', alignSelf: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, marginTop: 20,
+    shadowColor: '#fcd34d', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 3
+  },
+  pendingAlertText: { color: '#d97706', fontWeight: '800', fontSize: 12 },
 
-  menuBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#ffffff', borderRadius: 16, padding: 20, marginBottom: 12, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 4, elevation: 2 },
-  menuBtnText: { fontSize: 15, fontWeight: '700', color: '#1e293b' },
+  // Menu Buttons
+  menuBtn: { 
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', 
+    backgroundColor: '#eef2f6', borderRadius: 20, padding: 20, marginBottom: 16, 
+    shadowColor: '#a3b1c6', shadowOffset: { width: 6, height: 6 }, shadowOpacity: 0.5, shadowRadius: 12, elevation: 6
+  },
+  menuBtnText: { fontSize: 16, fontWeight: '700', color: '#334155' },
 
-  subViewHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
+  subViewHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
   backBtn: { padding: 8, marginRight: 8 },
-  subViewTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a' },
+  subViewTitle: { fontSize: 20, fontWeight: '800', color: '#1e293b' },
 
-  itemCard: { backgroundColor: '#ffffff', padding: 18, borderRadius: 16, marginBottom: 12, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 4, elevation: 2 },
-  brandCard: { backgroundColor: '#ffffff', borderRadius: 16, paddingVertical: 40, paddingHorizontal: 20, marginBottom: 16, borderWidth: 1, borderColor: '#0f172a', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 3 },
-  brandCardText: { fontSize: 15, fontWeight: '700', color: '#0f172a', textTransform: 'uppercase', letterSpacing: 1, textAlign: 'center' },
-  subGroupsContainer: { backgroundColor: '#f8fafc', padding: 16, borderBottomLeftRadius: 16, borderBottomRightRadius: 16, borderWidth: 1, borderTopWidth: 0, borderColor: '#0f172a' },
-  subGroupRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
-  subGroupDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#2563eb', marginRight: 12 },
-  subGroupText: { fontSize: 15, fontWeight: '600', color: '#334155' },
+  // List Cards
+  itemCard: { 
+    backgroundColor: '#eef2f6', padding: 20, borderRadius: 20, marginBottom: 16, 
+    shadowColor: '#a3b1c6', shadowOffset: { width: 6, height: 6 }, shadowOpacity: 0.5, shadowRadius: 12, elevation: 6 
+  },
   
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  cardTitle: { fontWeight: '700', fontSize: 16, color: '#1e293b' },
-  cardDetail: { fontSize: 13, color: '#475569', marginTop: 4 },
-  boldText: { fontWeight: '700', color: '#0f172a' },
-  pendingBadge: { backgroundColor: '#fef3c7', color: '#d97706', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, fontWeight: '700', fontSize: 11 },
-  countBadge: { backgroundColor: '#e0f2fe', color: '#0369a1', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, fontWeight: '700', fontSize: 11 },
+  // Brands / Organizations
+  brandCard: { 
+    backgroundColor: '#eef2f6', borderRadius: 20, paddingVertical: 40, paddingHorizontal: 20, marginBottom: 16, 
+    justifyContent: 'center', alignItems: 'center', 
+    shadowColor: '#a3b1c6', shadowOffset: { width: 6, height: 6 }, shadowOpacity: 0.5, shadowRadius: 12, elevation: 6 
+  },
+  brandCardText: { fontSize: 16, fontWeight: '800', color: '#1e293b', textTransform: 'uppercase', letterSpacing: 1, textAlign: 'center' },
+  subGroupsContainer: { 
+    backgroundColor: '#eef2f6', padding: 16, borderBottomLeftRadius: 20, borderBottomRightRadius: 20, 
+    borderTopWidth: 1, borderTopColor: '#dde4ee', marginTop: -16, marginBottom: 16
+  },
+  subGroupRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#dde4ee' },
+  subGroupDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#3b82f6', marginRight: 12 },
+  subGroupText: { fontSize: 15, fontWeight: '700', color: '#334155' },
 
-  actionRow: { flexDirection: 'row', marginTop: 16, gap: 12 },
-  modalActionRow: { flexDirection: 'row', marginTop: 24, gap: 12 },
-  actionBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  approveBtn: { backgroundColor: '#16a34a' },
-  rejectBtn: { backgroundColor: '#dc2626' },
-  btnText: { color: '#ffffff', fontWeight: '700', fontSize: 14 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 },
+  cardTitle: { fontWeight: '800', fontSize: 16, color: '#1e293b', flex: 1, marginRight: 8 },
+  cardDetail: { fontSize: 13, color: '#64748b', marginTop: 4, fontWeight: '500' },
+  boldText: { fontWeight: '700', color: '#1e293b' },
   
-  emptyText: { textAlign: 'center', color: '#94a3b8', marginTop: 40, fontSize: 15, fontWeight: '500' },
+  pendingBadge: { backgroundColor: '#fef3c7', color: '#d97706', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, fontWeight: '800', fontSize: 11, overflow: 'hidden' },
+  countBadge: { backgroundColor: '#e0f2fe', color: '#0369a1', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, fontWeight: '800', fontSize: 11, overflow: 'hidden' },
+
+  // Actions
+  actionRow: { flexDirection: 'row', marginTop: 20, gap: 12 },
+  modalActionRow: { flexDirection: 'row', marginTop: 28, gap: 12 },
+  actionBtn: { 
+    flex: 1, paddingVertical: 16, borderRadius: 16, alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#a3b1c6', shadowOffset: { width: 4, height: 4 }, shadowOpacity: 0.5, shadowRadius: 8, elevation: 4
+  },
+  approveBtn: { backgroundColor: '#10b981', shadowColor: '#34d399' },
+  rejectBtn: { backgroundColor: '#ef4444', shadowColor: '#f87171' },
+  btnText: { color: '#ffffff', fontWeight: '800', fontSize: 14, letterSpacing: 0.5 },
+
+  emptyText: { textAlign: 'center', color: '#94a3b8', marginTop: 50, fontSize: 16, fontWeight: '600' },
+
+  // Exports
+  exportCard: { 
+    backgroundColor: '#eef2f6', padding: 24, borderRadius: 24, 
+    shadowColor: '#a3b1c6', shadowOffset: { width: 8, height: 8 }, shadowOpacity: 0.6, shadowRadius: 16, elevation: 8
+  },
+  exportTitle: { fontSize: 20, fontWeight: '800', color: '#1e293b', marginBottom: 8 },
+  exportSubtitle: { fontSize: 14, color: '#64748b', marginBottom: 28, lineHeight: 20 },
   
-  exportCard: { backgroundColor: '#ffffff', padding: 24, borderRadius: 16, borderWidth: 1, borderColor: '#e2e8f0' },
-  exportTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a', marginBottom: 8 },
-  exportSubtitle: { fontSize: 14, color: '#64748b', marginBottom: 24 },
-  inputGroup: { marginBottom: 16 },
-  label: { fontSize: 12, fontWeight: '700', color: '#334155', marginBottom: 8, textTransform: 'uppercase' },
-  input: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, backgroundColor: '#f8fafc', color: '#0f172a' },
-  exportBtn: { backgroundColor: '#2563eb', paddingVertical: 16, borderRadius: 12, alignItems: 'center', marginTop: 12 },
-  disabledBtn: { opacity: 0.6 },
-  exportBtnText: { color: '#ffffff', fontWeight: '700', fontSize: 15 },
+  inputGroup: { marginBottom: 20 },
+  label: { fontSize: 12, fontWeight: '800', color: '#64748b', marginBottom: 10, textTransform: 'uppercase', paddingLeft: 4 },
+  input: { 
+    backgroundColor: '#eef2f6', borderRadius: 16, paddingHorizontal: 16, paddingVertical: 16, fontSize: 15, color: '#1e293b',
+    shadowColor: '#ffffff', shadowOffset: { width: -4, height: -4 }, shadowOpacity: 0.8, shadowRadius: 8, elevation: 2 
+  },
+  
+  exportBtn: { 
+    backgroundColor: '#4f46e5', paddingVertical: 18, borderRadius: 16, alignItems: 'center', marginTop: 16,
+    shadowColor: '#4f46e5', shadowOffset: { width: 4, height: 8 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 6
+  },
+  disabledBtn: { opacity: 0.5 },
+  exportBtnText: { color: '#ffffff', fontWeight: '800', fontSize: 16, letterSpacing: 0.5 },
 
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.7)', justifyContent: 'center', padding: 20 },
-  modalContent: { backgroundColor: '#ffffff', borderRadius: 24, padding: 24 },
-  modalTitle: { fontSize: 15, fontWeight: '700', color: '#0f172a', marginBottom: 6 },
-  modalSub: { fontSize: 14, color: '#64748b', marginBottom: 24 },
+  // Modals
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', padding: 20 },
+  modalContent: { 
+    backgroundColor: '#eef2f6', borderRadius: 24, padding: 28,
+    shadowColor: '#a3b1c6', shadowOffset: { width: 8, height: 8 }, shadowOpacity: 0.6, shadowRadius: 16, elevation: 10
+  },
+  modalTitle: { fontSize: 18, fontWeight: '800', color: '#1e293b', marginBottom: 8 },
+  modalSub: { fontSize: 14, color: '#64748b', marginBottom: 24, fontWeight: '500' },
 
-  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 12, borderWidth: 1, borderColor: '#cbd5e1', marginBottom: 16, height: 48 },
-  teamSearchInput: { flex: 1, height: '100%', paddingHorizontal: 12, fontSize: 15, color: '#0f172a' },
-  teamTabsRow: { flexDirection: 'row', marginBottom: 16, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
-  teamTabBtn: { flex: 1, paddingVertical: 12, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  teamTabBtnActive: { borderBottomColor: '#2563eb' },
-  teamTabText: { fontSize: 13, fontWeight: '600', color: '#64748b' },
-  teamTabTextActive: { color: '#2563eb', fontWeight: '700' },
+  // Team Directory
+  searchContainer: { 
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#eef2f6', borderRadius: 16, marginBottom: 20, height: 52,
+    shadowColor: '#ffffff', shadowOffset: { width: -4, height: -4 }, shadowOpacity: 0.8, shadowRadius: 8, elevation: 2
+  },
+  teamSearchInput: { flex: 1, height: '100%', paddingHorizontal: 16, fontSize: 15, color: '#1e293b' },
+  
+  teamTabsRow: { flexDirection: 'row', marginBottom: 20, borderBottomWidth: 1, borderBottomColor: '#dde4ee' },
+  teamTabBtn: { flex: 1, paddingVertical: 14, alignItems: 'center', borderBottomWidth: 3, borderBottomColor: 'transparent' },
+  teamTabBtnActive: { borderBottomColor: '#4f46e5' },
+  teamTabText: { fontSize: 14, fontWeight: '700', color: '#64748b' },
+  teamTabTextActive: { color: '#4f46e5', fontWeight: '800' },
 });
