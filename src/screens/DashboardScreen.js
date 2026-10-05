@@ -471,49 +471,80 @@ await Notifications.scheduleNotificationAsync({
       {/* CLOCK OUT REVIEW & GPS CONFIRMATION MODAL */}
       <Modal visible={showClockOutReviewModal} transparent animationType="slide">
         <View style={styles.modalBg}>
-          <View style={[styles.modalSheet, { height: '85%' }]}>
+          <View style={[styles.modalSheet, { height: '85%', paddingHorizontal: 20 }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Shift Review</Text>
-              <TouchableOpacity onPress={() => setShowClockOutReviewModal(false)}><Ionicons name="close" size={24} color="#475569" /></TouchableOpacity>
+              <Text style={styles.modalTitle}>Shift ended  <Ionicons name="map-outline" size={20} color="#0f172a" /></Text>
+              <TouchableOpacity onPress={() => setShowClockOutReviewModal(false)}>
+                <View style={{ backgroundColor: '#ffffff', borderRadius: 20, padding: 4, borderWidth: 1, borderColor: '#e2e8f0' }}>
+                  <Ionicons name="close" size={20} color="#475569" />
+                </View>
+              </TouchableOpacity>
             </View>
 
             <ScrollView style={{ width: '100%' }} showsVerticalScrollIndicator={false}>
-              <View style={styles.clockOutMapCard}>
-                <WebView
-                  ref={clockOutWebViewRef}
-                  style={{ flex: 1, borderRadius: 16 }}
-                  originWhitelist={['*']}
-                  source={{ html: leafletHtml }}
-                />
-                <TouchableOpacity style={styles.refreshLocBtn} onPress={() => requestGpsLocation(true, true)}>
-                  {gpsLoading ? <ActivityIndicator size="small" color="#2563eb" /> : <Ionicons name="refresh" size={18} color="#2563eb" />}
-                  <Text style={styles.refreshLocText}>Refresh Location</Text>
+              <Text style={styles.shiftReviewDate}>
+                {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: '2-digit' })}
+              </Text>
+
+              <View style={styles.shiftReviewJobPill}>
+                <Text style={styles.shiftReviewJobPillText}>{selectedJob?.job_name || 'System Administrator'}</Text>
+              </View>
+
+              <View style={styles.timeBoxesContainer}>
+                <View style={styles.timeBox}>
+                  <Text style={styles.timeBoxTitle}>{clockInTimestampStr || '08:00 AM'}</Text>
+                  <View style={styles.timeBoxAddressRow}>
+                    <Ionicons name="location-outline" size={12} color="#94a3b8" />
+                    <Text style={styles.timeBoxAddressText} numberOfLines={2}>{location?.coords ? `GPS: ${location.coords.latitude.toFixed(4)}, ${location.coords.longitude.toFixed(4)}` : 'Location saved'}</Text>
+                  </View>
+                </View>
+
+                <Text style={styles.timeArrow}>→</Text>
+
+                <View style={styles.timeBox}>
+                  <Text style={styles.timeBoxTitle}>{clockOutTimestampStr || '05:00 PM'}</Text>
+                  <View style={styles.timeBoxAddressRow}>
+                    <Ionicons name="location-outline" size={12} color="#94a3b8" />
+                    <Text style={styles.timeBoxAddressText} numberOfLines={2}>{location?.coords ? `GPS: ${location.coords.latitude.toFixed(4)}, ${location.coords.longitude.toFixed(4)}` : 'Location saved'}</Text>
+                  </View>
+                </View>
+              </View>
+
+              <Text style={styles.totalHoursText}>Total hours {clockInTimestampStr ? '8:00' : '--:--'}</Text>
+
+              <View style={styles.formsContainer}>
+                <View style={styles.formRow}>
+                  <Ionicons name="create-outline" size={20} color="#3b82f6" />
+                  <View style={styles.formRowContent}>
+                    <Text style={styles.formRowTitle}>Time In</Text>
+                    <Text style={styles.formRowSubtext}>(left blank)</Text>
+                  </View>
+                </View>
+                <View style={styles.formRow}>
+                  <Ionicons name="create-outline" size={20} color="#3b82f6" />
+                  <View style={styles.formRowContent}>
+                    <Text style={styles.formRowTitle}>OB Form</Text>
+                    <Text style={styles.formRowSubtext}>(left blank)</Text>
+                  </View>
+                </View>
+                <View style={styles.formRow}>
+                  <Ionicons name="create-outline" size={20} color="#3b82f6" />
+                  <View style={styles.formRowContent}>
+                    <Text style={styles.formRowTitle}>Note</Text>
+                    <Text style={styles.formRowSubtext}>(left blank)</Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.reviewActionRow}>
+                <TouchableOpacity style={styles.reviewActionBtnOutline} onPress={() => { setRequestedInTime(clockInTimestampStr); setShowEditInModal(true); }}>
+                  <Ionicons name="pencil" size={16} color="#0f172a" />
+                  <Text style={styles.reviewActionTextOutline}>Edit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.reviewActionBtnSolid} onPress={() => submitPunch(selectedJob)} disabled={loading}>
+                  {loading ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.reviewActionTextSolid}>Done</Text>}
                 </TouchableOpacity>
               </View>
-
-              <View style={styles.punchReviewBlock}>
-                <Text style={styles.punchReviewLabel}>CLOCK IN</Text>
-                <View style={styles.punchReviewDataRow}>
-                  <Text style={styles.punchReviewVal}>{new Date().toISOString().split('T')[0]}, {clockInTimestampStr || '08:00 AM'}</Text>
-                  <TouchableOpacity style={styles.editBtnBox} onPress={() => { setRequestedInTime(clockInTimestampStr); setShowEditInModal(true); }}>
-                    <Text style={styles.editBtnBoxText}>EDIT</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <View style={styles.punchReviewBlock}>
-                <Text style={styles.punchReviewLabel}>CLOCK OUT</Text>
-                <View style={styles.punchReviewDataRow}>
-                  <Text style={styles.punchReviewVal}>{new Date().toISOString().split('T')[0]}, {clockOutTimestampStr || '05:00 PM'}</Text>
-                  <TouchableOpacity style={styles.editBtnBox} onPress={() => { setRequestedOutTime(clockOutTimestampStr); setShowEditOutModal(true); }}>
-                    <Text style={styles.editBtnBoxText}>EDIT</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <TouchableOpacity style={styles.confirmClockOutBtn} onPress={() => submitPunch(selectedJob)} disabled={loading}>
-                {loading ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.confirmClockOutText}>CONFIRM SHIFT</Text>}
-              </TouchableOpacity>
             </ScrollView>
           </View>
         </View>
@@ -647,9 +678,9 @@ const styles = StyleSheet.create({
   logoutIconBtn: { padding: 8, borderRadius: 12, backgroundColor: '#f1f5f9' },
   mapFullscreen: { flex: 1, width: '100%' },
   recenterFab: { position: 'absolute', right: 24, top: -24, width: 48, height: 48, borderRadius: 24, backgroundColor: '#ffffff', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 6, elevation: 10, zIndex: 12 },
-  bottomDrawer: { position: 'absolute', bottom: 0, width: '100%', backgroundColor: '#ffffff', borderTopWidth: 1, borderColor: '#e2e8f0', paddingBottom: 34, paddingTop: 55, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 12, elevation: 12 },
-  clockBtnWrapper: { position: 'absolute', top: -65, alignSelf: 'center', backgroundColor: '#ffffff', borderRadius: 75, padding: 8, shadowColor: '#2563eb', shadowOpacity: 0.2, shadowRadius: 12, elevation: 10 },
-  bigClockBtn: { width: 130, height: 130, borderRadius: 65, backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#ffffff' },
+  bottomDrawer: { position: 'absolute', bottom: 0, width: '100%', backgroundColor: '#f1f5f9', borderTopLeftRadius: 32, borderTopRightRadius: 32, borderTopWidth: 2, borderTopColor: '#ffffff', borderLeftWidth: 2, borderLeftColor: '#ffffff', paddingBottom: 34, paddingTop: 65, alignItems: 'center', shadowColor: '#94a3b8', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 16 },
+  clockBtnWrapper: { position: 'absolute', top: -75, alignSelf: 'center', backgroundColor: '#f1f5f9', borderRadius: 80, padding: 8, borderTopWidth: 2, borderLeftWidth: 2, borderTopColor: '#ffffff', borderLeftColor: '#ffffff', shadowColor: '#94a3b8', shadowOffset: { width: 8, height: 12 }, shadowOpacity: 0.6, shadowRadius: 16, elevation: 10 },
+  bigClockBtn: { width: 130, height: 130, borderRadius: 65, backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center', borderTopWidth: 2, borderLeftWidth: 2, borderTopColor: 'rgba(255,255,255,0.4)', borderLeftColor: 'rgba(255,255,255,0.4)' },
   bigClockText: { color: '#ffffff', fontWeight: '800', fontSize: 14, marginTop: 4, letterSpacing: 0.5 },
   quickStatsRow: { flexDirection: 'row', width: '90%', justifyContent: 'space-around', marginTop: 16, backgroundColor: '#f8fafc', padding: 14, borderRadius: 18, alignItems: 'center' },
   statBox: { alignItems: 'center', flex: 1 },
@@ -658,8 +689,8 @@ const styles = StyleSheet.create({
   statVal: { fontSize: 12, fontWeight: '700', color: '#0f172a', marginTop: 2 },
 
   // Shift Active Layout
-  activeShiftContainer: { flex: 1, backgroundColor: '#ffffff', paddingTop: 24 },
-  activeCard: { backgroundColor: '#0f172a', marginHorizontal: 16, borderRadius: 20, paddingVertical: 28, paddingHorizontal: 24, alignItems: 'center' },
+  activeShiftContainer: { flex: 1, backgroundColor: '#f1f5f9', paddingTop: 24 },
+  activeCard: { backgroundColor: '#0f172a', marginHorizontal: 16, borderRadius: 32, paddingVertical: 28, paddingHorizontal: 24, alignItems: 'center', borderTopWidth: 2, borderLeftWidth: 2, borderTopColor: 'rgba(255,255,255,0.15)', borderLeftColor: 'rgba(255,255,255,0.15)', shadowColor: '#94a3b8', shadowOffset: { width: 8, height: 12 }, shadowOpacity: 0.6, shadowRadius: 16, elevation: 10 },
   jobPill: { backgroundColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16, marginBottom: 16 },
   jobPillText: { color: '#60a5fa', fontSize: 12, fontWeight: '500' },
   activeTimer: { fontSize: 46, fontWeight: '700', color: '#ffffff', marginBottom: 16, letterSpacing: 1 },
@@ -669,38 +700,51 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 16, fontWeight: '600', color: '#0f172a' },
   addNoteBtn: { paddingVertical: 8, marginTop: 4 },
   addNoteText: { fontSize: 15, color: '#334155', fontWeight: '400' },
-  contentDivider: { height: 1, backgroundColor: '#e2e8f0', marginVertical: 20 },
+  contentDivider: { height: 1, backgroundColor: '#cbd5e1', marginVertical: 20 },
   logPlaceholderText: { fontSize: 14, color: '#64748b', fontStyle: 'italic', marginTop: 4 },
-  bottomActions: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 24, gap: 12, backgroundColor: '#ffffff', borderTopWidth: 1, borderColor: '#f1f5f9' },
-  switchJobBtn: { flex: 1, backgroundColor: '#f8fafc', height: 50, borderRadius: 12, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', borderWidth: 1, borderColor: '#e2e8f0' },
-  switchJobText: { color: '#3b82f6', fontWeight: '600', fontSize: 14 },
-  endShiftBtn: { flex: 1.5, backgroundColor: '#ef4444', height: 50, borderRadius: 12, justifyContent: 'center', alignItems: 'center', flexDirection: 'row' },
-  endShiftText: { color: '#ffffff', fontWeight: '600', fontSize: 14 },
+  bottomActions: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 24, gap: 12, backgroundColor: '#f1f5f9' },
+  switchJobBtn: { flex: 1, backgroundColor: '#f1f5f9', height: 54, borderRadius: 24, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', borderTopWidth: 2, borderLeftWidth: 2, borderTopColor: '#ffffff', borderLeftColor: '#ffffff', shadowColor: '#94a3b8', shadowOffset: { width: 4, height: 6 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 4 },
+  switchJobText: { color: '#334155', fontWeight: '800', fontSize: 14 },
+  endShiftBtn: { flex: 1.5, backgroundColor: '#ef4444', height: 54, borderRadius: 24, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', borderTopWidth: 2, borderLeftWidth: 2, borderTopColor: 'rgba(255,255,255,0.3)', borderLeftColor: 'rgba(255,255,255,0.3)', shadowColor: '#94a3b8', shadowOffset: { width: 4, height: 6 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 4 },
+  endShiftText: { color: '#ffffff', fontWeight: '800', fontSize: 14 },
 
   // Fixed Bottom Navigation Tab Bar (Removed)
 
   // Modal Sheet & Review Modal
   modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  modalSheet: { backgroundColor: '#ffffff', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, height: '55%', alignItems: 'center' },
+  modalSheet: { backgroundColor: '#f1f5f9', borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, height: '55%', alignItems: 'center', borderTopWidth: 2, borderLeftWidth: 2, borderTopColor: '#ffffff', borderLeftColor: '#ffffff', shadowColor: '#94a3b8', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 16 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 16, alignItems: 'center' },
   modalTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a' },
-  categoryHeader: { fontSize: 12, fontWeight: '700', color: '#64748b', textTransform: 'uppercase', marginBottom: 8, letterSpacing: 0.5 },
-  jobRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderColor: '#f1f5f9', width: '100%', justifyContent: 'space-between' },
+  categoryHeader: { fontSize: 12, fontWeight: '700', color: '#64748b', textTransform: 'uppercase', marginBottom: 12, letterSpacing: 0.5, width: '100%' },
+  jobRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 16, paddingHorizontal: 16, backgroundColor: '#f1f5f9', borderRadius: 20, marginBottom: 12, width: '100%', justifyContent: 'space-between', borderTopWidth: 2, borderLeftWidth: 2, borderTopColor: '#ffffff', borderLeftColor: '#ffffff', shadowColor: '#94a3b8', shadowOffset: { width: 4, height: 6 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 4 },
   jobDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#2563eb' },
   jobText: { fontSize: 14, color: '#334155', fontWeight: '600', flex: 1 },
 
-  clockOutMapCard: { height: 200, width: '100%', borderRadius: 16, overflow: 'hidden', marginBottom: 16, borderWidth: 1, borderColor: '#e2e8f0' },
-  refreshLocBtn: { position: 'absolute', bottom: 12, right: 12, backgroundColor: '#ffffff', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
-  refreshLocText: { color: '#2563eb', fontWeight: '700', fontSize: 11 },
-  punchReviewBlock: { borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, padding: 16, marginBottom: 16 },
-  punchReviewLabel: { fontSize: 12, fontWeight: '700', color: '#64748b', letterSpacing: 1, marginBottom: 8 },
-  punchReviewDataRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  punchReviewVal: { fontSize: 15, fontWeight: '600', color: '#0f172a' },
-  editBtnBox: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#f8fafc', borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0' },
-  editBtnBoxText: { color: '#3b82f6', fontWeight: '700', fontSize: 12 },
+  // Shift Review Rework Styles
+  shiftReviewDate: { fontSize: 16, fontWeight: '600', color: '#0f172a', marginBottom: 8, alignSelf: 'flex-start' },
+  shiftReviewJobPill: { backgroundColor: '#3b82f6', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 4, alignSelf: 'flex-start', marginBottom: 20 },
+  shiftReviewJobPillText: { color: '#ffffff', fontSize: 12, fontWeight: '500' },
+  timeBoxesContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 },
+  timeBox: { flex: 1, backgroundColor: '#f1f5f9', borderRadius: 20, padding: 16, borderTopWidth: 2, borderLeftWidth: 2, borderTopColor: '#ffffff', borderLeftColor: '#ffffff', shadowColor: '#94a3b8', shadowOffset: { width: 4, height: 6 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 4 },
+  timeBoxTitle: { fontSize: 16, fontWeight: '700', color: '#0f172a', marginBottom: 8 },
+  timeBoxAddressRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 4 },
+  timeBoxAddressText: { fontSize: 11, color: '#64748b', flex: 1 },
+  timeArrow: { fontSize: 18, color: '#94a3b8', paddingHorizontal: 8 },
+  totalHoursText: { fontSize: 16, fontWeight: '700', color: '#0f172a', alignSelf: 'flex-start', marginBottom: 16 },
+  formsContainer: { width: '100%', marginBottom: 24 },
+  formRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
+  formRowContent: { marginLeft: 12, flex: 1 },
+  formRowTitle: { fontSize: 14, color: '#3b82f6', fontWeight: '500' },
+  formRowSubtext: { fontSize: 12, color: '#94a3b8' },
+  reviewActionRow: { flexDirection: 'row', gap: 12, width: '100%', marginTop: 8 },
+  reviewActionBtnOutline: { flex: 1, backgroundColor: '#ffffff', paddingVertical: 14, borderRadius: 24, alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0', flexDirection: 'row', justifyContent: 'center', gap: 6 },
+  reviewActionBtnSolid: { flex: 1, backgroundColor: '#3b82f6', paddingVertical: 14, borderRadius: 24, alignItems: 'center', shadowColor: '#94a3b8', shadowOffset: { width: 4, height: 6 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 4 },
+  reviewActionTextOutline: { color: '#0f172a', fontWeight: '700', fontSize: 15 },
+  reviewActionTextSolid: { color: '#ffffff', fontWeight: '700', fontSize: 15 },
+
+  // Original kept for fallback or edit modals
   editModalLabel: { fontSize: 14, fontWeight: '600', color: '#334155', alignSelf: 'flex-start', marginBottom: 6, marginTop: 4 },
-  confirmClockOutBtn: { backgroundColor: '#ef4444', width: '100%', paddingVertical: 14, borderRadius: 16, alignItems: 'center', marginTop: 16 },
-  confirmClockOutText: { color: '#ffffff', fontWeight: '800', fontSize: 15 },
+  modalInput: { width: '100%', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, padding: 12, marginBottom: 12, fontSize: 14 },
   modalInput: { width: '100%', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, padding: 12, marginBottom: 12, fontSize: 14 },
   editedBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fef3c7', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   editedBadgeText: { color: '#d97706', fontSize: 11, fontWeight: '700' },

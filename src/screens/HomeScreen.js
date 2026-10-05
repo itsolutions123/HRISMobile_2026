@@ -156,18 +156,18 @@ const styles = StyleSheet.create({
   avatarText: { color: '#ffffff', fontSize: 22, fontWeight: '800' },
   greetingText: { fontSize: 18, color: '#0f172a', fontWeight: '500' },
   
-  heroCard: { backgroundColor: '#ffffff', borderRadius: 16, padding: 32, alignItems: 'center', marginBottom: 24, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 4 },
+  heroCard: { backgroundColor: '#f1f5f9', borderRadius: 32, padding: 32, alignItems: 'center', marginBottom: 24, borderTopWidth: 2, borderLeftWidth: 2, borderTopColor: '#ffffff', borderLeftColor: '#ffffff', shadowColor: '#94a3b8', shadowOffset: { width: 8, height: 12 }, shadowOpacity: 0.6, shadowRadius: 16, elevation: 10 },
   clockTime: { fontSize: 44, fontWeight: '800', color: '#0f172a', marginBottom: 8, letterSpacing: 1 },
   clockDetails: { fontSize: 11, color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, textAlign: 'center' },
   
-  actionRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 },
-  actionBtn: { flex: 1, backgroundColor: '#ffffff', borderRadius: 16, paddingVertical: 18, alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0', marginHorizontal: 4, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 4, elevation: 2 },
+  actionRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24, paddingHorizontal: 4 },
+  actionBtn: { flex: 1, backgroundColor: '#f1f5f9', borderRadius: 24, paddingVertical: 18, alignItems: 'center', marginHorizontal: 6, borderTopWidth: 2, borderLeftWidth: 2, borderTopColor: '#ffffff', borderLeftColor: '#ffffff', shadowColor: '#94a3b8', shadowOffset: { width: 4, height: 6 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 4 },
   actionText: { fontSize: 10, fontWeight: '800', color: '#334155', marginTop: 10, textAlign: 'center' },
   
   divider: { height: 1, backgroundColor: '#cbd5e1', marginBottom: 24 },
   
-  feedHeader: { fontSize: 24, fontWeight: '800', color: '#0f172a', marginBottom: 16 },
-  feedCard: { backgroundColor: '#ffffff', borderRadius: 16, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 4, elevation: 2 },
+  feedHeader: { fontSize: 24, fontWeight: '800', color: '#0f172a', marginBottom: 16, paddingHorizontal: 4 },
+  feedCard: { backgroundColor: '#f1f5f9', borderRadius: 24, padding: 20, marginBottom: 20, marginHorizontal: 4, borderTopWidth: 2, borderLeftWidth: 2, borderTopColor: '#ffffff', borderLeftColor: '#ffffff', shadowColor: '#94a3b8', shadowOffset: { width: 6, height: 8 }, shadowOpacity: 0.5, shadowRadius: 12, elevation: 6 },
   feedDate: { fontSize: 12, fontWeight: '600', color: '#64748b', textAlign: 'center', marginBottom: 10 },
   feedUser: { fontSize: 16, fontWeight: '800', color: '#0f172a', textAlign: 'center', marginBottom: 4 },
   feedEvent: { fontSize: 14, fontWeight: '500', color: '#334155', textAlign: 'center', marginBottom: 20 },
