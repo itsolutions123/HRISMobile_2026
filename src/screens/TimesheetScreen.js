@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Linking, RefreshControl, Platform, Modal, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Linking, RefreshControl, Platform, Modal, TextInput, Alert } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../context/AuthContext';
@@ -8,15 +8,12 @@ export default function TimesheetScreen() {
   const { user, token, API_BASE_URL } = useContext(AuthContext);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [dailyRecords, setDailyRecords] = useState([]);
   const [allPunches, setAllPunches] = useState([]);
   const [markedDates, setMarkedDates] = useState({});
 
-  // Shift Edit Modal States
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editPunchType, setEditPunchType] = useState('CLOCK_IN');
-  const [editTimeString, setEditTimeString] = useState('');
-  const [editReason, setEditReason] = useState('');
+  const [editTimeIn, setEditTimeIn] = useState('');
+  const [editTimeOut, setEditTimeOut] = useState('');
   const [submittingRevision, setSubmittingRevision] = useState(false);
 
   const getLocalDateString = (d = new Date()) => {
@@ -29,7 +26,7 @@ export default function TimesheetScreen() {
   const [selectedDate, setSelectedDate] = useState(getLocalDateString());
 
   const formatCleanTime = (timeStr) => {
-    if (!timeStr || timeStr === 'N/A' || timeStr === 'Missing' || timeStr === 'Active') return timeStr || 'N/A';
+    if (!timeStr || timeStr === 'N/A' || timeStr === 'Missing') return 'N/A';
     try {
       if (timeStr.includes('T') || timeStr.includes('-')) {
         const d = new Date(timeStr);
@@ -60,28 +57,17 @@ export default function TimesheetScreen() {
       if (summaryRes.ok) {
         const data = await summaryRes.json();
         const records = data.daily_details || [];
-        setDailyRecords(records);
-
         let marks = {};
         records.forEach((rec) => {
           if (rec.clock_in || rec.clock_out) {
-            marks[rec.date] = {
-              marked: true,
-              dotColor: '#0284c7',
-            };
+            marks[rec.date] = { marked: true, dotColor: '#0284c7' };
           }
         });
-
-        marks[selectedDate] = {
-          ...(marks[selectedDate] || {}),
-          selected: true,
-          selectedColor: '#0284c7',
-        };
-
+        marks[selectedDate] = { ...(marks[selectedDate] || {}), selected: true, selectedColor: '#0284c7' };
         setMarkedDates(marks);
       }
 
-      const logsRes = await fetch(`${API_BASE_URL}/api/punch/my-logs`, { headers: { 'Authorization': 'Bearer ' + token } });
+      const logsRes = await fetch(`${API_BASE_URL}/api/punch/my-logs`, { headers });
       if (logsRes.ok) {
         const logs = await logsRes.json();
         const userPunches = logs.filter(p => p.employee_id === user?.employee_id);
@@ -102,7 +88,6 @@ export default function TimesheetScreen() {
   const handleDateSelect = (day) => {
     const dateStr = day.dateString;
     setSelectedDate(dateStr);
-
     let updatedMarks = { ...markedDates };
     Object.keys(updatedMarks).forEach((key) => {
       if (updatedMarks[key].selected) {
@@ -110,65 +95,8 @@ export default function TimesheetScreen() {
         delete updatedMarks[key].selectedColor;
       }
     });
-
-    updatedMarks[dateStr] = {
-      ...(updatedMarks[dateStr] || {}),
-      selected: true,
-      selectedColor: '#0284c7',
-    };
-
+    updatedMarks[dateStr] = { ...(updatedMarks[dateStr] || {}), selected: true, selectedColor: '#0284c7' };
     setMarkedDates(updatedMarks);
-  };
-
-  const openGoogleMaps = (lat, lng) => {
-    if (!lat || !lng) return;
-    const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
-    Linking.openURL(url);
-  };
-
-  const handleOpenEditShiftModal = () => {
-    const now = new Date();
-    const formatted = `${selectedDate} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:00`;
-    setEditTimeString(formatted);
-    setEditReason('');
-    setShowEditModal(true);
-  };
-
-  const handleSubmitShiftRevision = async () => {
-    if (!editTimeString.trim() || !editReason.trim()) {
-      Alert.alert('Required Fields', 'Please enter the requested timestamp and reason.');
-      return;
-    }
-
-    setSubmittingRevision(true);
-    try {
-      const headers = {
-        'Content-Type': 'application/json',
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-      };
-      const res = await fetch(`${API_BASE_URL}/api/manager/revisions/request`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          requested_punch_type: editPunchType,
-          requested_timestamp: editTimeString,
-          reason: editReason
-        })
-      });
-
-      if (res.ok) {
-        Alert.alert('Revision Submitted', 'Your shift edit request has been sent to your manager for approval.');
-        setShowEditModal(false);
-        fetchTimesheetData();
-      } else {
-        const err = await res.json();
-        Alert.alert('Submission Failed', err.detail || 'Could not submit shift edit request.');
-      }
-    } catch (e) {
-      Alert.alert('Error', 'Unable to reach backend server.');
-    } finally {
-      setSubmittingRevision(false);
-    }
   };
 
   const normalizeDate = (ts) => {
@@ -183,208 +111,137 @@ export default function TimesheetScreen() {
     return ts;
   };
 
-  const selectedDayPunches = allPunches.filter(p => {
-    return normalizeDate(p.timestamp) === selectedDate;
-  }).sort((a,b) => a.id - b.id);
+  const selectedDayPunches = allPunches.filter(p => normalizeDate(p.timestamp) === selectedDate).sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
+  const inPunch = selectedDayPunches.find(p => p.punch_type === 'CLOCK_IN');
+  const outPunch = [...selectedDayPunches].reverse().find(p => p.punch_type === 'CLOCK_OUT');
 
-  // Compute exact shift range for the selected day
-  const inPunches = selectedDayPunches.filter(p => p.punch_type === 'CLOCK_IN');
-  const outPunches = selectedDayPunches.filter(p => p.punch_type === 'CLOCK_OUT');
+  const handleOpenEditShiftModal = () => {
+    setEditTimeIn(inPunch ? inPunch.timestamp : `${selectedDate} 08:00:00`);
+    setEditTimeOut(outPunch ? outPunch.timestamp : `${selectedDate} 17:00:00`);
+    setShowEditModal(true);
+  };
 
-  const earliestIn = inPunches.length > 0 ? inPunches[0].timestamp : null;
-  const latestOut = outPunches.length > 0 ? outPunches[outPunches.length - 1].timestamp : null;
+  const handleSubmitShiftRevision = async () => {
+    if (!editTimeIn.trim() || !editTimeOut.trim()) {
+      Alert.alert('Required Fields', 'Please ensure both Clock In and Clock Out times are provided.');
+      return;
+    }
+    setSubmittingRevision(true);
+    try {
+      const headers = { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) };
+      
+      const reqIn = fetch(`${API_BASE_URL}/api/manager/revisions/request`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ requested_punch_type: 'CLOCK_IN', requested_timestamp: editTimeIn, reason: 'Bulk shift edit' })
+      });
 
-  const displayClockIn = earliestIn ? formatCleanTime(earliestIn) : 'Missing';
-  const displayClockOut = latestOut ? formatCleanTime(latestOut) : (earliestIn ? 'Active' : 'Missing');
+      const reqOut = fetch(`${API_BASE_URL}/api/manager/revisions/request`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ requested_punch_type: 'CLOCK_OUT', requested_timestamp: editTimeOut, reason: 'Bulk shift edit' })
+      });
+
+      const [resIn, resOut] = await Promise.all([reqIn, reqOut]);
+
+      if (resIn.ok && resOut.ok) {
+        Alert.alert('Revision Submitted', 'Your shift edit request has been sent to your manager.');
+        setShowEditModal(false);
+        fetchTimesheetData();
+      } else {
+        Alert.alert('Submission Failed', 'Could not submit one or more shift edit requests.');
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Unable to reach backend server.');
+    } finally {
+      setSubmittingRevision(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
-      {/* CALENDAR WIDGET */}
       <View style={styles.calendarCardContainer}>
         <Calendar
           current={selectedDate}
           onDayPress={handleDateSelect}
           markedDates={markedDates}
           theme={{
-            calendarBackground: '#ffffff',
-            textSectionTitleColor: '#94a3b8',
-            selectedDayBackgroundColor: '#0284c7',
-            selectedDayTextColor: '#ffffff',
-            todayTextColor: '#0284c7',
-            dayTextColor: '#1e293b',
-            textDisabledColor: '#cbd5e1',
-            dotColor: '#0284c7',
-            selectedDotColor: '#ffffff',
-            arrowColor: '#0284c7',
-            monthTextColor: '#0f172a',
-            indicatorColor: '#0284c7',
-            textDayFontWeight: '600',
-            textMonthFontWeight: '700',
-            textDayHeaderFontWeight: '600',
-            textDayFontSize: 14,
-            textMonthFontSize: 16,
-            textDayHeaderFontSize: 12,
+            calendarBackground: '#ffffff', textSectionTitleColor: '#94a3b8',
+            selectedDayBackgroundColor: '#0284c7', selectedDayTextColor: '#ffffff',
+            todayTextColor: '#0284c7', dayTextColor: '#1e293b',
+            textDisabledColor: '#cbd5e1', dotColor: '#0284c7',
+            selectedDotColor: '#ffffff', arrowColor: '#0284c7',
+            monthTextColor: '#0f172a', indicatorColor: '#0284c7',
+            textDayFontWeight: '600', textMonthFontWeight: '700',
+            textDayHeaderFontWeight: '600', textDayFontSize: 14,
+            textMonthFontSize: 16, textDayHeaderFontSize: 12,
           }}
         />
       </View>
 
-      {/* SUMMARY HEADER BAR */}
-      <View style={styles.summaryBar}>
-        <View style={styles.summaryLeft}>
-          <Ionicons name="calendar-outline" size={18} color="#0284c7" />
-          <Text style={styles.summaryTitle}>
-            DTR Details for {selectedDate}
-          </Text>
-        </View>
-        <View style={styles.durationPill}>
-          <Ionicons name="time-outline" size={13} color="#ffffff" style={{ marginRight: 4 }} />
-          <Text style={styles.durationText}>
-            {earliestIn && latestOut ? '8.0 hrs' : (earliestIn ? 'In Progress' : '0 hrs')}
-          </Text>
-        </View>
-      </View>
+      <ScrollView 
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchTimesheetData(); }} tintColor="#0284c7" />}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.summaryTitle}>DTR Logs for {selectedDate}</Text>
 
-      {/* CLEAN DAILY DTR CARD */}
-      {selectedDayPunches.length > 0 ? (
-        <View style={styles.dtrSummaryCard}>
-          <View style={styles.dtrSummaryRow}>
-            <Text style={styles.dtrLabel}>Shift In / Out:</Text>
-            <Text style={styles.dtrValue}>
-              {displayClockIn} - {displayClockOut}
-            </Text>
-          </View>
-          <TouchableOpacity style={styles.editShiftBtn} onPress={handleOpenEditShiftModal}>
-            <Ionicons name="create-outline" size={15} color="#0284c7" />
-            <Text style={styles.editShiftBtnText}>Edit Shift (Request Revision)</Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
-
-      {/* PUNCH FEED LIST */}
-      {loading ? (
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#0284c7" />
-        </View>
-      ) : selectedDayPunches.length > 0 ? (
-        <FlatList
-          data={selectedDayPunches}
-          keyExtractor={(item) => (item.id ? item.id.toString() : Math.random().toString())}
-          contentContainerStyle={{ paddingBottom: 20 }}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchTimesheetData(); }} tintColor="#0284c7" />
-          }
-          renderItem={({ item }) => {
-            const isClockIn = item.punch_type === 'CLOCK_IN';
-            const actionText = isClockIn ? 'SHIFT STARTED' : 'SHIFT ENDED';
-            
-            const nDate = normalizeDate(item.timestamp) || selectedDate;
-            const dateParts = nDate.split('-');
-            const formattedDate = dateParts.length === 3 ? `${dateParts[1]}-${dateParts[2]}-${dateParts[0].slice(-2)}` : selectedDate;
-            
-            let timeFormatted = 'Missing';
-            try {
-              if (item.timestamp) {
-                const dateObj = new Date(item.timestamp);
-                if (!isNaN(dateObj)) {
-                  timeFormatted = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                } else {
-                  timeFormatted = item.timestamp.includes(',') ? item.timestamp.split(', ')[1] : item.timestamp.split('T')[1].split('.')[0];
-                }
-              }
-            } catch(e) {
-               timeFormatted = formatCleanTime(item.timestamp) || 'Missing';
-            }
-            
-            const displayText = `${actionText} | ${formattedDate} | ${timeFormatted} |`;
-
-            return (
-              <View style={styles.punchCard}>
-                <View style={styles.cardTopRow}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: isClockIn ? '#166534' : '#991b1b', letterSpacing: 0.5 }}>
-                    {displayText}
-                  </Text>
-                </View>
-
-                <View style={styles.locationRow}>
-                  <Ionicons name="location-sharp" size={15} color="#64748b" style={{ marginRight: 4 }} />
-                  <Text style={styles.addressText} numberOfLines={1}>{item.address || 'Duty Shift'}</Text>
-                </View>
-
-                {item.latitude && item.longitude ? (
-                  <TouchableOpacity
-                    style={styles.mapActionChip}
-                    activeOpacity={0.7}
-                    onPress={() => openGoogleMaps(item.latitude, item.longitude)}
-                  >
-                    <Ionicons name="map-outline" size={14} color="#0284c7" />
-                    <Text style={styles.mapActionText}>View Location Pin</Text>
-                  </TouchableOpacity>
-                ) : null}
+        {loading ? (
+          <ActivityIndicator size="large" color="#0284c7" style={{ marginTop: 20 }} />
+        ) : (inPunch || outPunch) ? (
+          <View style={styles.shiftCard}>
+            {/* CLOCK IN SECTION */}
+            <View style={styles.punchRow}>
+              <View style={styles.punchInfo}>
+                <Text style={styles.punchType}>CLOCK IN</Text>
+                <Text style={styles.punchDetail}>JOB: {user?.job_title || 'N/A'} - {user?.department || 'N/A'}</Text>
+                <Text style={styles.punchDetail} numberOfLines={2}>LOCATION TRACKER: {inPunch ? (inPunch.address && inPunch.address !== 'N/A' ? inPunch.address : `${inPunch.latitude}, ${inPunch.longitude}`) : 'Missing'}</Text>
               </View>
-            );
-          }}
-        />
-      ) : (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="document-text-outline" size={48} color="#cbd5e1" />
-          <Text style={styles.emptyText}>No DTR attendance records found for {selectedDate}.</Text>
-        </View>
-      )}
+              <Text style={styles.punchTime}>{inPunch ? formatCleanTime(inPunch.timestamp) : '--:--'}</Text>
+            </View>
+
+            <View style={styles.divider} />
+
+            {/* CLOCK OUT SECTION */}
+            <View style={styles.punchRow}>
+              <View style={styles.punchInfo}>
+                <Text style={styles.punchType}>CLOCK OUT</Text>
+                <Text style={styles.punchDetail} numberOfLines={2}>LOCATION TRACKER: {outPunch ? (outPunch.address && outPunch.address !== 'N/A' ? outPunch.address : `${outPunch.latitude}, ${outPunch.longitude}`) : 'Missing'}</Text>
+              </View>
+              <Text style={styles.punchTime}>{outPunch ? formatCleanTime(outPunch.timestamp) : '--:--'}</Text>
+            </View>
+
+            {/* EDIT SHIFT BUTTON */}
+            <TouchableOpacity style={styles.editShiftBtn} onPress={handleOpenEditShiftModal}>
+              <Text style={styles.editShiftBtnText}>EDIT SHIFT</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="document-text-outline" size={48} color="#cbd5e1" />
+            <Text style={styles.emptyText}>No DTR attendance records found.</Text>
+          </View>
+        )}
+      </ScrollView>
 
       {/* EDIT SHIFT MODAL */}
       <Modal visible={showEditModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Request Shift Edit</Text>
-              <TouchableOpacity onPress={() => setShowEditModal(false)}>
+              <Text style={styles.modalTitle}>SHIFT EDIT</Text>
+              <TouchableOpacity onPress={() => setShowEditModal(false)} style={styles.closeBtn}>
                 <Ionicons name="close" size={24} color="#64748b" />
               </TouchableOpacity>
             </View>
 
-            <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748b', marginBottom: 6 }}>PUNCH TYPE</Text>
-            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
-              <TouchableOpacity
-                style={{ flex: 1, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: editPunchType === 'CLOCK_IN' ? '#0284c7' : '#cbd5e1', backgroundColor: editPunchType === 'CLOCK_IN' ? '#eff6ff' : '#ffffff', alignItems: 'center' }}
-                onPress={() => setEditPunchType('CLOCK_IN')}
-              >
-                <Text style={{ fontSize: 13, fontWeight: '700', color: editPunchType === 'CLOCK_IN' ? '#0284c7' : '#475569' }}>CLOCK IN</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={{ flex: 1, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: editPunchType === 'CLOCK_OUT' ? '#0284c7' : '#cbd5e1', backgroundColor: editPunchType === 'CLOCK_OUT' ? '#eff6ff' : '#ffffff', alignItems: 'center' }}
-                onPress={() => setEditPunchType('CLOCK_OUT')}
-              >
-                <Text style={{ fontSize: 13, fontWeight: '700', color: editPunchType === 'CLOCK_OUT' ? '#0284c7' : '#475569' }}>CLOCK OUT</Text>
-              </TouchableOpacity>
-            </View>
+            <Text style={styles.inputLabel}>CLOCK IN (YYYY-MM-DD HH:MM:SS)</Text>
+            <TextInput style={styles.inputField} value={editTimeIn} onChangeText={setEditTimeIn} />
 
-            <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748b', marginBottom: 6 }}>REQUESTED TIMESTAMP (YYYY-MM-DD HH:MM:SS)</Text>
-            <TextInput
-              style={{ borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, padding: 12, marginBottom: 14, fontSize: 14 }}
-              value={editTimeString}
-              onChangeText={setEditTimeString}
-            />
+            <Text style={styles.inputLabel}>CLOCK OUT (YYYY-MM-DD HH:MM:SS)</Text>
+            <TextInput style={styles.inputField} value={editTimeOut} onChangeText={setEditTimeOut} />
 
-            <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748b', marginBottom: 6 }}>REASON FOR EDIT</Text>
-            <TextInput
-              style={{ borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, padding: 12, marginBottom: 18, fontSize: 14, height: 75 }}
-              placeholder="Explain why shift edit is required..."
-              multiline
-              value={editReason}
-              onChangeText={setEditReason}
-            />
-
-            <TouchableOpacity
-              style={{ backgroundColor: '#0284c7', paddingVertical: 14, borderRadius: 12, alignItems: 'center' }}
-              onPress={handleSubmitShiftRevision}
-              disabled={submittingRevision}
-            >
-              {submittingRevision ? (
-                <ActivityIndicator color="#ffffff" />
-              ) : (
-                <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 15 }}>Send to Manager for Approval</Text>
-              )}
+            <TouchableOpacity style={styles.saveBtn} onPress={handleSubmitShiftRevision} disabled={submittingRevision}>
+              {submittingRevision ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.saveBtnText}>SAVE SHIFT</Text>}
             </TouchableOpacity>
           </View>
         </View>
@@ -395,110 +252,30 @@ export default function TimesheetScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16, backgroundColor: '#f8fafc' },
-  calendarCardContainer: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8 },
-      android: { elevation: 3 },
-    }),
-  },
-  summaryBar: {
-    flexDirection: 'row',
-    justify: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-    paddingHorizontal: 4,
-  },
-  summaryLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  summaryTitle: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
-  durationPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0284c7',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-  },
-  durationText: { color: '#ffffff', fontWeight: '700', fontSize: 12 },
-  dtrSummaryCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  dtrSummaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  dtrLabel: { fontSize: 13, color: '#64748b', fontWeight: '600' },
-  dtrValue: { fontSize: 13, color: '#0f172a', fontWeight: '700' },
-  editShiftBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#eff6ff',
-    borderColor: '#bfdbfe',
-    borderWidth: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    marginTop: 8,
-  },
-  editShiftBtnText: { color: '#0284c7', fontWeight: '800', fontSize: 13 },
-  punchCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4 },
-      android: { elevation: 2 },
-    }),
-  },
-  cardTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  badgeIn: { backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0' },
-  badgeOut: { backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecaca' },
-  statusBadgeText: { fontWeight: '700', fontSize: 11, letterSpacing: 0.3 },
-  textIn: { color: '#166534' },
-  textOut: { color: '#991b1b' },
-  timestampText: { fontSize: 13, fontWeight: '700', color: '#334155' },
-  locationRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  addressText: { fontSize: 13, color: '#64748b', flex: 1 },
-  mapActionChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#eff6ff',
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#dbeafe',
-  },
-  mapActionText: { color: '#0284c7', fontWeight: '600', fontSize: 12 },
-  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 30, gap: 8 },
+  calendarCardContainer: { backgroundColor: '#ffffff', borderRadius: 16, overflow: 'hidden', marginBottom: 16, borderWidth: 1, borderColor: '#f1f5f9', ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8 }, android: { elevation: 3 } }) },
+  summaryTitle: { fontSize: 14, fontWeight: '700', color: '#64748b', marginBottom: 12, marginLeft: 4 },
+  
+  shiftCard: { backgroundColor: '#ffffff', borderRadius: 24, padding: 20, marginBottom: 24, marginHorizontal: 4, borderWidth: 1, borderColor: '#f8fafc', ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.08, shadowRadius: 12 }, android: { elevation: 6 } }) },
+  punchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  punchInfo: { flex: 1, paddingRight: 12 },
+  punchType: { fontSize: 16, fontWeight: '800', color: '#0f172a', marginBottom: 6 },
+  punchDetail: { fontSize: 11, fontWeight: '700', color: '#64748b', marginBottom: 2, textTransform: 'uppercase', lineHeight: 16 },
+  punchTime: { fontSize: 16, fontWeight: '800', color: '#0f172a' },
+  divider: { height: 1, backgroundColor: '#f1f5f9', marginVertical: 16 },
+  
+  editShiftBtn: { marginTop: 20, paddingVertical: 14, borderRadius: 16, backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fee2e2', alignItems: 'center', ...Platform.select({ ios: { shadowColor: '#ef4444', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8 }, android: { elevation: 3 } }) },
+  editShiftBtnText: { color: '#ef4444', fontWeight: '800', fontSize: 14, letterSpacing: 0.5 },
+  
+  emptyContainer: { alignItems: 'center', marginTop: 40, gap: 8 },
   emptyText: { color: '#94a3b8', fontSize: 14, fontWeight: '500' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.7)', justifyContent: 'center', padding: 20 },
-  modalContent: { backgroundColor: '#ffffff', borderRadius: 24, padding: 22 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalContent: { backgroundColor: '#ffffff', borderRadius: 24, padding: 24, width: '100%', maxWidth: 360, ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 12 }, android: { elevation: 10 } }) },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   modalTitle: { fontSize: 18, fontWeight: '800', color: '#0f172a' },
+  closeBtn: { backgroundColor: '#f1f5f9', padding: 6, borderRadius: 20 },
+  inputLabel: { fontSize: 12, fontWeight: '700', color: '#64748b', marginBottom: 8 },
+  inputField: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 16, padding: 14, marginBottom: 20, fontSize: 14, color: '#0f172a' },
+  saveBtn: { backgroundColor: '#0284c7', paddingVertical: 16, borderRadius: 16, alignItems: 'center', marginTop: 10, ...Platform.select({ ios: { shadowColor: '#0284c7', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 }, android: { elevation: 4 } }) },
+  saveBtnText: { color: '#ffffff', fontWeight: '800', fontSize: 15, letterSpacing: 0.5 }
 });

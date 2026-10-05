@@ -23,6 +23,7 @@ import { AuthProvider, AuthContext } from './src/context/AuthContext';
 import LoginScreen from './src/screens/LoginScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import TimesheetScreen from './src/screens/TimesheetScreen';
+import WeeklyHoursScreen from './src/screens/WeeklyHoursScreen';
 import ManagerScreen from './src/screens/ManagerScreen';
 import FormsScreen from './src/screens/FormsScreen';
 import HomeScreen from './src/screens/HomeScreen';
@@ -101,6 +102,7 @@ function NavigationRoot() {
               component={TimesheetScreen} 
               options={{ headerShown: true, title: 'Timesheet', headerStyle: { backgroundColor: '#2563eb' }, headerTintColor: '#fff' }} 
             />
+            <Stack.Screen name="WeeklyHours" component={WeeklyHoursScreen} options={{ headerShown: true, title: "Weekly Hours", headerStyle: { backgroundColor: "#2563eb" }, headerTintColor: "#fff" }} />
           </>
         )}
       </Stack.Navigator>

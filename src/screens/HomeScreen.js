@@ -119,7 +119,7 @@ export default function HomeScreen() {
           <Ionicons name="calendar-outline" size={26} color="#2563eb" />
           <Text style={styles.actionText}>TIME SHEET</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionBtn} onPress={() => alert('Weekly Hours summary coming soon')}>
+        <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('WeeklyHours')}>
           <Ionicons name="time-outline" size={26} color="#2563eb" />
           <Text style={styles.actionText}>WEEKLY HOURS</Text>
         </TouchableOpacity>
