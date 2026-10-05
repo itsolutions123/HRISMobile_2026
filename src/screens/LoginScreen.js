@@ -109,11 +109,7 @@ export default function LoginScreen() {
 
       if (res.success) {
         const fullDispName = `${firstName} ${lastName} ${suffix}`.trim();
-        Alert.alert(
-          'Join Request Submitted',
-          `Join request sent for ${fullDispName}! Pending admin approval. Generated ID: ${res.employeeId}`,
-          [{ text: 'OK', onPress: () => setIsRegisterMode(false) }]
-        );
+        Alert.alert('Join Request Submitted', `Join request sent for ${fullDispName}! Pending admin approval. Generated ID: ${res.employeeId}`, () => setIsRegisterMode(false));
       } else {
         const errMsg = typeof res.message === 'object' ? JSON.stringify(res.message) : (res.message || 'Failed to submit join request.');
         Alert.alert('Registration Failed', errMsg);
@@ -320,6 +316,8 @@ export default function LoginScreen() {
 
         </View>
       </ScrollView>
+
+      
     </KeyboardAvoidingView>
   );
 }
