@@ -5,6 +5,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
+import * as Notifications from 'expo-notifications';
 import { AuthContext } from '../context/AuthContext';
 
 export default function DashboardScreen({ navigation }) {
@@ -273,7 +274,44 @@ export default function DashboardScreen({ navigation }) {
           address: isClockedIn ? 'Shift Ended' : `Job: ${jobName} (${userDept})`,
         }),
       });
-      if (res.ok) await fetchStatus();
+      if (res.ok) {
+        await fetchStatus();
+        try {
+          if (!isClockedIn) {
+            const { status } = await Notifications.requestPermissionsAsync();
+            if (status === 'granted') {
+              await Notifications.cancelAllScheduledNotificationsAsync();
+              
+              const { Platform } = require('react-native');
+              if (Platform.OS === 'android') {
+                await Notifications.setNotificationChannelAsync('dtr-alerts', {
+                  name: 'DTR Alerts',
+                  importance: Notifications.AndroidImportance.MAX,
+                  vibrationPattern: [0, 250, 250, 250],
+                  lightColor: '#FF231F7C',
+                });
+              }
+await Notifications.scheduleNotificationAsync({
+                content: {
+                  title: 'TIME TO CLOCK OUT!',
+                  body: '9hrs 30mins limit reached. Please clock out or check the app.',
+                  sound: true,
+                  priority: Notifications.AndroidNotificationPriority.MAX,
+                },
+                trigger: { 
+                  seconds: 10,
+                  channelId: 'dtr-alerts'
+                },
+              });
+            }
+          } else {
+            await Notifications.cancelAllScheduledNotificationsAsync();
+          }
+        } catch (notifErr) {
+          console.log('Notification Error', notifErr);
+          require('react-native').Alert.alert('Notification Error', notifErr.message || String(notifErr));
+        }
+      }
     } catch (e) {
       Alert.alert('Connection Error', 'Failed to connect to backend server.');
     }

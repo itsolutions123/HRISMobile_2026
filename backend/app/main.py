@@ -1,7 +1,7 @@
 import os
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
@@ -33,11 +33,54 @@ app.include_router(auth.router)
 app.include_router(punch.router)
 app.include_router(jobs.router)
 app.include_router(manager.router)
+
+@app.get("/Favicon.png", include_in_schema=False)
+async def get_favicon():
+    return FileResponse(os.path.join(os.path.dirname(__file__), "Favicon.png"))
 app.include_router(dtr.router)
 app.include_router(forms.router)
 
+from apscheduler.schedulers.background import BackgroundScheduler
+from datetime import datetime, timedelta
+
+scheduler = BackgroundScheduler()
+
+def auto_clock_out_task():
+    db = SessionLocal()
+    try:
+        from .models import PunchLog, Employee
+        now = datetime.utcnow()
+        cutoff = now - timedelta(hours=21)
+        emps = db.query(Employee.employee_id).all()
+        for (emp_id,) in emps:
+            last = db.query(PunchLog).filter(PunchLog.employee_id == emp_id).order_by(PunchLog.id.desc()).first()
+            if last and last.punch_type == "CLOCK_IN" and last.timestamp and last.timestamp < cutoff:
+                auto_out = PunchLog(
+                    employee_id=emp_id,
+                    punch_type="CLOCK_OUT",
+                    timestamp=now,
+                    latitude=last.latitude,
+                    longitude=last.longitude,
+                    accuracy=0,
+                    address="Auto Clock-Out (21h cap exceeded)"
+                )
+                db.add(auto_out)
+        db.commit()
+    except Exception as e:
+        print("Auto clock-out error:", e)
+    finally:
+        db.close()
+
+# Run the sweep every 30 minutes
+scheduler.add_job(auto_clock_out_task, 'interval', minutes=30)
+
+@app.on_event("shutdown")
+def shutdown_event():
+    scheduler.shutdown()
+
 @app.on_event("startup")
 def seed_initial_data():
+    scheduler.start()
     db = SessionLocal()
     try:
         initial_admin_pass = os.getenv("INITIAL_SUPERADMIN_PASSWORD")
@@ -114,6 +157,7 @@ def get_admin_dashboard(path: str = ""):
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>atWork — Bigtime Empire Corporation</title>
+        <link rel="icon" type="image/png" href="/Favicon.png">
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
@@ -5839,37 +5883,43 @@ def get_admin_dashboard(path: str = ""):
     async function deleteSelectedSubmissions() {
         const checkedBoxes = document.querySelectorAll('.submission-checkbox:checked');
         if (checkedBoxes.length === 0) return;
-        if (!confirm(`Are you sure you want to delete ${checkedBoxes.length} submission(s)?`)) return;
         
-        try {
-            const token = await getAdminAuthToken();
-            let deletedCount = 0;
-            for (const cb of checkedBoxes) {
-                const subId = cb.value;
-                if (!subId) continue;
-                const res = await fetch(`${window.location.origin}/api/forms/submissions/${subId}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (res.ok) {
-                    deletedCount++;
-                    const row = cb.closest('tr');
-                    if (row) row.remove();
+        showConfirmDeleteModal(
+            'Delete Submissions?',
+            `Are you sure you want to delete the ${checkedBoxes.length} selected submission(s)? This action cannot be undone.`,
+            'Delete',
+            async () => {
+                try {
+                    const token = await getAdminAuthToken();
+                    let deletedCount = 0;
+                    for (const cb of checkedBoxes) {
+                        const subId = cb.value;
+                        if (!subId) continue;
+                        const res = await fetch(`${window.location.origin}/api/forms/submissions/${subId}`, {
+                            method: 'DELETE',
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        if (res.ok) {
+                            deletedCount++;
+                            const row = cb.closest('tr');
+                            if (row) row.remove();
+                        }
+                    }
+                    showToast(`Deleted ${deletedCount} submission(s)`);
+                    const countLbl = document.getElementById('form-submission-count-label');
+                    if (countLbl) {
+                        const currentCount = parseInt(countLbl.innerText, 10);
+                        if (!isNaN(currentCount)) countLbl.innerText = currentCount - deletedCount;
+                    }
+                    document.getElementById('btn-delete-submissions').style.display = 'none';
+                    const selectAll = document.getElementById('select-all-submissions');
+                    if (selectAll) selectAll.checked = false;
+                } catch (err) {
+                    console.error('Error deleting submissions:', err);
+                    showToast('Error deleting submissions.');
                 }
             }
-            showToast(`Deleted ${deletedCount} submission(s)`);
-            const countLbl = document.getElementById('form-submission-count-label');
-            if (countLbl) {
-                const currentCount = parseInt(countLbl.innerText, 10);
-                if (!isNaN(currentCount)) countLbl.innerText = currentCount - deletedCount;
-            }
-            document.getElementById('btn-delete-submissions').style.display = 'none';
-            const selectAll = document.getElementById('select-all-submissions');
-            if (selectAll) selectAll.checked = false;
-        } catch (err) {
-            console.error('Error deleting submissions:', err);
-            alert('Error deleting submissions.');
-        }
+        );
     }
 
     function viewSubmission(btn) {

@@ -9,17 +9,26 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.bigtime.hrismobileapp.test",
+      "package": "com.atwork",
       "versionCode": 1,
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION"
       ],
       "userInterfaceStyle": "light",
-      "usesCleartextTraffic": true
+      "usesCleartextTraffic": true,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/mobile_icon.png",
+        "backgroundColor": "#FFFFFF"
+      }
     },
     "plugins": [
       "@react-native-community/datetimepicker"
-    ]
+    ],
+    "icon": "./assets/mobile_icon.png",
+    "notification": {
+      "icon": "./assets/Favicon.png",
+      "color": "#d97706"
+    }
   }
 }

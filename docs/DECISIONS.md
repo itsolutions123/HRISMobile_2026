@@ -21,7 +21,7 @@ Hand back to: Full-Stack (implement) -> API Gem (record)
 Docs to update: docs/API.md | docs/SECURITY.md
 
 ## D-002 - Test APK Build Configuration and Release Setup
-Date: 2026-10-01   Status: PROPOSED
+Date: 2026-10-01   Status: APPROVED
 Mode: build-release
 Context: External testing of GPS clock in/out requires an installable Android APK pointing to https://app.bigtimeempire.com. Security blockers cleared in D-001. Evidence: app.json, src/context/AuthContext.js:8.
 Decision: Configure Expo SDK 57 for a local standalone test APK build:
@@ -46,7 +46,7 @@ Hand back to: Full-Stack (implement) -> API Gem / Database Gem (record)
 Docs to update: docs/API.md
 
 ## D-003 - Add Endpoint to Delete Form Submissions
-Date: 2026-10-02   Status: PROPOSED
+Date: 2026-10-02   Status: APPROVED
 Mode: new feature
 Context: The web panel needs a way to delete custom form submissions (either single or bulk from a table selection). Evidence: backend/app/routers/forms.py lacks a DELETE endpoint for FormSubmission.
 Decision: Implement a single-resource RESTful deletion endpoint. The web panel will handle batch deletions by issuing concurrent requests (e.g., via `Promise.all`).
@@ -60,3 +60,42 @@ Affects: backend yes | web panel yes | mobile no
 Hardcodes removed / remaining: none
 Hand back to: Full-Stack (implement) -> API Gem (record)
 Docs to update: docs/API.md
+
+## D-004 - RBAC Redesign and Smart Group Form Routing
+**Date:** 2026-10-02
+**Status:** APPROVED
+**Mode:** SCHEMA CHANGE / NEW FEATURE DESIGN
+**Context:** Transitioning to a 4-tier RBAC (Super Admin, Admin, Manager, Basic). Managers need to approve forms scoped strictly to their assigned Smart Groups.
+**Decision:** 
+- Basic users are assigned exactly one Smart Group (`smart_group_id` on `employees`).
+- Managers can manage multiple Smart Groups via a new `smart_group_managers` join table.
+- Legacy role 'Employee' becomes 'Basic'. 'SuperAdmin' becomes 'Super Admin'.
+**Alternatives rejected:** Storing manager IDs in a JSON column on SmartGroup (rejected for referential integrity and query performance).
+**Contract:** Updates to `/api/auth/me`, `/api/forms`, `/api/smart_groups/{id}/managers`, `/api/employees/{id}/role`.
+**Schema:** Add `employees.smart_group_id`, create `smart_group_managers` join table.
+**Migration:** Backup DB, run ALTER/CREATE tables, map string 'Employee' to 'Basic'.
+**Config:** None.
+**Security impact:** Form visibility strictly enforced on the backend based on `smart_group_id` and role.
+**Affects:** Backend, Web Panel (restart).
+**Blueprint:** docs/features/rbac-forms-approval.md
+**Hardcodes removed/remaining:** SmartGroup.selected legacy behavior kept for now.
+**Hand back to:** Full-Stack Gem
+**Docs to update:** API.md, DATABASE.md, SECURITY.md
+
+## D-005 - Task Scheduling and Notification Strategy
+Date: 2026-10-05   Status: APPROVED
+Mode: new feature / build-release
+Context: The app needs to automatically clock out users after 21 hours (backend) and alert them at 9.5 hours (mobile). Neither apscheduler nor expo-notifications currently exist in the repo, and the database has no device token storage.
+Decision: 
+1. Use `APScheduler` (AsyncIOScheduler) within the FastAPI application lifecycle for the 21-hour auto-clock-out sweep.
+2. Use `expo-notifications` for Local Notifications on the mobile client for the 9.5-hour alert, scheduled at the moment of clock-in and cancelled upon clock-out.
+Alternatives rejected: Celery/Redis (overkill for backend scheduling); Push Notifications (rejected as it requires external push infrastructure and schema changes for device tokens).
+Contract: no change
+Schema: no change
+Migration: none
+Config: none
+Security impact: none (no external services, no new endpoints, notifications are local to the device)
+Affects: backend yes | web panel no | mobile yes
+Hardcodes removed / remaining: none
+Hand back to: Full-Stack (implement)
+Docs to update: none
