@@ -120,3 +120,23 @@ Affects: backend yes | web panel yes | mobile yes
 Hardcodes removed / remaining: Will remove reliance on browser local storage (`setDeptJobsStore`) in the web panel.
 Hand back to: Full-Stack (implement) -> Database Gem / API Gem (record)
 Docs to update: docs/DATABASE.md, docs/API.md
+
+## D-007 - Admin-Initiated Password Reset Endpoint
+Date: 2026-10-06   Status: APPROVED
+Mode: new feature
+Context: Employees currently have no mechanism to reset forgotten passwords. Inspection of `backend/app/routers/auth.py` confirms no password reset route exists, and `models.py:20` defines nullable `email` without SMTP backend configuration.
+Decision:
+1. Create `PUT /api/auth/users/{emp_id}/password` endpoint restricted to `Super Admin` / `Superadmin` roles using `require_roles(["Super Admin", "Superadmin"])`.
+2. Accept `{"new_password": "string"}` in JSON body, require a minimum password length of 6 characters, and hash using `get_password_hash()` in `auth_utils.py` before saving to `Employee.password_hash`.
+3. Mobile app does not require code changes; login screen will direct users to contact HR/Super Admin for resets. Web panel will add a reset password interface for Super Admins.
+Alternatives rejected: Self-service email OTP reset (rejected due to missing SMTP configuration, nullable employee emails, and avoiding external SaaS/cloud dependencies).
+Contract:
+- `PUT /api/auth/users/{emp_id}/password` - Auth: `require_roles(["Super Admin", "Superadmin"])` - Request Body: `{"new_password": "string"}` - Response: `{"message": "Password updated successfully", "employee_id": "string"}` - Error shape: 400 (password validation error), 403 (forbidden/insufficient role), 404 (user not found).
+Schema: no change
+Migration: none
+Config: none
+Security impact: Security Ruling S-R001 in `docs/SECURITY.md` approved password transmission over TLS. Endpoint is restricted strictly to Super Admin roles and uses `bcrypt` hashing (`get_password_hash`).
+Affects: backend yes | web panel yes | mobile no
+Hardcodes removed / remaining: None.
+Hand back to: Full-Stack (implement) -> API Gem (record)
+Docs to update: docs/API.md
