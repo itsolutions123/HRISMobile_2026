@@ -2202,6 +2202,7 @@ def get_admin_dashboard(path: str = ""):
                         localStorage.setItem('atwork_session_active', 'true');
                         showToast('Successfully authenticated into atWork.');
                         checkAuthentication();
+                        if (typeof loadConnecteamDirectory === 'function') await loadConnecteamDirectory();
                         if (typeof loadCategoryTabsBar === 'function') await loadCategoryTabsBar();
                         if (typeof renderSidebarFormsCategories === 'function') await renderSidebarFormsCategories();
                         if (window.location.pathname === '/admin/login' || window.location.pathname === '/admin/login/') {
@@ -2908,6 +2909,31 @@ def get_admin_dashboard(path: str = ""):
                 }
             }
 
+            window.toggleGroupFormAssignment = async function(groupName, formId, isChecked) {
+                const token = localStorage.getItem('atwork_jwt_token');
+                try {
+                    const res = await fetch('/api/forms/' + formId, { headers: { 'Authorization': 'Bearer ' + token } });
+                    if (!res.ok) return;
+                    const formObj = await res.json();
+                    
+                    let assigned = formObj.assigned_groups || [];
+                    if (isChecked) {
+                        if (!assigned.includes(groupName)) assigned.push(groupName);
+                    } else {
+                        assigned = assigned.filter(g => g !== groupName);
+                    }
+                    
+                    await fetch('/api/forms/' + formId, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                        body: JSON.stringify({ assigned_groups: assigned })
+                    });
+                    
+                    renderConnecteamProvisioningTable();
+                    showToast(isChecked ? 'Form assigned to group' : 'Form removed from group');
+                } catch(e) { console.error("Error updating form assignment", e); }
+            };
+
             function filterGroupByBrand(brandVal) {
                 selectedBrandView = brandVal;
                 renderConnecteamProvisioningTable();
@@ -2916,6 +2942,16 @@ def get_admin_dashboard(path: str = ""):
             async function renderConnecteamProvisioningTable() {
                 const brands = await getStoredBrands();
                 const allGroups = await getStoredGroups();
+
+                let allForms = [];
+                try {
+                    const token = localStorage.getItem('atwork_jwt_token');
+                    if (token) {
+                        const fRes = await fetch('/api/forms', { headers: { 'Authorization': 'Bearer ' + token } });
+                        if (fRes.ok) allForms = await fRes.json();
+                    }
+                } catch(e) {}
+                window.globalAvailableForms = allForms;
 
                 let visibleBrands = (selectedBrandView === 'ALL') ? brands : brands.filter(b => b === selectedBrandView);
                 document.getElementById('groups-count-label').innerText = `${allGroups.length} groups total`;
@@ -2964,11 +3000,31 @@ def get_admin_dashboard(path: str = ""):
                                     </div>
                                 </td>
                                 <td>
-                                    <select class="form-select form-select-sm" style="width: 130px;" onclick="event.stopPropagation()" onchange="showToast('Assignments updated')">
-                                        <option>${g.selected || '15 selected'}</option>
-                                        <option>All Members</option>
-                                        <option>Custom Filter</option>
-                                    </select>
+                                    ${(function(){
+                                        const assignedForms = (window.globalAvailableForms || []).filter(f => f.assignedGroups && f.assignedGroups.includes(g.name));
+                                        let formsDropdownHtml = `
+                                        <div class="dropdown" onclick="event.stopPropagation()">
+                                            <button class="btn btn-outline-custom btn-sm dropdown-toggle text-start bg-white d-flex justify-content-between align-items-center" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" style="width: 130px;">
+                                                <span class="text-truncate">${assignedForms.length} selected</span>
+                                            </button>
+                                            <div class="dropdown-menu p-2 shadow border-0" style="max-height: 250px; overflow-y: auto; width: 220px;">
+                                                <div class="text-muted fw-bold mb-2 ms-1" style="font-size: 11px;">ASSIGN CUSTOM FORMS</div>
+                                                ${(!window.globalAvailableForms || window.globalAvailableForms.length === 0) ? '<div class="text-muted small ms-1">No forms found</div>' : ''}
+                                                ${(window.globalAvailableForms || []).map(f => {
+                                                    const isChecked = f.assignedGroups && f.assignedGroups.includes(g.name);
+                                                    const cleanId = g.name.replace(/[^a-zA-Z0-9]/g, '') + '_' + f.id;
+                                                    return `
+                                                    <div class="form-check custom-checkbox py-1">
+                                                        <input class="form-check-input" type="checkbox" value="${f.id}" id="chk_form_${cleanId}" ${isChecked ? 'checked' : ''} onchange="toggleGroupFormAssignment('${g.name}',${f.id}, this.checked)">
+                                                        <label class="form-check-label w-100 ms-2 text-truncate" style="cursor:pointer; font-size: 13px;" for="chk_form_${cleanId}">
+                                                            ${f.name}
+                                                        </label>
+                                                    </div>`;
+                                                }).join('')}
+                                            </div>
+                                        </div>`;
+                                        return formsDropdownHtml;
+                                    })()}
                                 </td>
                                 <td>
                                     <div class="d-flex align-items-center justify-content-between">
