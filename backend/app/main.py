@@ -164,7 +164,7 @@ def get_admin_dashboard(path: str = ""):
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
         <style>
             :root {
-                --bg-main: #f8fafc;
+                --bg-main: #f1f5f9;
                 --surface-card: #ffffff;
                 --border-color: #e2e8f0;
                 --border-subtle: #f1f5f9;
@@ -177,6 +177,8 @@ def get_admin_dashboard(path: str = ""):
                 --gold-border: #fef3c7;
                 --sidebar-bg: #0f172a;
                 --sidebar-hover: #1e293b;
+                --clay-shadow: 6px 6px 16px rgba(148, 163, 184, 0.18), -6px -6px 16px #ffffff;
+                --clay-shadow-sm: 4px 4px 10px rgba(148, 163, 184, 0.14), -4px -4px 10px #ffffff;
             }
             body {
                 background-color: var(--bg-main);
@@ -194,19 +196,20 @@ def get_admin_dashboard(path: str = ""):
             .sidebar .nav-link {
                 color: #94a3b8;
                 padding: 10px 14px;
-                border-radius: 8px;
-                margin-bottom: 2px;
+                border-radius: 14px;
+                margin-bottom: 4px;
                 font-weight: 500;
                 font-size: 13px;
                 display: flex;
                 align-items: center;
                 gap: 10px;
                 cursor: pointer;
-                transition: all 0.15s ease;
+                transition: all 0.2s ease;
             }
             .sidebar .nav-link:hover, .sidebar .nav-link.active {
                 background: var(--sidebar-hover);
                 color: #ffffff;
+                box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
             }
             .sidebar .nav-link.active i {
                 color: var(--gold-accent);
@@ -222,20 +225,26 @@ def get_admin_dashboard(path: str = ""):
             .top-bar {
                 background: var(--surface-card);
                 border-bottom: 1px solid var(--border-color);
-                padding: 12px 32px;
+                border-top: 2px solid #ffffff;
+                padding: 14px 32px;
+                box-shadow: 0 4px 12px rgba(148, 163, 184, 0.08);
             }
             .card-custom {
                 background: var(--surface-card);
-                border-radius: 12px;
-                border: 1px solid var(--border-color);
+                border-radius: 20px;
+                border: 1px solid #e2e8f0;
+                border-top: 2px solid #ffffff;
+                border-left: 2px solid #ffffff;
                 padding: 24px;
-                box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+                box-shadow: var(--clay-shadow);
+                transition: all 0.2s ease;
             }
             #map, #modalHistoryMap {
                 height: 520px;
                 width: 100%;
-                border-radius: 12px;
+                border-radius: 20px;
                 border: 1px solid var(--border-color);
+                box-shadow: var(--clay-shadow-sm);
             }
             #modalHistoryMap {
                 height: 320px;
@@ -252,6 +261,7 @@ def get_admin_dashboard(path: str = ""):
                 justify-content: center;
                 font-weight: 700;
                 font-size: 12px;
+                box-shadow: var(--clay-shadow-sm);
             }
             .avatar-chip {
                 width: 28px;
@@ -263,40 +273,57 @@ def get_admin_dashboard(path: str = ""):
                 align-items: center;
                 justify-content: center;
                 border: 2px solid #ffffff;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
             }
             .btn-primary-custom {
                 background-color: var(--gold-primary);
                 color: #ffffff;
                 border: none;
-                border-radius: 8px;
-                padding: 8px 16px;
+                border-top: 1px solid rgba(255, 255, 255, 0.4);
+                border-radius: 14px;
+                padding: 9px 18px;
                 font-weight: 600;
                 font-size: 13px;
-                transition: background-color 0.15s ease;
+                box-shadow: 3px 3px 8px rgba(217, 119, 6, 0.25), -2px -2px 6px rgba(255, 255, 255, 0.6);
+                transition: all 0.15s ease;
             }
             .btn-primary-custom:hover {
                 background-color: #b45309;
                 color: #ffffff;
+                box-shadow: 1px 1px 4px rgba(217, 119, 6, 0.3);
+                transform: translateY(1px);
             }
             .btn-outline-custom {
                 background-color: #ffffff;
                 color: var(--text-secondary);
                 border: 1px solid var(--border-color);
-                border-radius: 8px;
-                padding: 7px 14px;
+                border-top: 2px solid #ffffff;
+                border-radius: 14px;
+                padding: 8px 16px;
                 font-weight: 600;
                 font-size: 13px;
+                box-shadow: var(--clay-shadow-sm);
+                transition: all 0.15s ease;
             }
             .btn-outline-custom:hover {
-                background-color: var(--bg-main);
+                background-color: #f8fafc;
                 color: var(--text-primary);
             }
             .form-control, .form-select {
-                border-radius: 8px;
+                border-radius: 14px;
                 border: 1px solid var(--border-color);
+                border-top: 2px solid #ffffff;
                 font-size: 13px;
-                padding: 8px 12px;
+                padding: 9px 14px;
                 color: var(--text-primary);
+                background-color: #f8fafc;
+                box-shadow: inset 1px 1px 3px rgba(148, 163, 184, 0.12);
+                transition: all 0.15s ease;
+            }
+            .form-control:focus, .form-select:focus {
+                background-color: #ffffff;
+                border-color: #3b82f6;
+                box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
             }
             .table {
                 font-size: 13px;

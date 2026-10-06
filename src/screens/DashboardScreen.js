@@ -220,11 +220,60 @@ export default function DashboardScreen({ navigation }) {
       const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('GPS_TIMEOUT')), 6000));
       const freshLoc = await Promise.race([locPromise, timeoutPromise]);
 
-      if (freshLoc && freshLoc.coords) {
+      if (freshLoc && freshLoc.coords) {        let addressStr = null;
+        const lat = freshLoc.coords.latitude;
+        const lon = freshLoc.coords.longitude;
+
+        // Cache to prevent OSM Nominatim rate limits during 4s polling
+        global._geoCache = global._geoCache || { lat: 0, lon: 0, address: null };
+        const dist = Math.abs(global._geoCache.lat - lat) + Math.abs(global._geoCache.lon - lon);
+
+        if (dist < 0.0002 && global._geoCache.address) {
+          addressStr = global._geoCache.address;
+        } else {
+          try {
+            const osmRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`, {
+              headers: { 'User-Agent': 'HRISMobileApp/1.0' }
+            });
+            const osmData = await osmRes.json();
+            if (osmData && osmData.address) {
+              const addr = osmData.address;
+              const poi = addr.building || addr.amenity || addr.leisure || addr.shop || osmData.name || null;
+              const streetInfo = [addr.house_number, addr.road].filter(Boolean).join(' ');
+              const parts = [
+                poi,
+                streetInfo,
+                addr.neighbourhood || addr.suburb || addr.quarter,
+                addr.city || addr.town || addr.village || addr.city_district,
+                addr.state || addr.region
+              ].filter(Boolean);
+              addressStr = [...new Set(parts)].join(', ');
+            }
+          } catch (osmErr) {
+            console.log("OSM Geo fail:", osmErr);
+          }
+
+          // Fallback to Expo Native Geocoder
+          if (!addressStr) {
+            try {
+              const rev = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lon });
+              if (rev && rev.length > 0) {
+                const item = rev[0];
+                const streetInfo = [item.streetNumber, item.street].filter(Boolean).join(' ');
+                const poi = (item.name && item.name !== item.street && item.name !== item.streetNumber) ? item.name : null;
+                const parts = [poi, streetInfo, item.district, item.city || item.subregion, item.region].filter(Boolean);
+                addressStr = [...new Set(parts)].join(', ');
+              }
+            } catch (revErr) {}
+          }
+          global._geoCache = { lat, lon, address: addressStr };
+        }
+
         const liveCoords = {
           latitude: freshLoc.coords.latitude,
           longitude: freshLoc.coords.longitude,
           accuracy: freshLoc.coords.accuracy,
+          address: addressStr,
         };
         if (isForClockOut) {
           setClockOutLocation(liveCoords);
@@ -364,7 +413,9 @@ export default function DashboardScreen({ navigation }) {
           accuracy: locToUse.accuracy || 10,
           date: currentDate,
           timestamp: currentTimestamp,
-          address: isClockedIn ? 'Shift Ended' : `Job: ${jobName} (${userDept})`,
+          address: isClockedIn
+            ? `Shift Ended${locToUse.address ? ' @ ' + locToUse.address : ''}`
+            : `Job: ${jobName} (${userDept})${locToUse.address ? ' @ ' + locToUse.address : ''}`,
         }),
       });
       if (res.ok) {
@@ -479,7 +530,7 @@ await Notifications.scheduleNotificationAsync({
             <View style={styles.locRow}>
               <Ionicons name="location" size={14} color="#60a5fa" />
               <Text style={styles.locText}>
-                {location ? `GPS Pin: ${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}` : 'Location Locked'}
+                {location ? (location.address || `GPS Pin: ${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}`) : 'Location Locked'}
               </Text>
             </View>
           </View>
@@ -553,7 +604,7 @@ await Notifications.scheduleNotificationAsync({
                 <Ionicons name="location-outline" size={18} color={location ? "#16a34a" : "#ef4444"} />
                 <Text style={styles.statLabel}>Location Status</Text>
                 <Text style={[styles.statVal, { color: location ? "#16a34a" : "#ef4444" }]}>
-                  {location ? `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}` : 'Check GPS / Network'}
+                  {location ? (location.address || `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`) : 'Check GPS / Network'}
                 </Text>
               </View>
             </View>
@@ -627,7 +678,7 @@ await Notifications.scheduleNotificationAsync({
                         <Text style={styles.timeBoxTitle}>{displayIn}</Text>
                         <View style={styles.timeBoxAddressRow}>
                           <Ionicons name="location-outline" size={12} color="#94a3b8" />
-                          <Text style={styles.timeBoxAddressText} numberOfLines={2}>{location?.coords ? `GPS: ${location.coords.latitude.toFixed(4)}, ${location.coords.longitude.toFixed(4)}` : 'Location saved'}</Text>
+                          <Text style={styles.timeBoxAddressText} numberOfLines={2}>{location?.address ? location.address : (location ? `GPS: ${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}` : 'Location saved')}</Text>
                         </View>
                       </View>
 
@@ -637,7 +688,7 @@ await Notifications.scheduleNotificationAsync({
                         <Text style={styles.timeBoxTitle}>{clockOutTimestampStr || '05:00 PM'}</Text>
                         <View style={styles.timeBoxAddressRow}>
                           <Ionicons name="location-outline" size={12} color="#94a3b8" />
-                          <Text style={styles.timeBoxAddressText} numberOfLines={2}>{location?.coords ? `GPS: ${location.coords.latitude.toFixed(4)}, ${location.coords.longitude.toFixed(4)}` : 'Location saved'}</Text>
+                          <Text style={styles.timeBoxAddressText} numberOfLines={2}>{clockOutLocation?.address ? clockOutLocation.address : (clockOutLocation ? `GPS: ${clockOutLocation.latitude.toFixed(4)}, ${clockOutLocation.longitude.toFixed(4)}` : 'Location saved')}</Text>
                         </View>
                       </View>
                     </View>
@@ -841,7 +892,7 @@ await Notifications.scheduleNotificationAsync({
       {/* REUSED CLAY EDIT SHIFT MODAL */}
       <Modal visible={showClayEditModal} transparent animationType="slide">
         <View style={styles.modalBg}>
-          <View style={[styles.modalSheet, { maxHeight: '88%', paddingHorizontal: 22, paddingTop: 24, borderTopLeftRadius: 32, borderTopRightRadius: 32 }]}>
+          <View style={[styles.modalSheet, { width: '100%', height: 'auto', maxHeight: '88%', paddingHorizontal: 22, paddingTop: 24, borderTopLeftRadius: 32, borderTopRightRadius: 32, alignItems: 'stretch' }]}>
             <View style={styles.modalHeader}>
               <Text style={{ fontSize: 22, fontWeight: '700', color: '#0f172a' }}>Edit shift</Text>
               <TouchableOpacity onPress={() => setShowClayEditModal(false)} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#f8fafc', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0' }}>
@@ -849,7 +900,7 @@ await Notifications.scheduleNotificationAsync({
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 10 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ width: '100%' }} contentContainerStyle={{ width: '100%', paddingBottom: 10 }}>
               {/* Job Row */}
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' }}>
                 <Text style={{ fontSize: 15, fontWeight: '500', color: '#334155', width: 55 }}>Job</Text>
@@ -875,10 +926,10 @@ await Notifications.scheduleNotificationAsync({
               </View>
 
               {/* Starts Row */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' }}>
-                <Text style={{ fontSize: 15, fontWeight: '500', color: '#334155', width: 55 }}>Starts</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <Text style={{ fontSize: 14, fontWeight: '500', color: '#0284c7' }}>{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' }}>
+                <Text style={{ fontSize: 15, fontWeight: '500', color: '#334155', width: 55, marginTop: 6 }}>Starts</Text>
+                <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                  <Text style={{ fontSize: 14, fontWeight: '500', color: '#0284c7', marginBottom: 8 }}>{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</Text>
                   <TouchableOpacity style={{ backgroundColor: '#e0f2fe', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: '#bae6fd' }} onPress={() => { setTimePickerTarget('START'); setShowTimePickerModal(true); }}>
                     <Text style={{ fontSize: 14, fontWeight: '600', color: '#0284c7' }}>{`${clayStartHour}:${clayStartMin} ${clayStartAmpm}`}</Text>
                   </TouchableOpacity>
@@ -886,10 +937,10 @@ await Notifications.scheduleNotificationAsync({
               </View>
 
               {/* Ends Row */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' }}>
-                <Text style={{ fontSize: 15, fontWeight: '500', color: '#334155', width: 55 }}>Ends</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <Text style={{ fontSize: 14, fontWeight: '500', color: '#0284c7' }}>{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' }}>
+                <Text style={{ fontSize: 15, fontWeight: '500', color: '#334155', width: 55, marginTop: 6 }}>Ends</Text>
+                <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                  <Text style={{ fontSize: 14, fontWeight: '500', color: '#0284c7', marginBottom: 8 }}>{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</Text>
                   <TouchableOpacity style={{ backgroundColor: '#e0f2fe', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: '#bae6fd' }} onPress={() => { setTimePickerTarget('END'); setShowTimePickerModal(true); }}>
                     <Text style={{ fontSize: 14, fontWeight: '600', color: '#0284c7' }}>{`${clayEndHour}:${clayEndMin} ${clayEndAmpm}`}</Text>
                   </TouchableOpacity>
