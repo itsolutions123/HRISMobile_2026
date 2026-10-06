@@ -52,21 +52,14 @@ export default function FormsScreen({ navigation }) {
           setCurrentView('CATEGORIES');
           return true;
         } else {
-          Alert.alert(
-            'Logout Confirmation',
-            'Are you sure you want to log out of atWork?',
-            [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Logout', style: 'destructive', onPress: () => logout() }
-            ]
-          );
+          navigation.navigate('Home');
           return true;
         }
       };
 
       const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
       return () => subscription.remove();
-    }, [currentView, logout])
+    }, [currentView, navigation])
   );
   
   const [webViewHeights, setWebViewHeights] = useState({});
