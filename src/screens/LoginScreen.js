@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Image } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Image, Modal } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../context/AuthContext';
@@ -7,6 +7,7 @@ import { AuthContext } from '../context/AuthContext';
 export default function LoginScreen() {
   const { login, register, API_BASE_URL } = useContext(AuthContext);
   const [isRegisterMode, setIsRegisterMode] = useState(false);
+  const [isForgotMode, setIsForgotMode] = useState(false);
 
   // Login States
   const [employeeId, setEmployeeId] = useState('');
@@ -67,6 +68,32 @@ export default function LoginScreen() {
     }
   };
 
+
+  const handlePasswordReset = async () => {
+    if (!employeeId || !mobilePhone) {
+      Alert.alert('Error', 'Please enter both Employee ID and Mobile Phone.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/reset-requests`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employee_id: employeeId, mobile_phone: mobilePhone })
+      });
+      const data = await response.json().catch(() => ({}));
+      Alert.alert(
+        'A password reset notification is sent to your Administrator Coordinate via viber',
+        data.message || 'If the details match our records, a request has been sent to your administrator.',
+        [{ text: 'OK', onPress: () => { setIsForgotMode(false); setMobilePhone(''); } }]
+      );
+    } catch (e) {
+      Alert.alert('Error', 'Network error. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleLogin = async () => {
     if (!employeeId || !password) {
       Alert.alert('Missing Fields', 'Please enter your Employee ID / Email and Password.');
@@ -121,15 +148,47 @@ export default function LoginScreen() {
     }
   };
 
-  return (
+  
+
+return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.card}>
           
           <Image source={require('../../assets/logo_gray.png')} style={styles.logo} resizeMode="contain" />
 
-          {isRegisterMode ? (
-            /* REGISTRATION FORM */
+          {isForgotMode ? (
+            /* FORGOT PASSWORD FORM */
+            <>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Employee ID</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="person-outline" size={18} color="#64748b" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g. EMP004"
+                    value={employeeId}
+                    onChangeText={setEmployeeId}
+                    autoCapitalize="none"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Registered Mobile Phone</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="call-outline" size={18} color="#64748b" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g. 09989400957"
+                    value={mobilePhone}
+                    onChangeText={setMobilePhone}
+                    keyboardType="phone-pad"
+                  />
+                </View>
+              </View>
+            </>
+          ) : isRegisterMode ? (
             <>
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>First Name</Text>
@@ -289,7 +348,7 @@ export default function LoginScreen() {
           {/* SUBMIT BUTTON */}
           <TouchableOpacity
             style={styles.submitBtn}
-            onPress={isRegisterMode ? handleRegister : handleLogin}
+            onPress={isForgotMode ? handlePasswordReset : isRegisterMode ? handleRegister : handleLogin}
             disabled={loading}
             activeOpacity={0.85}
           >
@@ -297,18 +356,36 @@ export default function LoginScreen() {
               <ActivityIndicator color="#ffffff" />
             ) : (
               <Text style={styles.submitBtnText}>
-                {isRegisterMode ? 'Submit Join Request' : 'Sign In'}
+                {isForgotMode ? 'Request Password Reset' : isRegisterMode ? 'Submit Join Request' : 'Sign In'}
               </Text>
             )}
           </TouchableOpacity>
 
-          {/* MODE TOGGLE */}
+          {/* MODE TOGGLE LINKS */}
+          {!isForgotMode && !isRegisterMode && (
+            <TouchableOpacity 
+              style={{ marginTop: 15, alignItems: 'center' }} 
+              onPress={() => { setIsForgotMode(true); setIsRegisterMode(false); }}
+            >
+              <Text style={{ color: '#ef4444', fontWeight: '600', fontSize: 14 }}>Forgot Password</Text>
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
             style={styles.toggleBtn}
-            onPress={() => setIsRegisterMode(!isRegisterMode)}
+            onPress={() => {
+              if (isForgotMode) {
+                setIsForgotMode(false);
+                setIsRegisterMode(false);
+              } else {
+                setIsRegisterMode(!isRegisterMode);
+              }
+            }}
           >
             <Text style={styles.toggleBtnText}>
-              {isRegisterMode
+              {isForgotMode
+                ? 'Back to Sign In'
+                : isRegisterMode
                 ? 'Already have an account? Sign In'
                 : 'Need to join an organization? Request Sign Up'}
             </Text>
