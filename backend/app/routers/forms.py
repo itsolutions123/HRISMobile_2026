@@ -143,7 +143,7 @@ def list_forms(category: Optional[str] = None, is_archived: bool = False, db: Se
     for f in forms:
         # Standard users only see forms assigned to their group (or global forms)
         if current_user.role not in ["Admin", "Superadmin", "Super Admin", "SUPERADMIN", "ADMIN"]:
-            assigned_groups = f.assigned_groups.split(",") if f.assigned_groups else ["All users group"]
+            assigned_groups = f.assigned_groups.split(",") if f.assigned_groups else []
             user_dept = current_user.department or ""
             allowed = False
             if "All users group" in assigned_groups:
@@ -166,7 +166,7 @@ def list_forms(category: Optional[str] = None, is_archived: bool = False, db: Se
             "status": f.status,
             "entries": submission_count,
             "views": 1,
-            "assignedGroups": f.assigned_groups.split(",") if f.assigned_groups else ["All users group"],
+            "assignedGroups": f.assigned_groups.split(",") if f.assigned_groups else [],
             "assignmentType": f.assignment_type or "Dynamic",
             "totalAssignees": total_employees_count,
             "createdBy": f.created_by,

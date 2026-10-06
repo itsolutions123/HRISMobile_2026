@@ -1,21 +1,14 @@
-import React, { useContext } from 'react';
+import LogoutModal from '../components/LogoutModal';
+import React, { useState, useContext } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert , Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../context/AuthContext';
 
 export default function ProfileScreen() {
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const { user, logout } = useContext(AuthContext);
 
-  const handleLogout = () => {
-    Alert.alert(
-      "Confirm Logout",
-      "Are you sure you want to log out of your account?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Logout", style: "destructive", onPress: logout }
-      ]
-    );
-  };
+  const handleLogout = () => { setLogoutModalVisible(true); };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -70,12 +63,17 @@ export default function ProfileScreen() {
           <Text style={styles.listItemText}>Settings</Text>
           <Ionicons name="chevron-forward" size={20} color="#cbd5e1" />
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.listItem, { borderBottomWidth: 0 }]} onPress={handleLogout}>
+        <TouchableOpacity style={[styles.listItem, { borderBottomWidth: 0 }]} onPress={() => setLogoutModalVisible(true)}>
           <Text style={[styles.listItemText, { color: '#ef4444' }]}>Logout</Text>
           <Ionicons name="log-out-outline" size={20} color="#ef4444" />
         </TouchableOpacity>
       </View>
-    </ScrollView>
+      <LogoutModal
+          visible={logoutModalVisible}
+          onClose={() => setLogoutModalVisible(false)}
+          onLogout={() => { setLogoutModalVisible(false); logout(); }}
+        />
+      </ScrollView>
   );
 }
 
