@@ -46,6 +46,26 @@ class FormSubmissionCreate(BaseModel):
 @router.get("/categories")
 def list_categories(is_archived: bool = False, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
     categories = db.query(FormCategory).filter(FormCategory.is_archived == is_archived).all()
+    
+    # Filter categories for standard users so they only see ones with forms assigned to them
+    if current_user.role not in ["Admin", "Superadmin", "Super Admin", "SUPERADMIN", "ADMIN"]:
+        user_dept = current_user.department or ""
+        active_forms = db.query(CustomForm).filter(CustomForm.is_archived == False).all()
+        visible_cat_ids = set()
+        for f in active_forms:
+            assigned = f.assigned_groups.split(",") if f.assigned_groups else ["All users group"]
+            allowed = False
+            if "All users group" in assigned:
+                allowed = True
+            else:
+                for g in assigned:
+                    if user_dept == g or user_dept == g.replace("HO - ", "").strip():
+                        allowed = True
+                        break
+            if allowed:
+                visible_cat_ids.add(f.category_id)
+        categories = [c for c in categories if c.id in visible_cat_ids]
+
     return [{"id": c.id, "name": c.name, "isArchived": c.is_archived} for c in categories]
 
 @router.post("/categories")
@@ -121,6 +141,22 @@ def list_forms(category: Optional[str] = None, is_archived: bool = False, db: Se
     total_employees_count = db.query(Employee).count()
 
     for f in forms:
+        # Standard users only see forms assigned to their group (or global forms)
+        if current_user.role not in ["Admin", "Superadmin", "Super Admin", "SUPERADMIN", "ADMIN"]:
+            assigned_groups = f.assigned_groups.split(",") if f.assigned_groups else ["All users group"]
+            user_dept = current_user.department or ""
+            allowed = False
+            if "All users group" in assigned_groups:
+                allowed = True
+            else:
+                for g in assigned_groups:
+                    # Match exact string or without 'HO - ' prefix
+                    if user_dept == g or user_dept == g.replace("HO - ", "").strip():
+                        allowed = True
+                        break
+            if not allowed:
+                continue
+
         submission_count = db.query(FormSubmission).filter(FormSubmission.form_id == f.id).count()
         cat_item = db.query(FormCategory).filter(FormCategory.id == f.category_id).first()
         results.append({
