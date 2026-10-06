@@ -173,43 +173,22 @@ export default function DashboardScreen({ navigation }) {
   const fetchJobs = useCallback(async () => {
     setJobsLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/jobs`, { headers: { 'Authorization': 'Bearer ' + token } });
+      const res = await fetch(`${API_BASE_URL}/api/jobs/groups/${encodeURIComponent(userDept || 'General')}/jobs`, { headers: { 'Authorization': 'Bearer ' + token } });
       let titles = [];
       if (res.ok) {
         const data = await res.json();
-        const match = data.find(c => 
-          c.code === userDept || 
-          c.name === userDept || 
-          c.description === userDept ||
-          c.name.toLowerCase() === userDept.toLowerCase()
-        );
-        if (match && match.sub_items && match.sub_items.length > 0) {
-          titles = match.sub_items.map(s => s.name);
-        }
-      }
-
-      if (titles.length === 0) {
-        const deptUpper = userDept.toUpperCase();
-        if (deptUpper.includes('MARKETING')) {
-          titles = ['Marketing OIC', 'BME'];
-        } else if (deptUpper.includes('ADMIN')) {
-          titles = ['Admin OIC', 'Payroll Specialist', 'Admin Assistant', 'Messenger'];
-        } else if (deptUpper.includes('HR') || deptUpper.includes('HUMAN RESOURCE')) {
-          titles = ['HR Manager', 'HR Associate', 'Recruiter'];
-        } else if (deptUpper.includes('ACCOUNTING')) {
-          titles = ['Accounting Head', 'Junior Accountant', 'Billing Clerk'];
-        } else if (deptUpper.includes('SALES')) {
-          titles = ['Sales Manager', 'Sales Executive'];
-        } else {
-          titles = ['System Administrator', 'IT Head', 'Technical Specialist'];
-        }
+        titles = data.jobs || [];
       }
 
       setDeptJobTitles(titles);
-      if (titles.length > 0) setSelectedJob(titles[0]);
+      if (titles.length > 0) {
+        setSelectedJob(titles[0]);
+      } else {
+        setSelectedJob(null);
+      }
     } catch (e) {
-      setDeptJobTitles(['System Administrator', 'IT Head', 'Technical Specialist']);
-      setSelectedJob('System Administrator');
+      setDeptJobTitles([]);
+      setSelectedJob(null);
     }
     setJobsLoading(false);
   }, [API_BASE_URL, userDept]);
@@ -805,7 +784,7 @@ await Notifications.scheduleNotificationAsync({
         <View style={styles.modalBg}>
           <View style={styles.modalSheet}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Duty Role</Text>
+              <Text style={styles.modalTitle}>Department Specific Jobs</Text>
               <TouchableOpacity onPress={() => setShowJobModal(false)}><Ionicons name="close" size={24} color="#475569" /></TouchableOpacity>
             </View>
 

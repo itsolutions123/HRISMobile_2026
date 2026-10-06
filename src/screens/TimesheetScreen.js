@@ -139,24 +139,10 @@ export default function TimesheetScreen() {
       setSmartGroupName(userGroup || 'General');
 
       // 2. Fetch jobs catalog
-      const jobsRes = await fetch(`${API_BASE_URL}/api/jobs`, { headers });
+      const jobsRes = await fetch(`${API_BASE_URL}/api/jobs/groups/${encodeURIComponent(userGroup || 'General')}/jobs`, { headers });
       if (jobsRes.ok) {
-        const categories = await jobsRes.json();
-        let matchedTitles = [];
-
-        // Find matching job category/group
-        const groupMatch = categories.find(c =>
-          c.name?.toLowerCase() === userGroup.toLowerCase() ||
-          c.code?.toLowerCase() === userGroup.toLowerCase() ||
-          c.description?.toLowerCase() === userGroup.toLowerCase()
-        );
-
-        if (groupMatch && groupMatch.sub_items && groupMatch.sub_items.length > 0) {
-          matchedTitles = groupMatch.sub_items.map(s => s.name);
-        } else if (categories.length > 0 && categories[0].sub_items) {
-          // Fallback to first category sub_items if exact group match has no sub_items
-          matchedTitles = categories[0].sub_items.map(s => s.name);
-        }
+        const data = await jobsRes.json();
+        let matchedTitles = data.jobs || [];
 
         if (matchedTitles.length > 0) {
           setAvailableJobs(matchedTitles);

@@ -99,3 +99,24 @@ Affects: backend yes | web panel no | mobile yes
 Hardcodes removed / remaining: none
 Hand back to: Full-Stack (implement)
 Docs to update: none
+
+## D-006 - Schema and Contract for Smart Group Jobs
+Date: 2026-10-06   Status: APPROVED
+Mode: new feature
+Context: The web panel's "Department Specific Jobs" are currently only saved to local storage (`setDeptJobsStore`), preventing the mobile app from fetching them. 
+Decision: Add a `jobs` JSON-encoded column to the `smart_groups` table to store a list of job titles, and create matching GET/PUT API endpoints.
+Alternatives rejected: Creating a separate `department_jobs` table (rejected as overkill for a simple list of string tags, and to maintain consistency with the existing `admins` JSON text column).
+Contract: 
+- `GET /api/smart_groups/{id}/jobs` - Auth: `get_current_user` - Body: none - Response: `{"jobs": ["Cashier", "Barista"]}` - Error: 404
+- `PUT /api/smart_groups/{id}/jobs` - Auth: `require_roles(["Super Admin", "Admin"])` - Body: `{"jobs": ["Cashier", "Barista"]}` - Response: `{"jobs": ["Cashier", "Barista"]}` - Error: 404, 403
+Schema: `smart_groups.jobs` `TEXT` nullable default `'[]'`
+Migration: 
+  Backup: `docker exec hris-postgres-db pg_dump -U hrisuser -d hrisdb -t smart_groups > smart_groups_backup.sql`
+  Run: `docker exec hris-postgres-db psql -U hrisuser -d hrisdb -c "ALTER TABLE smart_groups ADD COLUMN jobs TEXT DEFAULT '[]';"`
+  Rollback: `docker exec hris-postgres-db psql -U hrisuser -d hrisdb -c "ALTER TABLE smart_groups DROP COLUMN jobs;"`
+Config: none
+Security impact: Requires Admin+ role to modify the list. Standard authenticated access to read.
+Affects: backend yes | web panel yes | mobile yes
+Hardcodes removed / remaining: Will remove reliance on browser local storage (`setDeptJobsStore`) in the web panel.
+Hand back to: Full-Stack (implement) -> Database Gem / API Gem (record)
+Docs to update: docs/DATABASE.md, docs/API.md

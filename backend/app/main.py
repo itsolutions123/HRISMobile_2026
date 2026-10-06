@@ -1395,12 +1395,7 @@ def get_admin_dashboard(path: str = ""):
                     </div>
                 </div>
 
-                <div class="d-flex align-items-center gap-2 mb-4">
-                    <span class="text-muted fw-semibold" style="font-size: 12px;">Group filtered by</span>
-                    <span class="filter-pill" id="filter-brand-pill">Location is Head Office</span>
-                    <span class="filter-pill" id="filter-dept-pill">Department is Admin</span>
-                    <button class="btn btn-link btn-sm text-primary fw-bold text-decoration-none p-0 ms-2" onclick="showToast('Filter editor opened.')">Edit filters</button>
-                </div>
+
 
                 <div class="card-custom p-3 mb-4 bg-light">
                     <div class="d-flex justify-content-between align-items-center mb-2">
@@ -2263,19 +2258,7 @@ def get_admin_dashboard(path: str = ""):
                 return [];
             }
 
-            function getDeptJobsStore(groupName) {
-                const key = 'dept_jobs_' + groupName;
-                const stored = localStorage.getItem(key);
-                if (stored) {
-                    try { return JSON.parse(stored); } catch(e) {}
-                }
-                return ['IT Support', 'System Administrator', 'Technical Specialist'];
-            }
 
-            function setDeptJobsStore(groupName, jobs) {
-                const key = 'dept_jobs_' + groupName;
-                localStorage.setItem(key, JSON.stringify(jobs));
-            }
 
             async function populateDepartmentDropdownOptions(selectedVal) {
                 const allGroups = await getStoredGroups();
@@ -3190,8 +3173,6 @@ def get_admin_dashboard(path: str = ""):
             async function viewGroupDetails(groupName, brand, dept) {
                 activeGroupName = groupName;
                 document.getElementById('detail-group-title').innerText = groupName;
-                document.getElementById('filter-brand-pill').innerText = `Location is ${brand || 'Head Office'}`;
-                document.getElementById('filter-dept-pill').innerText = `Department is ${dept || 'General'}`;
 
                 const token = await getAdminAuthToken();
                 try {
@@ -3284,10 +3265,28 @@ def get_admin_dashboard(path: str = ""):
                 });
             }
 
-            function renderDepartmentJobsChips() {
-                const jobsList = getDeptJobsStore(activeGroupName);
+            let currentGroupJobs = [];
+
+            async function renderDepartmentJobsChips() {
+                const token = await getAdminAuthToken();
+                document.getElementById('dept-jobs-chips-container').innerHTML = '<small class="text-muted">Loading...</small>';
+                try {
+                    const res = await fetch(`/api/jobs/groups/${encodeURIComponent(activeGroupName)}/jobs`, {
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        currentGroupJobs = data.jobs || [];
+                    } else {
+                        currentGroupJobs = [];
+                    }
+                } catch(e) {
+                    console.error("Failed to load jobs", e);
+                    currentGroupJobs = [];
+                }
+
                 let chipsHtml = '';
-                jobsList.forEach((j, idx) => {
+                currentGroupJobs.forEach((j, idx) => {
                     chipsHtml += `
                         <span class="badge bg-white text-dark border p-2 fw-semibold d-inline-flex align-items-center gap-2">
                             ${j}
@@ -3303,28 +3302,50 @@ def get_admin_dashboard(path: str = ""):
                 currentBsModal.show();
             }
 
-            function saveNewDeptJobTitle() {
+            async function saveNewDeptJobTitle() {
+                const token = await getAdminAuthToken();
                 const jobTitle = document.getElementById('modalNewDeptJobTitle').value.trim();
                 if (!jobTitle) {
                     showToast('Please enter a job title.');
                     return;
                 }
 
-                let jobsList = getDeptJobsStore(activeGroupName);
-                jobsList.push(jobTitle);
-                setDeptJobsStore(activeGroupName, jobsList);
-
-                renderDepartmentJobsChips();
-                showToast(`Job "${jobTitle}" added to ${activeGroupName}.`);
-                if (currentBsModal) currentBsModal.hide();
+                currentGroupJobs.push(jobTitle);
+                
+                try {
+                    const res = await fetch(`/api/jobs/groups/${encodeURIComponent(activeGroupName)}/jobs`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                        body: JSON.stringify({ jobs: currentGroupJobs })
+                    });
+                    if (!res.ok) throw new Error("Failed to save");
+                    
+                    await renderDepartmentJobsChips();
+                    showToast(`Job "${jobTitle}" added to ${activeGroupName}.`);
+                    if (currentBsModal) currentBsModal.hide();
+                } catch (e) {
+                    showToast('Error saving job title.');
+                    currentGroupJobs.pop(); // revert
+                }
             }
 
-            function removeDepartmentJobTitle(idx) {
-                let jobsList = getDeptJobsStore(activeGroupName);
-                jobsList.splice(idx, 1);
-                setDeptJobsStore(activeGroupName, jobsList);
-                renderDepartmentJobsChips();
-                showToast('Job title removed.');
+            async function removeDepartmentJobTitle(idx) {
+                const token = await getAdminAuthToken();
+                const removed = currentGroupJobs.splice(idx, 1)[0];
+                try {
+                    const res = await fetch(`/api/jobs/groups/${encodeURIComponent(activeGroupName)}/jobs`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                        body: JSON.stringify({ jobs: currentGroupJobs })
+                    });
+                    if (!res.ok) throw new Error("Failed to save");
+                    
+                    await renderDepartmentJobsChips();
+                    showToast('Job title removed.');
+                } catch(e) {
+                    showToast('Error removing job title.');
+                    currentGroupJobs.splice(idx, 0, removed); // revert
+                }
             }
 
             function renderDetailMembers(members) {

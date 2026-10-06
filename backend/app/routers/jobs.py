@@ -35,6 +35,9 @@ class GroupAdminUpdate(BaseModel):
 class GroupRename(BaseModel):
     new_name: str
 
+class GroupJobsUpdate(BaseModel):
+    jobs: List[str]
+
 # 1. LEGACY JOB CATEGORIES & SUB-ITEMS
 @router.get("/public")
 def get_all_jobs_public(db: Session = Depends(get_db)):
@@ -255,6 +258,30 @@ def delete_smart_group(group_name: str, db: Session = Depends(get_db), current_u
     db.delete(group)
     db.commit()
     return {"status": "success", "message": f"Group '{group_name}' removed"}
+
+@router.get("/groups/{group_name}/jobs")
+def get_group_jobs(group_name: str, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
+    group = db.query(SmartGroup).filter(SmartGroup.name == group_name).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Smart Group not found")
+    import json
+    try:
+        jobs = json.loads(group.jobs)
+    except:
+        jobs = []
+    return {"jobs": jobs}
+
+@router.put("/groups/{group_name}/jobs")
+def update_group_jobs(group_name: str, payload: GroupJobsUpdate, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
+    if current_user.role not in ["Super Admin", "Admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    group = db.query(SmartGroup).filter(SmartGroup.name == group_name).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Smart Group not found")
+    import json
+    group.jobs = json.dumps(payload.jobs)
+    db.commit()
+    return {"detail": "Jobs updated successfully"}
 
 @router.put("/groups/{group_name}/admins")
 def update_group_admins(group_name: str, payload: GroupAdminUpdate, db: Session = Depends(get_db), current_user: Employee = Depends(get_current_user)):
