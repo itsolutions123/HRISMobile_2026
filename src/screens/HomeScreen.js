@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useContext, useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator , Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Platform, RefreshControl, BackHandler, Alert } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../context/AuthContext';
 
 export default function HomeScreen() {
-  const { user, token, API_BASE_URL } = useContext(AuthContext);
+  const { user, token, logout, API_BASE_URL } = useContext(AuthContext);
   const navigation = useNavigation();
   const [isClockedIn, setIsClockedIn] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -13,6 +13,32 @@ export default function HomeScreen() {
   const [clockInTime, setClockInTime] = useState('');
   const [fetchingStatus, setFetchingStatus] = useState(true);
   const timerRef = useRef(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchActiveStatus();
+    setRefreshing(false);
+  }, [fetchActiveStatus]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        Alert.alert(
+          'Logout Confirmation',
+          'Are you sure you want to log out of atWork?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Logout', style: 'destructive', onPress: () => logout() }
+          ]
+        );
+        return true;
+      };
+
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => subscription.remove();
+    }, [logout])
+  );
 
   const getTimeState = () => {
     const hour = new Date().getHours();
@@ -83,7 +109,14 @@ export default function HomeScreen() {
   ];
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2563eb']} tintColor="#2563eb" />
+      }
+    >
       
       {/* Top Header */}
       <View style={styles.header}>

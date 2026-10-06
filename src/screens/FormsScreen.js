@@ -1,11 +1,12 @@
 import React, { useContext, useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, FlatList, ScrollView, TextInput, Alert, Platform, Modal, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, FlatList, ScrollView, TextInput, Alert, Platform, Modal, Image, RefreshControl, BackHandler } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../context/AuthContext';
 
 export default function FormsScreen({ navigation }) {
-  const { user, token, API_BASE_URL } = useContext(AuthContext);
+  const { user, token, logout, API_BASE_URL } = useContext(AuthContext);
   
   const [currentView, setCurrentView] = useState('CATEGORIES');
   const [loading, setLoading] = useState(true);
@@ -18,6 +19,55 @@ export default function FormsScreen({ navigation }) {
   
   const [formData, setFormData] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    if (currentView === 'CATEGORIES') {
+      await fetchCategories();
+    } else if (currentView === 'FORMS' && activeCategory) {
+      const catName = typeof activeCategory === 'string' ? activeCategory : activeCategory.name;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/forms?category=${encodeURIComponent(catName)}&is_archived=false`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setForms(data);
+        }
+      } catch (error) {
+        console.log('Error refreshing forms:', error);
+      }
+    }
+    setRefreshing(false);
+  }, [currentView, activeCategory, fetchCategories, API_BASE_URL, token]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        if (currentView === 'FILL_FORM') {
+          setCurrentView('FORMS');
+          return true;
+        } else if (currentView === 'FORMS') {
+          setCurrentView('CATEGORIES');
+          return true;
+        } else {
+          Alert.alert(
+            'Logout Confirmation',
+            'Are you sure you want to log out of atWork?',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Logout', style: 'destructive', onPress: () => logout() }
+            ]
+          );
+          return true;
+        }
+      };
+
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => subscription.remove();
+    }, [currentView, logout])
+  );
   
   const [webViewHeights, setWebViewHeights] = useState({});
   
@@ -257,6 +307,9 @@ export default function FormsScreen({ navigation }) {
           data={categories}
           keyExtractor={(item, index) => item.id ? item.id.toString() : index.toString()}
           contentContainerStyle={{ paddingBottom: 20, paddingTop: 10 }}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2563eb']} tintColor="#2563eb" />
+          }
           renderItem={({ item }) => (
             <TouchableOpacity style={styles.categoryCard} onPress={() => handleSelectCategory(item)}>
               <View style={[styles.iconContainer, { backgroundColor: item.color || '#0ea5e9' }]}>
@@ -281,15 +334,23 @@ export default function FormsScreen({ navigation }) {
       
       {loading ? <ActivityIndicator size="large" color="#2563eb" style={{marginTop: 40}} /> : (
         forms.length === 0 ? (
-          <View style={styles.emptyState}>
+          <ScrollView
+            contentContainerStyle={styles.emptyState}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2563eb']} tintColor="#2563eb" />
+            }
+          >
             <Ionicons name="folder-open-outline" size={48} color="#cbd5e1" />
             <Text style={styles.emptyStateText}>No active forms in this category.</Text>
-          </View>
+          </ScrollView>
         ) : (
           <FlatList
             data={forms}
             keyExtractor={item => item.id.toString()}
             contentContainerStyle={{ paddingBottom: 20 }}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2563eb']} tintColor="#2563eb" />
+            }
             renderItem={({ item }) => (
               <TouchableOpacity style={styles.formCard} onPress={() => handleSelectForm(item)}>
                 <View style={{flex: 1}}>
