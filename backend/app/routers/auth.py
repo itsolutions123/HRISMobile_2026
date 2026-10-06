@@ -60,6 +60,9 @@ class UserUpdateRequest(BaseModel):
 class UserStatusUpdateRequest(BaseModel):
     status: str  # 'APPROVED', 'DENIED', 'PENDING', 'ARCHIVED'
 
+class UserPasswordResetRequest(BaseModel):
+    new_password: str
+
 @router.get("/departments")
 def get_public_departments(db: Session = Depends(get_db)):
     groups = db.query(SmartGroup.name).order_by(SmartGroup.name.asc()).all()
@@ -273,3 +276,25 @@ def update_user_status(
     db.commit()
     db.refresh(user)
     return {"status": "success", "message": f"User status updated to {payload.status}"}
+
+@router.put("/users/{emp_id}/password")
+def reset_user_password(
+    emp_id: str,
+    payload: UserPasswordResetRequest,
+    db: Session = Depends(get_db),
+    current_user: Employee = Depends(require_roles(["Super Admin", "Superadmin"]))
+):
+    if len(payload.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    
+    user = db.query(Employee).filter(Employee.employee_id == emp_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if verify_password(payload.new_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Already used this password once, please use new password")
+    
+    user.password_hash = get_password_hash(payload.new_password)
+    db.commit()
+    
+    return {"message": "Password updated successfully", "employee_id": user.employee_id}

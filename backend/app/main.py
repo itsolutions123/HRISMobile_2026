@@ -96,13 +96,13 @@ def seed_initial_data():
                 password_hash=get_password_hash(initial_admin_pass),
                 mobile_phone="+63 998 940 0957",
                 email="admin@bigtimeempire.com",
-                role="Admin",
+                role="Superadmin",
                 status="APPROVED"
             )
             db.add(super_admin)
             db.commit()
         elif super_admin:
-            super_admin.role = "Admin"
+            super_admin.role = "Superadmin"
             super_admin.status = "APPROVED"
             db.commit()
 
@@ -705,12 +705,16 @@ def get_admin_dashboard(path: str = ""):
                                     <div class="d-flex align-items-center gap-2">
                                         <div class="dropdown">
                                             <button class="btn btn-outline-custom btn-sm dropdown-toggle fw-bold" type="button" data-bs-toggle="dropdown">
-                                                <i class="bi bi-person-gear me-1"></i> Change Role
+                                                <i class="bi bi-person-gear me-1"></i> Actions
                                             </button>
                                             <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                                                <li><h6 class="dropdown-header fs-8 text-uppercase">Role</h6></li>
                                                 <li><a class="dropdown-item fs-7" onclick="changeActiveUserRole('Admin')">Assign as Admin</a></li>
                                                 <li><a class="dropdown-item fs-7" onclick="changeActiveUserRole('Manager')">Assign as Manager</a></li>
                                                 <li><a class="dropdown-item fs-7" onclick="changeActiveUserRole('Employee')">Assign as Employee</a></li>
+                                                <li><hr class="dropdown-divider"></li>
+                                                <li><h6 class="dropdown-header fs-8 text-uppercase">Security</h6></li>
+                                                <li><a class="dropdown-item fs-7 text-danger" onclick="openResetPasswordModal()"><i class="bi bi-key me-1"></i> Reset Password</a></li>
                                             </ul>
                                         </div>
                                         <button class="btn btn-outline-custom btn-sm text-success" id="unarchive-profile-btn" style="display:none;" onclick="unarchiveActiveUserProfile()"><i class="bi bi-arrow-counterclockwise me-1"></i> Un-archive User</button>
@@ -1320,6 +1324,34 @@ def get_admin_dashboard(path: str = ""):
                                 </tbody>
                             </table>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RESET PASSWORD MODAL -->
+        <div class="modal fade" id="resetPasswordModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 shadow">
+                    <div class="modal-header border-bottom-0 pb-0">
+                        <h5 class="modal-title fw-bold">Reset Password</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="text-muted fs-7 mb-3">Set a new password for <strong id="reset-password-empid"></strong>. Minimum 6 characters.</p>
+                        <div class="mb-3">
+                            <label class="form-label fs-7 fw-bold text-secondary">New Password</label>
+                            <div class="input-group input-group-sm">
+                                <input type="password" class="form-control" id="reset-password-input">
+                                <button class="btn btn-outline-secondary border text-secondary" type="button" onclick="const p = document.getElementById('reset-password-input'); const i = this.querySelector('i'); if(p.type === 'password'){p.type='text'; i.className='bi bi-eye-slash';}else{p.type='password'; i.className='bi bi-eye';}">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-top-0 pt-0">
+                        <button type="button" class="btn btn-outline-secondary btn-sm fw-bold" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-danger btn-sm fw-bold" onclick="submitPasswordReset()">Reset Password</button>
                     </div>
                 </div>
             </div>
@@ -3789,6 +3821,49 @@ def get_admin_dashboard(path: str = ""):
                         showToast('Failed to update employee profile.');
                     }
                 } catch(e) { showToast('Server connection error.'); }
+            }
+
+            function openResetPasswordModal() {
+                const origEmpId = document.getElementById('edit-user-original-empid').value;
+                document.getElementById('reset-password-empid').innerText = origEmpId;
+                const passInput = document.getElementById('reset-password-input');
+                passInput.value = '';
+                passInput.type = 'password';
+                const eyeIcon = passInput.nextElementSibling.querySelector('i');
+                if (eyeIcon) eyeIcon.className = 'bi bi-eye';
+                new bootstrap.Modal(document.getElementById('resetPasswordModal')).show();
+            }
+
+            async function submitPasswordReset() {
+                const empId = document.getElementById('reset-password-empid').innerText;
+                const newPassword = document.getElementById('reset-password-input').value;
+                
+                if (newPassword.length < 6) {
+                    showToast('Password must be at least 6 characters.');
+                    return;
+                }
+                
+                try {
+                    const token = await getAdminAuthToken();
+                    const res = await fetch(`/api/auth/users/${empId}/password`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + token
+                        },
+                        body: JSON.stringify({ new_password: newPassword })
+                    });
+                    
+                    if (res.ok) {
+                        showToast('Password updated successfully.');
+                        bootstrap.Modal.getInstance(document.getElementById('resetPasswordModal')).hide();
+                    } else {
+                        const err = await res.json();
+                        showToast(`Failed: ${err.detail || 'Unknown error'}`);
+                    }
+                } catch (e) {
+                    showToast('Server connection error.');
+                }
             }
 
             async function archiveActiveUserProfile() {
