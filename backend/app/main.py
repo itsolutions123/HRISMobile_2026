@@ -3149,22 +3149,83 @@ def get_admin_dashboard(path: str = ""):
 
                 let clockedInCount = 0;
                 try {
-                    const activeRes = await fetch('/api/punch/logs', { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('atwork_jwt_token') } });
+                    const activeRes = await fetch('/api/punch/logs', { headers: { 'Authorization': 'Bearer ' + token } });
                     if (activeRes.ok) {
                         const logs = await activeRes.json();
-                        const activeEmpIds = logs.filter(p => p.punch_type === 'CLOCK_IN').map(p => p.employee_id);
+                        // Find latest punch per employee to accurately determine currently clocked in status
+                        const latestPunches = {};
+                        logs.forEach(p => {
+                            if (!latestPunches[p.employee_id] || new Date(p.timestamp) > new Date(latestPunches[p.employee_id].timestamp)) {
+                                latestPunches[p.employee_id] = p;
+                            }
+                        });
+                        const activeEmpIds = Object.values(latestPunches).filter(p => p.punch_type === 'CLOCK_IN').map(p => p.employee_id);
                         clockedInCount = groupMembers.filter(m => activeEmpIds.includes(m.employee_id || m.kiosk_code)).length;
                     }
-                } catch(e) {}
+                } catch(e) { console.error("Error fetching logs for active count:", e); }
 
                 document.getElementById('detail-emp-count').innerText = groupMembers.length;
                 document.getElementById('detail-logged-count').innerText = `${clockedInCount} / ${groupMembers.length}`;
+
+                // Fetch group info to get current admins
+                let currentAdmins = [];
+                try {
+                    const groups = await getStoredGroups();
+                    const thisGroup = groups.find(g => g.name === activeGroupName);
+                    if (thisGroup && thisGroup.admins) {
+                        currentAdmins = typeof thisGroup.admins === 'string' ? JSON.parse(thisGroup.admins) : thisGroup.admins;
+                    }
+                } catch(e) {}
+
+                // Populate Group Admins / Managers dropdown (filtered by group)
+                const managers = groupMembers.filter(u => u.role && ['MANAGER', 'ADMIN', 'SUPER ADMIN', 'SUPERADMIN'].includes(u.role.toUpperCase()));
+                let managersHtml = '';
+                managers.forEach(m => {
+                    const displayName = m.full_name || (m.first_name ? `${m.first_name} ${m.last_name}` : m.employee_id);
+                    const isChecked = currentAdmins.includes(m.employee_id) ? 'checked' : '';
+                    let displayRole = (m.role.toLowerCase() === 'superadmin') ? 'Super Admin' : m.role.charAt(0).toUpperCase() + m.role.slice(1).toLowerCase();
+                    managersHtml += `
+                        <div class="form-check custom-checkbox py-1 group-admin-item">
+                            <input class="form-check-input group-admin-cb" type="checkbox" value="${m.employee_id}" id="chk_mgr_${m.employee_id}" ${isChecked} onchange="saveGroupAdmins()">
+                            <label class="form-check-label w-100 ms-2" style="cursor:pointer;" for="chk_mgr_${m.employee_id}">
+                                <div class="fw-medium text-dark admin-name-search">${displayName}</div>
+                                <div class="text-muted" style="font-size:11px;">${displayRole}</div>
+                            </label>
+                        </div>`;
+                });
+                document.getElementById('groupAdminCheckboxesContainer').innerHTML = managersHtml || '<div class="text-muted small">No managers found in this group</div>';
                 renderDetailMembers(groupMembers);
                 renderDepartmentJobsChips();
 
                 const drawerEl = document.getElementById('groupDetailDrawer');
                 currentOffcanvasDrawer = new bootstrap.Offcanvas(drawerEl);
                 currentOffcanvasDrawer.show();
+            }
+
+            async function saveGroupAdmins() {
+                const checkboxes = document.querySelectorAll('.group-admin-cb:checked');
+                const selectedAdmins = Array.from(checkboxes).map(cb => cb.value);
+                const token = await getAdminAuthToken();
+                try {
+                    await fetch(`/api/jobs/groups/${encodeURIComponent(activeGroupName)}/admins`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                        body: JSON.stringify({ admins: selectedAdmins })
+                    });
+                } catch(e) { console.error("Failed to save admins", e); }
+            }
+
+            function filterGroupAdminDropdownList(query) {
+                const q = query.toLowerCase();
+                const items = document.querySelectorAll('.group-admin-item');
+                items.forEach(item => {
+                    const name = item.querySelector('.admin-name-search').innerText.toLowerCase();
+                    if (name.includes(q)) {
+                        item.style.display = 'block';
+                    } else {
+                        item.style.display = 'none';
+                    }
+                });
             }
 
             function renderDepartmentJobsChips() {

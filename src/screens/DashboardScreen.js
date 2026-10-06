@@ -9,6 +9,119 @@ import * as Notifications from 'expo-notifications';
 import { AuthContext } from '../context/AuthContext';
 
 export default function DashboardScreen({ navigation }) {
+  // Clay Edit Shift Modal States
+  const [showClayEditModal, setShowClayEditModal] = useState(false);
+  const [clayStartHour, setClayStartHour] = useState('09');
+  const [clayStartMin, setClayStartMin] = useState('00');
+  const [clayStartAmpm, setClayStartAmpm] = useState('AM');
+  const [clayEndHour, setClayEndHour] = useState('05');
+  const [clayEndMin, setClayEndMin] = useState('00');
+  const [clayEndAmpm, setClayEndAmpm] = useState('PM');
+  const [timePickerTarget, setTimePickerTarget] = useState(null);
+  const [showTimePickerModal, setShowTimePickerModal] = useState(false);
+  const [clayEditNote, setClayEditNote] = useState('');
+  const [submittingClayRevision, setSubmittingClayRevision] = useState(false);
+
+  const parseTimestampToParts = (ts, defaultH, defaultM, defaultAmpm) => {
+    if (!ts) return { h: defaultH, m: defaultM, ampm: defaultAmpm };
+    try {
+      const d = new Date(ts.includes('T') || ts.includes('-') ? ts : `${new Date().toISOString().split('T')[0]}T${ts}`);
+      if (isNaN(d.getTime())) return { h: defaultH, m: defaultM, ampm: defaultAmpm };
+      let hours = d.getHours();
+      const mins = String(d.getMinutes()).padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12;
+      hours = hours ? hours : 12;
+      return { h: String(hours).padStart(2, '0'), m: mins, ampm };
+    } catch (e) {
+      return { h: defaultH, m: defaultM, ampm: defaultAmpm };
+    }
+  };
+
+  const handleOpenClayEditShiftModal = () => {
+    const startParts = parseTimestampToParts(clockInTimestampStr, '09', '00', 'AM');
+    setClayStartHour(startParts.h);
+    setClayStartMin(startParts.m);
+    setClayStartAmpm(startParts.ampm);
+
+    const endParts = parseTimestampToParts(clockOutTimestampStr, '05', '00', 'PM');
+    setClayEndHour(endParts.h);
+    setClayEndMin(endParts.m);
+    setClayEndAmpm(endParts.ampm);
+
+    setClayEditNote('');
+    setShowClayEditModal(true);
+  };
+
+  const calculateClayTotalHours = () => {
+    try {
+      let h1 = parseInt(clayStartHour, 10) || 0;
+      let m1 = parseInt(clayStartMin, 10) || 0;
+      if (clayStartAmpm === 'PM' && h1 < 12) h1 += 12;
+      if (clayStartAmpm === 'AM' && h1 === 12) h1 = 0;
+
+      let h2 = parseInt(clayEndHour, 10) || 0;
+      let m2 = parseInt(clayEndMin, 10) || 0;
+      if (clayEndAmpm === 'PM' && h2 < 12) h2 += 12;
+      if (clayEndAmpm === 'AM' && h2 === 12) h2 = 0;
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      const d1 = new Date(todayStr); d1.setHours(h1, m1, 0, 0);
+      const d2 = new Date(todayStr); d2.setHours(h2, m2, 0, 0);
+
+      const diffMs = d2 - d1;
+      if (diffMs <= 0) return '0:00';
+      const totalMins = Math.floor(diffMs / (1000 * 60));
+      return `${Math.floor(totalMins / 60)}:${String(totalMins % 60).padStart(2, '0')}`;
+    } catch (e) {
+      return '8:00';
+    }
+  };
+
+  const handleSubmitClayShiftRevision = async () => {
+    let h1 = parseInt(clayStartHour, 10) || 0;
+    let m1 = parseInt(clayStartMin, 10) || 0;
+    if (clayStartAmpm === 'PM' && h1 < 12) h1 += 12;
+    if (clayStartAmpm === 'AM' && h1 === 12) h1 = 0;
+
+    let h2 = parseInt(clayEndHour, 10) || 0;
+    let m2 = parseInt(clayEndMin, 10) || 0;
+    if (clayEndAmpm === 'PM' && h2 < 12) h2 += 12;
+    if (clayEndAmpm === 'AM' && h2 === 12) h2 = 0;
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const formattedStartISO = `${todayStr} ${String(h1).padStart(2, '0')}:${String(m1).padStart(2, '0')}:00`;
+    const formattedEndISO = `${todayStr} ${String(h2).padStart(2, '0')}:${String(m2).padStart(2, '0')}:00`;
+
+    setSubmittingClayRevision(true);
+    try {
+      const headers = { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) };
+      const jobTitleStr = typeof selectedJob === 'string' ? selectedJob : (selectedJob?.job_name || user?.job_title || 'Staff');
+      const reasonText = clayEditNote.trim() ? `[Job: ${jobTitleStr}] ${clayEditNote.trim()}` : `Shift edit request [Job: ${jobTitleStr}]`;
+
+      const reqIn = fetch(`${API_BASE_URL}/api/manager/revisions/request`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ requested_punch_type: 'CLOCK_IN', requested_timestamp: formattedStartISO, reason: reasonText })
+      });
+
+      const reqOut = fetch(`${API_BASE_URL}/api/manager/revisions/request`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ requested_punch_type: 'CLOCK_OUT', requested_timestamp: formattedEndISO, reason: reasonText })
+      });
+
+      const [resIn, resOut] = await Promise.all([reqIn, reqOut]);
+      if (resIn.ok && resOut.ok) {
+        Alert.alert('Revision Submitted', 'Your shift edit request has been sent to your manager.');
+        setShowClayEditModal(false);
+      } else {
+        Alert.alert('Submission Failed', 'Could not submit shift edit request.');
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Unable to reach backend server.');
+    } finally {
+      setSubmittingClayRevision(false);
+    }
+  };
   const { user, token, logout, API_BASE_URL } = useContext(AuthContext);
   const [isClockedIn, setIsClockedIn] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -25,6 +138,7 @@ export default function DashboardScreen({ navigation }) {
   const [showEditInModal, setShowEditInModal] = useState(false);
   const [showEditOutModal, setShowEditOutModal] = useState(false);
   const [showEditHistoryModal, setShowEditHistoryModal] = useState(false);
+
 
   // Job & Edit States
   const [deptJobTitles, setDeptJobTitles] = useState([]);
@@ -487,7 +601,7 @@ await Notifications.scheduleNotificationAsync({
               </Text>
 
               <View style={styles.shiftReviewJobPill}>
-                <Text style={styles.shiftReviewJobPillText}>{selectedJob?.job_name || 'System Administrator'}</Text>
+                <Text style={styles.shiftReviewJobPillText}>{typeof selectedJob === 'string' ? selectedJob : (selectedJob?.job_name || user?.job_title || 'System Administrator')}</Text>
               </View>
 
               {(() => {
@@ -592,7 +706,7 @@ await Notifications.scheduleNotificationAsync({
               </View>
 
               <View style={styles.reviewActionRow}>
-                <TouchableOpacity style={styles.reviewActionBtnOutline} onPress={() => { setRequestedInTime(clockInTimestampStr); setShowEditInModal(true); }}>
+                <TouchableOpacity style={styles.reviewActionBtnOutline} onPress={() => { setShowClockOutReviewModal(false); handleOpenClayEditShiftModal(); }}>
                   <Ionicons name="pencil" size={16} color="#0f172a" />
                   <Text style={styles.reviewActionTextOutline}>Edit</Text>
                 </TouchableOpacity>
@@ -744,7 +858,155 @@ await Notifications.scheduleNotificationAsync({
         </View>
       </Modal>
 
-    </View>
+    
+      {/* REUSED CLAY EDIT SHIFT MODAL */}
+      <Modal visible={showClayEditModal} transparent animationType="slide">
+        <View style={styles.modalBg}>
+          <View style={[styles.modalSheet, { maxHeight: '88%', paddingHorizontal: 22, paddingTop: 24, borderTopLeftRadius: 32, borderTopRightRadius: 32 }]}>
+            <View style={styles.modalHeader}>
+              <Text style={{ fontSize: 22, fontWeight: '700', color: '#0f172a' }}>Edit shift</Text>
+              <TouchableOpacity onPress={() => setShowClayEditModal(false)} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#f8fafc', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0' }}>
+                <Ionicons name="close" size={20} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 10 }}>
+              {/* Job Row */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' }}>
+                <Text style={{ fontSize: 15, fontWeight: '500', color: '#334155', width: 55 }}>Job</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={{ backgroundColor: '#dbeafe', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 }}>
+                    <Text style={{ color: '#1d4ed8', fontSize: 13, fontWeight: '600' }}>{user?.department || 'HO IT'}</Text>
+                  </View>
+                  {deptJobTitles.map((jobName, idx) => {
+                    const currentTitle = typeof selectedJob === 'string' ? selectedJob : selectedJob?.job_name;
+                    const isSelected = currentTitle === jobName;
+                    return (
+                      <TouchableOpacity
+                        key={idx}
+                        style={[{ backgroundColor: '#e0e7ff', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: '#c7d2fe' }, isSelected && { backgroundColor: '#3b82f6', borderColor: '#2563eb' }]}
+                        onPress={() => setSelectedJob(jobName)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[{ color: '#4338ca', fontSize: 13, fontWeight: '600' }, isSelected && { color: '#ffffff' }]}>{jobName}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+
+              {/* Starts Row */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' }}>
+                <Text style={{ fontSize: 15, fontWeight: '500', color: '#334155', width: 55 }}>Starts</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '500', color: '#0284c7' }}>{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</Text>
+                  <TouchableOpacity style={{ backgroundColor: '#e0f2fe', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: '#bae6fd' }} onPress={() => { setTimePickerTarget('START'); setShowTimePickerModal(true); }}>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#0284c7' }}>{`${clayStartHour}:${clayStartMin} ${clayStartAmpm}`}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Ends Row */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' }}>
+                <Text style={{ fontSize: 15, fontWeight: '500', color: '#334155', width: 55 }}>Ends</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '500', color: '#0284c7' }}>{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</Text>
+                  <TouchableOpacity style={{ backgroundColor: '#e0f2fe', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: '#bae6fd' }} onPress={() => { setTimePickerTarget('END'); setShowTimePickerModal(true); }}>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#0284c7' }}>{`${clayEndHour}:${clayEndMin} ${clayEndAmpm}`}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Total Hours */}
+              <View style={{ marginVertical: 18 }}>
+                <Text style={{ fontSize: 16, fontWeight: '600', color: '#0f172a' }}>
+                  Total hours <Text style={{ fontWeight: '800', color: '#0f172a' }}>{calculateClayTotalHours()}</Text>
+                </Text>
+              </View>
+
+              {/* Note / Reason */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                <Ionicons name="create-outline" size={18} color="#0284c7" />
+                <Text style={{ fontSize: 14, fontWeight: '500', color: '#334155' }}>Add a note</Text>
+              </View>
+
+              <TextInput
+                style={{ backgroundColor: '#ffffff', borderRadius: 16, padding: 14, fontSize: 14, color: '#0f172a', borderWidth: 1, borderColor: '#e2e8f0', minHeight: 80, textAlignVertical: 'top', marginBottom: 12 }}
+                value={clayEditNote}
+                onChangeText={setClayEditNote}
+                placeholder="Attach a note to your request"
+                placeholderTextColor="#94a3b8"
+                multiline
+                numberOfLines={3}
+              />
+
+              <Text style={{ fontSize: 12, color: '#94a3b8', textAlign: 'center', marginBottom: 20 }}>All requests will be sent for a manager's approval</Text>
+
+              <TouchableOpacity
+                style={{ backgroundColor: '#2563eb', borderRadius: 28, paddingVertical: 16, alignItems: 'center', elevation: 4 }}
+                onPress={handleSubmitClayShiftRevision}
+                disabled={submittingClayRevision}
+                activeOpacity={0.8}
+              >
+                {submittingClayRevision ? (
+                  <ActivityIndicator color="#ffffff" />
+                ) : (
+                  <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '600' }}>Send for approval</Text>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* CONSTRAINED TIME PICKER MODAL */}
+      <Modal visible={showTimePickerModal} transparent animationType="fade">
+        <View style={{ flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <View style={{ width: '80%', maxWidth: 320, backgroundColor: '#ffffff', borderRadius: 24, padding: 20, alignItems: 'center', elevation: 8 }}>
+            <Text style={{ fontSize: 17, fontWeight: '700', color: '#0f172a', marginBottom: 16 }}>Set {timePickerTarget === 'START' ? 'Start' : 'End'} Time</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 140, gap: 12, marginBottom: 16 }}>
+              <ScrollView style={{ width: 60 }} showsVerticalScrollIndicator={false}>
+                {['01','02','03','04','05','06','07','08','09','10','11','12'].map(h => {
+                  const curr = timePickerTarget === 'START' ? clayStartHour : clayEndHour;
+                  const active = curr === h;
+                  return (
+                    <TouchableOpacity key={h} style={[{ paddingVertical: 8, alignItems: 'center', borderRadius: 8, marginVertical: 2 }, active && { backgroundColor: '#0284c7' }]} onPress={() => timePickerTarget === 'START' ? setClayStartHour(h) : setClayEndHour(h)}>
+                      <Text style={[{ fontSize: 16, fontWeight: '600', color: '#475569' }, active && { color: '#ffffff', fontWeight: '700' }]}>{h}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+              <Text style={{ fontSize: 20, fontWeight: '700', color: '#0f172a' }}>:</Text>
+              <ScrollView style={{ width: 60 }} showsVerticalScrollIndicator={false}>
+                {['00','15','30','45','58','20'].map(m => {
+                  const curr = timePickerTarget === 'START' ? clayStartMin : clayEndMin;
+                  const active = curr === m;
+                  return (
+                    <TouchableOpacity key={m} style={[{ paddingVertical: 8, alignItems: 'center', borderRadius: 8, marginVertical: 2 }, active && { backgroundColor: '#0284c7' }]} onPress={() => timePickerTarget === 'START' ? setClayStartMin(m) : setClayEndMin(m)}>
+                      <Text style={[{ fontSize: 16, fontWeight: '600', color: '#475569' }, active && { color: '#ffffff', fontWeight: '700' }]}>{m}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+              <View style={{ width: 60 }}>
+                {['AM', 'PM'].map(p => {
+                  const curr = timePickerTarget === 'START' ? clayStartAmpm : clayEndAmpm;
+                  const active = curr === p;
+                  return (
+                    <TouchableOpacity key={p} style={[{ paddingVertical: 8, alignItems: 'center', borderRadius: 8, marginVertical: 2 }, active && { backgroundColor: '#0284c7' }]} onPress={() => timePickerTarget === 'START' ? setClayStartAmpm(p) : setClayEndAmpm(p)}>
+                      <Text style={[{ fontSize: 16, fontWeight: '600', color: '#475569' }, active && { color: '#ffffff', fontWeight: '700' }]}>{p}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+            <TouchableOpacity style={{ backgroundColor: '#0284c7', paddingVertical: 10, paddingHorizontal: 28, borderRadius: 16 }} onPress={() => setShowTimePickerModal(false)}>
+              <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 15 }}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+</View>
   );
 }
 
