@@ -483,8 +483,13 @@ def get_admin_dashboard(path: str = ""):
                             <small class="text-muted" style="font-size:11px;">Bigtime Empire Corporation</small>
                         </div>
 
-                        <div class="dropdown profile-dropdown">
-                            <button class="btn border-0 d-flex align-items-center gap-2 p-1" type="button" data-bs-toggle="dropdown">
+                        <div class="d-flex align-items-center gap-3">
+                            <button class="btn btn-link text-dark p-0 position-relative" onclick="openResetRequestsModal()">
+                                <i class="bi bi-bell fs-5"></i>
+                                <span class="position-absolute top-0 start-100 translate-middle p-1 bg-danger border border-light rounded-circle d-none" id="reset-request-badge"></span>
+                            </button>
+                            <div class="dropdown profile-dropdown">
+                                <button class="btn border-0 d-flex align-items-center gap-2 p-1" type="button" data-bs-toggle="dropdown">
                                 <div class="avatar-circle">SA</div>
                                 <div class="text-start d-none d-sm-block ms-1">
                                     <div class="fw-bold text-dark lh-1" style="font-size: 13px;" id="topbar-user-name">Super Admin Xenon</div>
@@ -497,6 +502,7 @@ def get_admin_dashboard(path: str = ""):
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item py-2 fs-7 text-danger" onclick="performSignOut()"><i class="bi bi-box-arrow-right me-2"></i> Sign Out</a></li>
                             </ul>
+                        </div>
                         </div>
                     </div>
 
@@ -6275,6 +6281,96 @@ def get_admin_dashboard(path: str = ""):
     }
     </script>
 
+
+<!-- PASSWORD RESET REQUESTS MODAL -->
+<div class="modal fade" id="resetRequestsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header border-bottom-0 pb-0">
+                <h5 class="modal-title fw-bold">Password Reset Requests</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead>
+                            <tr>
+                                <th>Full Name</th>
+                                <th>Date & Time of Request</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reset-requests-tbody">
+                            <tr><td colspan="3" class="text-center text-muted">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function fetchResetRequests() {
+    try {
+        const res = await fetch('/api/auth/admin/reset-requests', {
+            headers: { 'Authorization': 'Bearer ' + localStorage.getItem('hris_token') }
+        });
+        if (!res.ok) return [];
+        const data = await res.json();
+        
+        const badge = document.getElementById('reset-request-badge');
+        if (data.length > 0) {
+            badge.classList.remove('d-none');
+        } else {
+            badge.classList.add('d-none');
+        }
+        return data;
+    } catch (err) {
+        console.error(err);
+        return [];
+    }
+}
+
+async function openResetRequestsModal() {
+    const tbody = document.getElementById('reset-requests-tbody');
+    tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Loading...</td></tr>';
+    
+    const modal = new bootstrap.Modal(document.getElementById('resetRequestsModal'));
+    modal.show();
+    
+    const requests = await fetchResetRequests();
+    if (requests.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No pending reset requests.</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = '';
+    requests.forEach(r => {
+        const dateObj = new Date(r.requested_at);
+        const dateStr = dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ' - ' + dateObj.toLocaleDateString();
+        
+        const tr = document.createElement('tr');
+        tr.style.cursor = 'pointer';
+        tr.onclick = () => {
+            bootstrap.Modal.getInstance(document.getElementById('resetRequestsModal')).hide();
+            origEmpId = r.employee_id; 
+            setTimeout(openResetPasswordModal, 400); 
+        };
+        
+        tr.innerHTML = `
+            <td><div class="fw-bold">${r.name.replace(/</g, "&lt;")}</div><small class="text-muted">${r.employee_id.replace(/</g, "&lt;")}</small></td>
+            <td>${dateStr}</td>
+            <td><span class="badge bg-warning text-dark">${r.status.replace(/</g, "&lt;")}</span></td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+// Poll every 30s
+setInterval(fetchResetRequests, 30000);
+setTimeout(fetchResetRequests, 2000);
+</script>
 </body>
     </html>
     """

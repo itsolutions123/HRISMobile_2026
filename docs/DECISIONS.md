@@ -140,3 +140,29 @@ Affects: backend yes | web panel yes | mobile no
 Hardcodes removed / remaining: None.
 Hand back to: Full-Stack (implement) -> API Gem (record)
 Docs to update: docs/API.md
+
+## D-008 - Schema and Contract for User-Initiated Password Reset Requests
+Date: 2026-10-06   Status: PROPOSED
+Mode: new feature
+Context: The mobile app requires an unauthenticated "Forgot Password" flow. Security Ruling S-R002 mandates that this endpoint must not reveal user existence (generic success response), requires a secondary matching field to prevent spam, and must enforce a strict IP-based rate limit (3 requests per hour). 
+Decision: 
+1. Use `mobile_phone` as the secondary validation field alongside `employee_id`.
+2. Create a separate `password_reset_requests` table to store pending requests for admins to review.
+3. Apply a 3-per-hour rate limit on the unauthenticated POST endpoint.
+Alternatives rejected: Adding a column directly to `employees` (rejected because a separate table allows tracking historical requests and provides a more efficient queue query for admins). Using `birthday` for validation (rejected in favor of `mobile_phone` to avoid date-formatting friction).
+Contract:
+- `POST /api/auth/reset-requests` - Auth: None (Open) - Body: `{"employee_id": "string", "mobile_phone": "string"}` - Response: `200 OK {"message": "If the details match our records, a request has been sent to your administrator."}` - Error: 429 Too Many Requests.
+- `GET /api/admin/reset-requests` - Auth: `require_roles(["Super Admin", "Admin"])` - Body: none - Response: `[{"id": 1, "employee_id": "EMP01", "name": "Juan Dela Cruz", "requested_at": "2026-10-06T10:00:00Z", "status": "PENDING"}]` - Error: 403 Forbidden.
+Schema: 
+- Table `password_reset_requests`
+- Columns: `id` SERIAL PRIMARY KEY, `employee_id` VARCHAR NOT NULL (FK to employees.employee_id), `requested_at` TIMESTAMP WITHOUT TIME ZONE DEFAULT now(), `status` VARCHAR DEFAULT 'PENDING'
+Migration:
+  Backup: `docker exec hris-postgres-db pg_dump -U hrisuser -d hrisdb -s > schema_backup_d008.sql`
+  Run: `docker exec hris-postgres-db psql -U hrisuser -d hrisdb -c "CREATE TABLE password_reset_requests (id SERIAL PRIMARY KEY, employee_id VARCHAR NOT NULL REFERENCES employees(employee_id), requested_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now(), status VARCHAR DEFAULT 'PENDING');"`
+  Rollback: `docker exec hris-postgres-db psql -U hrisuser -d hrisdb -c "DROP TABLE password_reset_requests;"`
+Config: none
+Security impact: Addressed via S-R002. Endpoint is rate-limited by client IP (3/hour). Response is generic and constant-time.
+Affects: backend yes | web panel yes | mobile yes
+Hardcodes removed / remaining: None.
+Hand back to: Full-Stack (implement) -> Database Gem / API Gem (record)
+Docs to update: docs/DATABASE.md, docs/API.md, docs/SECURITY.md

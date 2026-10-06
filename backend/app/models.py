@@ -158,6 +158,14 @@ class BrandLocation(Base):
     name = Column(String, unique=True, index=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class PasswordResetRequest(Base):
+    __tablename__ = "password_reset_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(String, ForeignKey("employees.employee_id"), nullable=False)
+    requested_at = Column(DateTime, default=datetime.utcnow)
+    status = Column(String, default="PENDING")
+
 class SmartGroup(Base):
     __tablename__ = "smart_groups"
 

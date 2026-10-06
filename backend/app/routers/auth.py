@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
 from ..database import get_db
-from ..models import Employee, SmartGroup
+from ..models import Employee, SmartGroup, PasswordResetRequest
 from ..auth_utils import (
     verify_password,
     get_password_hash,
@@ -298,3 +298,38 @@ def reset_user_password(
     db.commit()
     
     return {"message": "Password updated successfully", "employee_id": user.employee_id}
+
+class ResetRequestPayload(BaseModel):
+    employee_id: str
+    mobile_phone: str
+
+@router.post("/reset-requests")
+@limiter.limit("3/hour")
+def create_reset_request(request: Request, payload: ResetRequestPayload, db: Session = Depends(get_db)):
+    emp = db.query(Employee).filter(
+        Employee.employee_id == payload.employee_id,
+        Employee.mobile_phone == payload.mobile_phone
+    ).first()
+    if emp:
+        new_req = PasswordResetRequest(employee_id=emp.employee_id)
+        db.add(new_req)
+        db.commit()
+    return {"message": "If the details match our records, a request has been sent to your administrator."}
+
+@router.get("/admin/reset-requests")
+def get_reset_requests(
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_roles(["Super Admin", "Admin"]))
+):
+    requests = db.query(PasswordResetRequest).filter(PasswordResetRequest.status == "PENDING").all()
+    result = []
+    for r in requests:
+        emp = db.query(Employee).filter(Employee.employee_id == r.employee_id).first()
+        result.append({
+            "id": r.id,
+            "employee_id": r.employee_id,
+            "name": emp.name if emp else "Unknown",
+            "requested_at": r.requested_at.isoformat() + "Z" if r.requested_at else None,
+            "status": r.status
+        })
+    return result
