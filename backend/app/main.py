@@ -160,6 +160,8 @@ def get_admin_dashboard(path: str = ""):
         <link rel="icon" type="image/png" href="/Favicon.png">
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+        <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
         <style>
@@ -1218,28 +1220,17 @@ def get_admin_dashboard(path: str = ""):
                                     <div class="p-3 border-bottom">
                                         <ul class="nav nav-tabs nav-tabs-connecteam border-0 m-0">
                                             <li class="nav-item"><a class="nav-link active" id="form-detail-tab-sub">Submissions</a></li>
-                                            <li class="nav-item"><a class="nav-link" id="form-detail-tab-usr">Users</a></li>
-                                            <li class="nav-item"><a class="nav-link" id="form-detail-tab-sum">Summary</a></li>
-                                            <li class="nav-item"><a class="nav-link" id="form-detail-tab-act">Activity</a></li>
                                         </ul>
                                     </div>
 
                                     <div class="p-3 border-bottom d-flex align-items-center justify-content-between flex-wrap gap-2">
                                         <div class="d-flex align-items-center gap-2">
-                                            <div class="btn-group" role="group">
-                                                <button class="btn btn-outline-custom btn-sm active fw-bold">Table</button>
-                                                <button class="btn btn-outline-custom btn-sm fw-bold">Inbox</button>
-                                            </div>
-                                            <div class="input-group input-group-sm" style="width: 200px;">
+                                            <div class="input-group input-group-sm" style="width: 280px;">
                                                 <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
-                                                <input type="text" class="form-control border-start-0" placeholder="Search">
+                                                <input type="text" id="form-submission-search" class="form-control border-start-0" placeholder="Search by name..." oninput="if(typeof filterFormSubmissions === 'function') filterFormSubmissions()">
                                             </div>
-                                            <button class="btn btn-outline-custom btn-sm p-1 px-2"><i class="bi bi-funnel"></i></button>
-                                            <input type="text" class="form-control form-control-sm text-center" value="06/11/2024 - 09/18/2026" style="width: 170px;">
-                                            <small class="text-muted ms-2">Group by</small>
-                                            <select class="form-select form-select-sm" style="width:100px;">
-                                                <option>None</option>
-                                            </select>
+                                            <button class="btn btn-outline-custom btn-sm p-1 px-2" title="Display smart groups"><i class="bi bi-funnel"></i></button>
+                                            <input type="date" id="form-submission-date" class="form-control form-control-sm text-center" style="width: 130px;" onchange="if(typeof filterFormSubmissions === 'function') filterFormSubmissions()">
                                         </div>
 
                                         <div class="d-flex align-items-center gap-3">
@@ -1338,7 +1329,7 @@ def get_admin_dashboard(path: str = ""):
         <!-- RESET PASSWORD MODAL -->
         <div class="modal fade" id="resetPasswordModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content border-0 p-3" style="border-radius: 18px; box-shadow: var(--clay-shadow);">
+                <div class="modal-content border-0 p-3 shadow" style="border-radius: 18px;">
                     <div class="modal-header border-bottom-0 pb-0">
                         <h5 class="modal-title fw-bold">Reset Password</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -4308,6 +4299,60 @@ def get_admin_dashboard(path: str = ""):
 
             let activeCustomForm = null;
 
+            let currentFormSubmissionsData = [];
+
+            function renderFormSubmissionsList(data, validFormId) {
+                const tbody = document.getElementById('form-submissions-tbody');
+                const countLbl = document.getElementById('form-submission-count-label');
+                if (!tbody) return;
+                
+                if (countLbl) countLbl.innerText = data.length;
+                if (data.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-muted fs-7">No submissions found.</td></tr>`;
+                    return;
+                }
+                
+                tbody.innerHTML = data.map(sub => `
+                                    <tr style="vertical-align: middle;">
+                                        <td>
+                                            <input type="checkbox" class="form-check-input submission-checkbox" value="${sub.id || ''}" style="width: 18px; height: 18px; border-color: #cbd5e1;" onchange="const cb = document.querySelectorAll('.submission-checkbox'); document.getElementById('select-all-submissions').checked = cb.length > 0 && Array.from(cb).every(c => c.checked); document.getElementById('btn-delete-submissions').style.display = Array.from(cb).some(c => c.checked) ? 'inline-block' : 'none';">
+                                        </td>
+                                        <td>
+                                            <div class="fw-bold text-dark fs-7">${sub.submittedBy || 'Unknown'}</div>
+                                        </td>
+                                        <td class="text-muted fs-7">${sub.dateTime || 'N/A'}</td>
+                                        <td>
+                                            <span class="badge bg-light text-dark fw-normal border px-2 py-1">${sub.smartGroup || 'General'}</span>
+                                        </td>
+                                        <td></td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-custom" data-submitter="${sub.submittedBy || 'Unknown'}" data-date="${sub.dateTime || 'N/A'}" data-form-id="${validFormId}" data-form-data="${encodeURIComponent(JSON.stringify(sub.formData || []))}" onclick="viewSubmission(this)">
+                                                <i class="bi bi-eye"></i> View
+                                            </button>
+                                        </td>
+                                    </tr>
+                                `).join('');
+            }
+
+            function filterFormSubmissions() {
+                const searchQ = (document.getElementById('form-submission-search')?.value || '').toLowerCase();
+                const dateQ = document.getElementById('form-submission-date')?.value || '';
+                
+                let filtered = currentFormSubmissionsData;
+                if (searchQ) {
+                    filtered = filtered.filter(sub => (sub.submittedBy || '').toLowerCase().includes(searchQ));
+                }
+                if (dateQ) {
+                    // Date picker gives YYYY-MM-DD. dateTime is typically MM/DD/YYYY, HH:MM AM/PM
+                    const [y, m, d] = dateQ.split('-');
+                    const targetDate = `${m}/${d}/${y}`; // basic format match
+                    filtered = filtered.filter(sub => (sub.dateTime || '').startsWith(targetDate));
+                }
+                
+                const validFormId = (typeof activeCustomForm !== 'undefined' && activeCustomForm) ? activeCustomForm.id : '';
+                renderFormSubmissionsList(filtered, validFormId);
+            }
+
             async function openFormDetailSubmissions(formId) {
                 if (typeof customFormsList === 'undefined' || !customFormsList || customFormsList.length === 0) {
                     await loadCustomForms(currentFormCategory || 'Admin');
@@ -6286,7 +6331,7 @@ def get_admin_dashboard(path: str = ""):
 <!-- PASSWORD RESET REQUESTS MODAL -->
 <div class="modal fade" id="resetRequestsModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg">
-        <div class="modal-content border-0 p-3" style="border-radius: 18px; box-shadow: var(--clay-shadow);">
+        <div class="modal-content border-0 p-3 shadow" style="border-radius: 18px;">
             <div class="modal-header border-bottom-0 pb-0">
                 <h5 class="modal-title fw-bold">Password Reset Requests</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
