@@ -14,7 +14,7 @@ Status tags: [OK] works as written, [PARTIAL] works with gaps, [BROKEN] will fai
 6. Never delete log entries. If a feature is later removed or replaced, mark it SUPERSEDED with the date.
 
 ## FEATURE LOG (confirmed done)
-Entries before F-14 were rebuilt from code on 2026-10-07 and are tagged CODE-VERIFIED (read in code, not runtime-confirmed by the user in this file). Entries from F-14 on need a user confirmation line.
+F-01 to F-22 were rebuilt from code on 2026-10-07 and are tagged CODE-VERIFIED (read in code, not runtime-confirmed in this file). Entries from F-23 on need a user confirmation line.
 | ID | Date | Feature | Sides | Evidence | Confirmed by |
 |---|---|---|---|---|---|
 | F-01 | 2026-10-07 | GPS clock in/out with Manila timestamp, duplicate-sequence and mock/range rejection, identity from token | backend, mobile | punch.py `record_punch`; DashboardScreen `submitPunch` | CODE-VERIFIED; APK confirmed working over mobile data (earlier file) |

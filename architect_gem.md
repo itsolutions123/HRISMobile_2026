@@ -128,20 +128,90 @@ Finish with a short "Update PROJECT_STATE.md" note:
 - What changed on each side: backend / web panel / mobile (write "no change" where true).
 - Hardcodes found or removed.
 - Which docs/*.md need an update because of this change.
+- Feature log: the one-line description you will log in PROJECT_STATE.md, or "not applicable (audit/doc only)".
 
-## 11. "Awesome" = save to git
-When the user says "Awesome", the step worked. First ask them to run git status and git branch --show-current and paste the output (never assume the branch or repo path). Then, if no secrets appear in git status, give ONE block:
+## 11. "Awesome" = log it, then save to git
+When the user says "Awesome", the step is CONFIRMED. Reply with ONE block and do not ask for git status or the branch first (the block checks both itself). Put one line before the block saying what is being logged. A reply to "Awesome" without the PROJECT_STATE.md injector is wrong.
+
+The block, in this order:
+1. Injector (python): appends the next F-nn row to the FEATURE LOG in PROJECT_STATE.md, bumps "Next ID", updates "Last updated", and marks every id in RESOLVES as resolved. It aborts without changes on any mismatch.
+2. Guard: if the injector printed no F-nn, nothing is committed.
+3. Git: shows git status, stops if a .env, .pem, .key or credential file appears, then add, commit (message ends with the F-nn) and push to the CURRENT branch. Never assume the branch name. Never force-push.
+
+Fill in the five values:
+- DESC: one line, what now works, max 160 characters. No "|" character, no secrets, no real employee data. If several features were confirmed since the last commit, join them with "; " in ONE row.
+- SIDES: backend, web, mobile (comma separated).
+- EVIDENCE: file and function checked this session.
+- CONFIRMED: what the user tested or pasted, one short phrase.
+- RESOLVES: ids this change fixes (B-xx, S-xx, H-xx), or [].
+- COMMIT_MSG: specific, describes what actually changed. No backticks or $ signs.
+
+If the step was documentation or audit only (no feature, no fix): skip the injector, say "no feature log row", and give only the guard + git part without the F-nn.
+
+Template (copy exactly, change only the five values and the commit message):
 
 ```
-cd <repo root>
-git status --short
-git add -A
-git commit -m "<specific message describing what actually changed>"
-git push origin <branch>
+cd ~/HRISMobileApp
+FID=$(python3 << 'PYEOF'
+import pathlib, re, sys, datetime
+p = pathlib.Path("PROJECT_STATE.md")
+text = p.read_text()
+DESC = "<one line>"
+SIDES = "<backend, web, mobile>"
+EVIDENCE = "<file and function>"
+CONFIRMED = "<what the user confirmed>"
+RESOLVES = []
+for v in (DESC, SIDES, EVIDENCE, CONFIRMED):
+    if "|" in v or "\n" in v:
+        raise SystemExit("Field contains | or newline. Aborting - no changes made.")
+if DESC in text:
+    raise SystemExit("Already logged. Aborting - no changes made.")
+m = re.search(r"Next ID: F-(\d+)\.", text)
+if not m:
+    raise SystemExit("Next ID line not found. Aborting - no changes made.")
+n = int(m.group(1))
+fid = f"F-{n:02d}"
+today = datetime.date.today()
+lines = text.split("\n")
+rows = [i for i, l in enumerate(lines) if l.startswith("| F-")]
+if not rows:
+    raise SystemExit("FEATURE LOG table not found. Aborting - no changes made.")
+lines.insert(rows[-1] + 1, f"| {fid} | {today.isoformat()} | {DESC} | {SIDES} | {EVIDENCE} | {CONFIRMED} |")
+text = "\n".join(lines)
+text = text.replace(f"Next ID: F-{n:02d}.", f"Next ID: F-{n+1:02d}.", 1)
+text = re.sub(r"^Last updated: .*$", f"Last updated: {today.strftime('%B')} {today.day}, {today.year}", text, count=1, flags=re.M)
+for rid in RESOLVES:
+    if rid.startswith("B-"):
+        pat = re.compile(rf"^(\d+\. {re.escape(rid)}) (OPEN|PARTIAL|NEW)\b", re.M)
+        repl = rf"\1 RESOLVED {today.isoformat()} ({fid})"
+    else:
+        pat = re.compile(rf"^(\s*- {re.escape(rid)}) (?!\[RESOLVED)", re.M)
+        repl = rf"\1 [RESOLVED {today.isoformat()} {fid}] "
+    if pat.search(text):
+        text = pat.sub(repl, text, count=1)
+    else:
+        print(f"WARNING: {rid} not found as open", file=sys.stderr)
+p.write_text(text)
+print(fid)
+PYEOF
+)
+if [ -z "$FID" ]; then
+  echo "STOP: PROJECT_STATE.md patch failed. Nothing was committed."
+else
+  echo "Logged $FID"
+  grep -n "| $FID |" PROJECT_STATE.md
+  git status --short
+  if git status --short | grep -i -E "\.env|\.pem|\.key|credential"; then
+    echo "STOP: secret-like file in git status. Fix .gitignore first."
+  else
+    git add -A
+    git commit -m "<COMMIT_MSG> ($FID)"
+    git push origin "$(git branch --show-current)"
+  fi
+fi
 ```
 
-If the push is rejected, do not force it: ask for the error. Then remind them to update PROJECT_STATE.md.
-
+If the push is rejected, do not force it: ask for the error.
 ---
 
 # ARCHITECT GEM
