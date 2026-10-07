@@ -40,7 +40,8 @@ F-01 to F-22 were rebuilt from code on 2026-10-07 and are tagged CODE-VERIFIED (
 | F-21 | 2026-10-07 | Auto clock-out sweep every 30 min (D-005, backend half) | backend | main.py `auto_clock_out_task` | CODE-VERIFIED, buggy (B-22), NOT confirmed |
 | F-22 | 2026-10-07 | Local clock-out reminder (D-005, mobile half) | mobile | DashboardScreen `submitPunch` | CODE-VERIFIED, test value left in (B-23), NOT confirmed |
 | F-23 | 2026-10-07 | Add drag-and-drop reordering functionality to elements in the custom form builder modal | web | backend/app/main.py:handleBuilderDrop | User replied awesome to drag and drop testing |
-Next ID: F-24.
+| F-24 | 2026-10-07 | Fix mobile form date/time pickers and description image height in FormsScreen | mobile | src/screens/FormsScreen.js | Confirmed visually by user on mobile app |
+Next ID: F-25.
 
 ## Stack (confirmed, do not change without discussion)
 - Backend: FastAPI (Python 3.11, Uvicorn), SQLAlchemy ORM, slowapi (login 5/min, reset-requests 3/hour), bcrypt, python-jose (HS256 JWT, 24h), openpyxl + simpleeval (XLSX export), apscheduler (BackgroundScheduler, auto clock-out)

@@ -4,6 +4,7 @@ import { WebView } from 'react-native-webview';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../context/AuthContext';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 export default function FormsScreen({ navigation }) {
   const { user, token, logout, API_BASE_URL } = useContext(AuthContext);
@@ -67,6 +68,7 @@ export default function FormsScreen({ navigation }) {
   // Signature Modal States
   const [sigModalVisible, setSigModalVisible] = useState(false);
   const [activeSigField, setActiveSigField] = useState(null);
+  const [activeDatePicker, setActiveDatePicker] = useState(null);
 
   const fetchCategories = useCallback(async () => {
     setLoading(true);
@@ -406,16 +408,23 @@ export default function FormsScreen({ navigation }) {
                     ${descHtml}
                     <script>
                       function sendHeight() {
-                        const height = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
-                        window.ReactNativeWebView.postMessage(height);
+                        const height = Math.max(document.body.scrollHeight, document.documentElement.offsetHeight, document.documentElement.scrollHeight);
+                        window.ReactNativeWebView.postMessage(height.toString());
                       }
                       window.onload = sendHeight;
+                      document.querySelectorAll('img').forEach(function(img) { 
+                        img.onload = sendHeight; 
+                        if (img.complete) sendHeight();
+                      });
                       setTimeout(sendHeight, 100);
                       setTimeout(sendHeight, 500);
-                      setTimeout(sendHeight, 1200);
+                      setTimeout(sendHeight, 1500);
+                      setTimeout(sendHeight, 3000);
                       if (window.ResizeObserver) {
                         new ResizeObserver(sendHeight).observe(document.body);
                       }
+                      const observer = new MutationObserver(sendHeight);
+                      observer.observe(document.body, { childList: true, subtree: true, attributes: true });
                     </script>
                   </body>
                 </html>
@@ -519,14 +528,74 @@ export default function FormsScreen({ navigation }) {
                     )}
                   </View>
                 ) : field.type === 'Date' ? (
-                  <View style={styles.dateInputContainer}>
-                    <TextInput 
-                      style={[styles.input, { paddingRight: 40 }]} 
-                      placeholder="mm/dd/yyyy" 
-                      value={value}
-                      onChangeText={(val) => updateField(label, val)}
-                    />
-                    <Ionicons name="calendar-outline" size={20} color="#64748b" style={styles.dateIcon} />
+                  <View>
+                    {Platform.OS === 'ios' ? (
+                      <View style={[styles.input, { justifyContent: 'center', padding: 0, overflow: 'hidden' }]}>
+                        <DateTimePicker
+                          value={new Date()}
+                          mode={field.format === 'Time' ? 'time' : 'date'}
+                          display="default"
+                          style={{ flex: 1 }}
+                          onChange={(event, selectedDate) => {
+                            if (selectedDate) {
+                              if (field.format === 'Time') {
+                                let hrs = selectedDate.getHours();
+                                const ampm = hrs >= 12 ? 'PM' : 'AM';
+                                hrs = hrs % 12 || 12;
+                                const mins = selectedDate.getMinutes().toString().padStart(2, '0');
+                                updateField(label, `${hrs.toString().padStart(2, '0')}:${mins} ${ampm}`);
+                              } else {
+                                const yyyy = selectedDate.getFullYear();
+                                const mm = (selectedDate.getMonth() + 1).toString().padStart(2, '0');
+                                const dd = selectedDate.getDate().toString().padStart(2, '0');
+                                updateField(label, `${yyyy}-${mm}-${dd}`);
+                              }
+                            }
+                          }}
+                        />
+                      </View>
+                    ) : (
+                      <>
+                        <TouchableOpacity 
+                          style={[styles.input, { justifyContent: 'center' }]} 
+                          onPress={() => setActiveDatePicker({ label, mode: field.format === 'Time' ? 'time' : 'date' })}
+                        >
+                          <Text style={{ color: value ? '#334155' : '#94a3b8' }}>
+                            {value || (field.format === 'Time' ? '--:-- --' : 'mm/dd/yyyy')}
+                          </Text>
+                          <Ionicons 
+                            name={field.format === 'Time' ? 'time-outline' : 'calendar-outline'} 
+                            size={20} 
+                            color="#64748b" 
+                            style={{ position: 'absolute', right: 12 }} 
+                          />
+                        </TouchableOpacity>
+                        {activeDatePicker && activeDatePicker.label === label && (
+                          <DateTimePicker
+                            value={new Date()}
+                            mode={activeDatePicker.mode}
+                            display="default"
+                            onChange={(event, selectedDate) => {
+                              setActiveDatePicker(null);
+                              if (event.type === 'set' && selectedDate) {
+                                if (activeDatePicker.mode === 'time') {
+                                  let hrs = selectedDate.getHours();
+                                  const ampm = hrs >= 12 ? 'PM' : 'AM';
+                                  hrs = hrs % 12 || 12;
+                                  const mins = selectedDate.getMinutes().toString().padStart(2, '0');
+                                  updateField(activeDatePicker.label, `${hrs.toString().padStart(2, '0')}:${mins} ${ampm}`);
+                                } else {
+                                  const yyyy = selectedDate.getFullYear();
+                                  const mm = (selectedDate.getMonth() + 1).toString().padStart(2, '0');
+                                  const dd = selectedDate.getDate().toString().padStart(2, '0');
+                                  updateField(activeDatePicker.label, `${yyyy}-${mm}-${dd}`);
+                                }
+                              }
+                            }}
+                          />
+                        )}
+                      </>
+                    )}
                   </View>
                 ) : (
                   <TextInput 
