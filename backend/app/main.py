@@ -486,7 +486,7 @@ def get_admin_dashboard(path: str = ""):
                         <div class="d-flex align-items-center gap-3">
                             <button class="btn btn-link text-dark p-0 position-relative" onclick="openResetRequestsModal()">
                                 <i class="bi bi-bell fs-5"></i>
-                                <span class="position-absolute top-0 start-100 translate-middle p-1 bg-danger border border-light rounded-circle d-none" id="reset-request-badge"></span>
+                                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none" id="reset-request-badge" style="font-size: 0.65em;"></span>
                             </button>
                             <div class="dropdown profile-dropdown">
                                 <button class="btn border-0 d-flex align-items-center gap-2 p-1" type="button" data-bs-toggle="dropdown">
@@ -1338,7 +1338,7 @@ def get_admin_dashboard(path: str = ""):
         <!-- RESET PASSWORD MODAL -->
         <div class="modal fade" id="resetPasswordModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content border-0 shadow">
+                <div class="modal-content border-0 p-3" style="border-radius: 18px; box-shadow: var(--clay-shadow);">
                     <div class="modal-header border-bottom-0 pb-0">
                         <h5 class="modal-title fw-bold">Reset Password</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -3830,7 +3830,7 @@ def get_admin_dashboard(path: str = ""):
             }
 
             function openResetPasswordModal() {
-                const origEmpId = document.getElementById('edit-user-original-empid').value;
+                // Remove the re-assignment; use the global origEmpId set by the row click
                 document.getElementById('reset-password-empid').innerText = origEmpId;
                 const passInput = document.getElementById('reset-password-input');
                 passInput.value = '';
@@ -3863,6 +3863,7 @@ def get_admin_dashboard(path: str = ""):
                     if (res.ok) {
                         showToast('Password updated successfully.');
                         bootstrap.Modal.getInstance(document.getElementById('resetPasswordModal')).hide();
+                        fetchResetRequests();
                     } else {
                         const err = await res.json();
                         showToast(`Failed: ${err.detail || 'Unknown error'}`);
@@ -6285,7 +6286,7 @@ def get_admin_dashboard(path: str = ""):
 <!-- PASSWORD RESET REQUESTS MODAL -->
 <div class="modal fade" id="resetRequestsModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg">
-        <div class="modal-content border-0 shadow">
+        <div class="modal-content border-0 p-3" style="border-radius: 18px; box-shadow: var(--clay-shadow);">
             <div class="modal-header border-bottom-0 pb-0">
                 <h5 class="modal-title fw-bold">Password Reset Requests</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -6314,15 +6315,17 @@ def get_admin_dashboard(path: str = ""):
 async function fetchResetRequests() {
     try {
         const res = await fetch('/api/auth/admin/reset-requests', {
-            headers: { 'Authorization': 'Bearer ' + localStorage.getItem('hris_token') }
+            headers: { 'Authorization': 'Bearer ' + localStorage.getItem('atwork_jwt_token') }
         });
         if (!res.ok) return [];
         const data = await res.json();
         
         const badge = document.getElementById('reset-request-badge');
         if (data.length > 0) {
+            badge.innerText = data.length;
             badge.classList.remove('d-none');
         } else {
+            badge.innerText = '';
             badge.classList.add('d-none');
         }
         return data;

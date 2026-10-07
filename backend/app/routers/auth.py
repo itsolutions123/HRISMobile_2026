@@ -282,7 +282,7 @@ def reset_user_password(
     emp_id: str,
     payload: UserPasswordResetRequest,
     db: Session = Depends(get_db),
-    current_user: Employee = Depends(require_roles(["Super Admin", "Superadmin"]))
+    current_user: Employee = Depends(require_roles(["Admin", "Superadmin", "Super Admin"]))
 ):
     if len(payload.new_password) < 6:
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
@@ -295,6 +295,12 @@ def reset_user_password(
         raise HTTPException(status_code=400, detail="Already used this password once, please use new password")
     
     user.password_hash = get_password_hash(payload.new_password)
+    pending_requests = db.query(PasswordResetRequest).filter(
+        PasswordResetRequest.employee_id == emp_id,
+        PasswordResetRequest.status == 'PENDING'
+    ).all()
+    for req in pending_requests:
+        req.status = 'COMPLETED'
     db.commit()
     
     return {"message": "Password updated successfully", "employee_id": user.employee_id}
@@ -311,15 +317,20 @@ def create_reset_request(request: Request, payload: ResetRequestPayload, db: Ses
         Employee.mobile_phone == payload.mobile_phone
     ).first()
     if emp:
-        new_req = PasswordResetRequest(employee_id=emp.employee_id)
-        db.add(new_req)
-        db.commit()
+        existing_req = db.query(PasswordResetRequest).filter(
+            PasswordResetRequest.employee_id == emp.employee_id,
+            PasswordResetRequest.status == "PENDING"
+        ).first()
+        if not existing_req:
+            new_req = PasswordResetRequest(employee_id=emp.employee_id)
+            db.add(new_req)
+            db.commit()
     return {"message": "If the details match our records, a request has been sent to your administrator."}
 
 @router.get("/admin/reset-requests")
 def get_reset_requests(
     db: Session = Depends(get_db),
-    user: dict = Depends(require_roles(["Super Admin", "Admin"]))
+    user: dict = Depends(require_roles(["Superadmin", "Admin"]))
 ):
     requests = db.query(PasswordResetRequest).filter(PasswordResetRequest.status == "PENDING").all()
     result = []
