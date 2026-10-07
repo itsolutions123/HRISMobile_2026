@@ -5380,6 +5380,63 @@ def get_admin_dashboard(path: str = ""):
                 renderModalCanvasBlocks();
             }
 
+            let draggedBuilderBlockIndex = null;
+
+            function handleBuilderDragStart(e, index) {
+                if (typeof syncModalCanvasInputs === 'function') syncModalCanvasInputs();
+                draggedBuilderBlockIndex = index;
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', index);
+                setTimeout(() => { if(e.target && e.target.classList) e.target.classList.add('opacity-50'); }, 0);
+            }
+
+            function handleBuilderDragOver(e) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                return false;
+            }
+
+            function handleBuilderDragEnter(e) {
+                e.preventDefault();
+                const targetDiv = e.target.closest('.builder-drag-item');
+                if (targetDiv) {
+                    targetDiv.classList.add('border-primary-subtle', 'bg-light');
+                }
+            }
+
+            function handleBuilderDragLeave(e) {
+                const targetDiv = e.target.closest('.builder-drag-item');
+                if (targetDiv) {
+                    if (targetDiv.contains(e.relatedTarget)) return;
+                    targetDiv.classList.remove('border-primary-subtle', 'bg-light');
+                }
+            }
+
+            function handleBuilderDrop(e, dropIndex) {
+                e.stopPropagation();
+                e.preventDefault();
+                const targetDiv = e.target.closest('.builder-drag-item');
+                if (targetDiv) {
+                    targetDiv.classList.remove('border-primary-subtle', 'bg-light');
+                }
+                if (draggedBuilderBlockIndex !== null && draggedBuilderBlockIndex !== dropIndex) {
+                    const item = modalBuilderFields.splice(draggedBuilderBlockIndex, 1)[0];
+                    modalBuilderFields.splice(dropIndex, 0, item);
+                    renderModalCanvasBlocks();
+                }
+                draggedBuilderBlockIndex = null;
+                return false;
+            }
+
+            function handleBuilderDragEnd(e) {
+                if(e.target && e.target.classList) {
+                    e.target.classList.remove('opacity-50');
+                    e.target.removeAttribute('draggable');
+                }
+                draggedBuilderBlockIndex = null;
+                renderModalCanvasBlocks();
+            }
+
             function renderModalCanvasBlocks() {
                 const container = document.getElementById('builderModalCanvasArea');
                 if (!container) return;
@@ -5397,11 +5454,14 @@ def get_admin_dashboard(path: str = ""):
                 let html = '';
                 modalBuilderFields.forEach((field, idx) => {
                     html += `
-                        <div class="p-2 position-relative bg-transparent mb-2">
+                        <div class="p-2 position-relative bg-transparent mb-2 builder-drag-item border border-2 border-transparent rounded transition-all" ondragstart="handleBuilderDragStart(event, ${idx})" ondragover="handleBuilderDragOver(event)" ondragenter="handleBuilderDragEnter(event)" ondragleave="handleBuilderDragLeave(event)" ondrop="handleBuilderDrop(event, ${idx})" ondragend="handleBuilderDragEnd(event)">
                             <div class="d-flex justify-content-between align-items-center mb-2">
-                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle fw-semibold" style="font-size:11px;">
-                                    ${field.type.toUpperCase()}
-                                </span>
+                                <div class="d-flex align-items-center" style="cursor: grab;" onmousedown="this.closest('.builder-drag-item').setAttribute('draggable', 'true')" onmouseup="this.closest('.builder-drag-item').removeAttribute('draggable')" onmouseleave="this.closest('.builder-drag-item').removeAttribute('draggable')">
+                                    <i class="bi bi-grip-vertical text-muted me-1 fs-6"></i>
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle fw-semibold" style="font-size:11px;">
+                                        ${field.type.toUpperCase()}
+                                    </span>
+                                </div>
                                 <button class="btn btn-sm btn-outline-danger border-0 p-1" onclick="removeModalCanvasBlock(${idx})">
                                     <i class="bi bi-trash"></i>
                                 </button>
