@@ -4378,6 +4378,18 @@ def get_admin_dashboard(path: str = ""):
                 document.getElementById('forms-list-container').style.display = 'none';
                 document.getElementById('form-detail-submissions-container').style.display = 'block';
 
+                // Reset filter inputs
+                const searchInput = document.getElementById('form-submission-search');
+                if (searchInput) searchInput.value = '';
+                const dateInput = document.getElementById('form-submission-date');
+                if (dateInput) {
+                    if (dateInput._flatpickr) {
+                        dateInput._flatpickr.clear();
+                    } else {
+                        dateInput.value = '';
+                    }
+                }
+
                 const tbody = document.getElementById('form-submissions-tbody');
                 if (tbody) {
                     tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-muted fs-7">Loading submissions...</td></tr>`;
@@ -4389,6 +4401,44 @@ def get_admin_dashboard(path: str = ""):
                         });
                         if (res.ok) {
                             const data = await res.json();
+                            currentFormSubmissionsData = data; // Populate for filter logic
+
+                            // Initialize flatpickr on the date input to add marks
+                            const submissionDates = new Set();
+                            data.forEach(sub => {
+                                if (sub.dateTime) {
+                                    const dPart = sub.dateTime.split(',')[0].trim(); // e.g., "10/01/2026"
+                                    if (dPart) submissionDates.add(dPart);
+                                }
+                            });
+
+                            const dateInput = document.getElementById('form-submission-date');
+                            if (dateInput) {
+                                dateInput.type = 'text'; // Flatpickr prefers text
+                                if (dateInput._flatpickr) {
+                                    dateInput._flatpickr.destroy();
+                                }
+                                flatpickr(dateInput, {
+                                    dateFormat: "Y-m-d",
+                                    allowInput: true, // Allows user to backspace/clear the date
+                                    onChange: function(selectedDates, dateStr) {
+                                        dateInput.value = dateStr;
+                                        if (typeof filterFormSubmissions === 'function') filterFormSubmissions();
+                                    },
+                                    onDayCreate: function(dObj, dStr, fp, dayElem) {
+                                        const m = String(dayElem.dateObj.getMonth() + 1).padStart(2, '0');
+                                        const d = String(dayElem.dateObj.getDate()).padStart(2, '0');
+                                        const y = dayElem.dateObj.getFullYear();
+                                        const dateStrFormatted = `${m}/${d}/${y}`;
+                                        
+                                        if (submissionDates.has(dateStrFormatted)) {
+                                            // Add an indicator mark for days with submissions
+                                            dayElem.innerHTML += '<span style="display:block; width:5px; height:5px; background-color:#ff6b00; border-radius:50%; margin:2px auto 0;"></span>';
+                                        }
+                                    }
+                                });
+                            }
+
                             if (data.length === 0) {
                                 tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-muted fs-7">No submissions found.</td></tr>`;
                             } else {
