@@ -2035,6 +2035,7 @@ def get_admin_dashboard(path: str = ""):
                                     <div class="col-6"><button class="btn btn-outline-secondary btn-sm w-100 text-start fw-medium" onclick="addModalCanvasBlock('Yes/No')"><i class="bi bi-toggle-on text-info me-2"></i>Yes / No</button></div>
                                     <div class="col-6"><button class="btn btn-outline-secondary btn-sm w-100 text-start fw-medium" onclick="addModalCanvasBlock('Location')"><i class="bi bi-geo-alt text-danger me-2"></i>Location</button></div>
                                     <div class="col-6"><button class="btn btn-outline-secondary btn-sm w-100 text-start fw-medium" onclick="addModalCanvasBlock('Date')"><i class="bi bi-calendar-event text-secondary me-2"></i>Date</button></div>
+                                    <div class="col-6"><button class="btn btn-outline-secondary btn-sm w-100 text-start fw-medium" onclick="addModalCanvasBlock('Time')"><i class="bi bi-clock text-info me-2"></i>Time</button></div>
                                     <div class="col-6"><button class="btn btn-outline-secondary btn-sm w-100 text-start fw-medium" onclick="addModalCanvasBlock('Rating')"><i class="bi bi-star text-warning me-2"></i>Rating</button></div>
                                     <div class="col-6"><button class="btn btn-outline-secondary btn-sm w-100 text-start fw-medium" onclick="addModalCanvasBlock('Signature')"><i class="bi bi-pencil-square text-dark me-2"></i>Signature</button></div>
                                     <div class="col-12"><button class="btn btn-outline-secondary btn-sm w-100 text-start fw-medium" onclick="addModalCanvasBlock('Task')"><i class="bi bi-check2-square text-primary me-2"></i>Task / Checkbox</button></div>
@@ -4326,7 +4327,7 @@ def get_admin_dashboard(path: str = ""):
                                         </td>
                                         <td></td>
                                         <td>
-                                            <button class="btn btn-sm btn-outline-custom" data-submitter="${sub.submittedBy || 'Unknown'}" data-date="${sub.dateTime || 'N/A'}" data-form-id="${validFormId}" data-form-data="${encodeURIComponent(JSON.stringify(sub.formData || []))}" onclick="viewSubmission(this)">
+                                            <button class="btn btn-sm btn-outline-custom" data-submitter="${sub.submittedBy || 'Unknown'}" data-date="${sub.dateTime || 'N/A'}" data-form-id="${validFormId}" data-form-title="${(typeof activeCustomForm !== 'undefined' && activeCustomForm && (activeCustomForm.name || activeCustomForm.title)) ? (activeCustomForm.name || activeCustomForm.title) : 'Form Submission'}" data-form-data="${encodeURIComponent(JSON.stringify(sub.formData || []))}" onclick="viewSubmission(this)">
                                                 <i class="bi bi-eye"></i> View
                                             </button>
                                         </td>
@@ -4459,7 +4460,7 @@ def get_admin_dashboard(path: str = ""):
                                         </td>
                                         <td></td>
                                         <td>
-                                            <button class="btn btn-sm btn-outline-custom" data-submitter="${sub.submittedBy || 'Unknown'}" data-date="${sub.dateTime || 'N/A'}" data-form-id="${validFormId}" data-form-data="${encodeURIComponent(JSON.stringify(sub.formData || []))}" onclick="viewSubmission(this)">
+                                            <button class="btn btn-sm btn-outline-custom" data-submitter="${sub.submittedBy || 'Unknown'}" data-date="${sub.dateTime || 'N/A'}" data-form-id="${validFormId}" data-form-title="${(typeof activeCustomForm !== 'undefined' && activeCustomForm && (activeCustomForm.name || activeCustomForm.title)) ? (activeCustomForm.name || activeCustomForm.title) : 'Form Submission'}" data-form-data="${encodeURIComponent(JSON.stringify(sub.formData || []))}" onclick="viewSubmission(this)">
                                                 <i class="bi bi-eye"></i> View
                                             </button>
                                         </td>
@@ -6254,7 +6255,7 @@ def get_admin_dashboard(path: str = ""):
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">
                 <div class="modal-header border-bottom-0 pb-0 d-flex justify-content-between align-items-center">
-                    <h5 class="modal-title fw-bold">Form Submission</h5>
+                    <h5 class="modal-title fw-bold" id="vs-modal-title">Form Submission</h5>
                     <div>
                         <button type="button" class="btn btn-sm btn-outline-primary me-2" onclick="downloadSubmissionPDF()">
                             <i class="bi bi-file-earmark-pdf"></i> Download PDF
@@ -6336,6 +6337,9 @@ def get_admin_dashboard(path: str = ""):
             console.error("Failed to parse form data", e);
         }
         
+        const formTitle = btn.getAttribute('data-form-title') || (typeof activeCustomForm !== 'undefined' && activeCustomForm ? (activeCustomForm.name || activeCustomForm.title) : null) || 'Form Submission';
+        const titleEl = document.getElementById('vs-modal-title');
+        if (titleEl) titleEl.innerText = formTitle;
         document.getElementById('vs-submitter').innerText = submitter;
         document.getElementById('vs-date').innerText = date;
         
@@ -6355,13 +6359,13 @@ def get_admin_dashboard(path: str = ""):
         }
         
         let html = '<style>#vs-form-content img { max-width: 100%; height: auto; display: block; margin: 0 auto; }</style>';
-        html += '<div class="p-2" style="max-width: 100%; color: #333;">';
-        
+        html += '<div class="px-2 py-1" style="max-width: 100%; color: #333;">';
+
         // Render exact schema layout if found
         if (schemaFields && schemaFields.length > 0) {
             schemaFields.forEach(field => {
                 if (field.type === 'Description') {
-                    html += `<div class="mb-4 lh-base" style="word-wrap: break-word;">${field.content || field.description || ''}</div>`;
+                    html += `<div class="mb-3 lh-base text-center" style="word-wrap: break-word; font-size: 14.5px; color: #444;">${field.content || field.description || ''}</div>`;
                 } else {
                     let ans = '';
                     if (Array.isArray(formData)) {
@@ -6371,41 +6375,35 @@ def get_admin_dashboard(path: str = ""):
                         ans = formData[field.label] || '';
                     }
                     if (Array.isArray(ans)) ans = ans.join(', ');
-                    
+
                     html += `
-                    <div class="card mb-4 shadow-none border rounded bg-white">
-                        <div class="card-body p-4">
-                            <div class="text-secondary fs-7 mb-2">${field.label || 'Question'} ${field.required ? '<span class="text-danger">*</span>' : ''}</div>
-                            <div class="fw-bold text-dark fs-6" style="white-space: pre-wrap;">
-                                ${ans && typeof ans === 'string' && ans.startsWith('data:image/') ? `<img src="${ans}" style="max-height: 150px; border: 1px solid #dee2e6; border-radius: 4px; padding: 4px;" alt="Signature">` : (ans || '-')}
-                            </div>
-                        </div>
+                    <div class="mb-3 pb-3 border-bottom" style="page-break-inside: avoid;">
+                        <div class="text-secondary fs-7 text-start mb-1">${field.label || 'Question'}${field.required ? '<span class="text-danger">*</span>' : ''}</div>
+                        <div class="fw-bold text-dark fs-6 text-start mt-1" style="white-space: pre-wrap; word-break: break-word;">${ans && typeof ans === 'string' && ans.startsWith('data:image/') ? `<img src="${ans}" style="max-height: 120px; max-width: 100%; border: 1px solid #dee2e6; border-radius: 4px; padding: 2px;" alt="Signature">` : (ans || '-')}</div>
                     </div>`;
                 }
             });
         } else {
             // Fallback list renderer if schema is missing
-            html += '<h6 class="border-bottom pb-2 mb-3 fw-bold text-secondary fs-7 text-uppercase">Responses</h6>';
-            html += '<div class="list-group list-group-flush border rounded">';
+            html += '<h6 class="pb-1 mb-2 fw-bold text-secondary fs-7 text-uppercase">Responses</h6>';
             if (Array.isArray(formData) && formData.length > 0) {
                 formData.forEach(item => {
                     let label = item.label || item.question || 'Field';
                     let val = item.value || item.answer || item;
                     if (Array.isArray(val)) val = val.join(', ');
-                    html += `<div class="list-group-item py-3 px-4"><div class="text-muted fs-7 mb-1">${label}</div><div class="fw-semibold text-dark">${val && typeof val === \'string\' && val.startsWith(\'data:image/\') ? `<img src="${val}" style="max-height: 150px; border: 1px solid #dee2e6; border-radius: 4px; padding: 4px;" alt="Signature">` : val}</div></div>`;
+                    html += `<div class="mb-3 pb-3 border-bottom" style="page-break-inside: avoid;"><div class="text-secondary fs-7 text-start mb-1">${label}</div><div class="fw-bold text-dark fs-6 text-start mt-1" style="white-space: pre-wrap; word-break: break-word;">${val && typeof val === 'string' && val.startsWith('data:image/') ? `<img src="${val}" style="max-height: 120px; max-width: 100%; border: 1px solid #dee2e6; border-radius: 4px; padding: 2px;" alt="Signature">` : val}</div></div>`;
                 });
             } else if (Object.keys(formData).length > 0) {
                 for (const [key, val] of Object.entries(formData)) {
                     let displayVal = Array.isArray(val) ? val.join(', ') : val;
-                    html += `<div class="list-group-item py-3 px-4"><div class="text-muted fs-7 mb-1">${key}</div><div class="fw-semibold text-dark">${displayVal && typeof displayVal === \'string\' && displayVal.startsWith(\'data:image/\') ? `<img src="${displayVal}" style="max-height: 150px; border: 1px solid #dee2e6; border-radius: 4px; padding: 4px;" alt="Signature">` : displayVal}</div></div>`;
+                    html += `<div class="mb-3 pb-3 border-bottom" style="page-break-inside: avoid;"><div class="text-secondary fs-7 text-start mb-1">${key}</div><div class="fw-bold text-dark fs-6 text-start mt-1" style="white-space: pre-wrap; word-break: break-word;">${displayVal && typeof displayVal === 'string' && displayVal.startsWith('data:image/') ? `<img src="${displayVal}" style="max-height: 120px; max-width: 100%; border: 1px solid #dee2e6; border-radius: 4px; padding: 2px;" alt="Signature">` : displayVal}</div></div>`;
                 }
             } else {
-                html += '<div class="list-group-item py-3 px-4 text-muted">No data provided.</div>';
+                html += '<div class="text-muted text-center fs-7 py-3">No response data available</div>';
             }
-            html += '</div>';
         }
-        
         html += '</div>';
+        
         contentDiv.innerHTML = html;
         
         const modal = new bootstrap.Modal(document.getElementById('viewSubmissionModal'));
@@ -6416,11 +6414,12 @@ def get_admin_dashboard(path: str = ""):
         const element = document.getElementById('vs-form-content');
         const submitter = document.getElementById('vs-submitter').innerText;
         const date = document.getElementById('vs-date').innerText;
+        const formTitle = (document.getElementById('vs-modal-title') ? document.getElementById('vs-modal-title').innerText : '') || 'Form Submission';
         
         const pdfContainer = document.createElement('div');
         pdfContainer.innerHTML = `
             <div style="text-align: center; margin-bottom: 20px;">
-                <h4 style="font-weight: bold; font-family: sans-serif;">Form Submission</h4>
+                <h4 style="font-weight: bold; font-family: sans-serif;">${formTitle}</h4>
                 <p style="color: #666; font-size: 14px; font-family: sans-serif;">Submitted by: ${submitter} <br> Date: ${date}</p>
             </div>
         `;
@@ -6431,7 +6430,8 @@ def get_admin_dashboard(path: str = ""):
             filename:     `Submission_${submitter.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`,
             image:        { type: 'jpeg', quality: 0.98 },
             html2canvas:  { scale: 2, useCORS: true, letterRendering: true },
-            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak:    { mode: ['css', 'legacy'] }
         };
         html2pdf().set(opt).from(pdfContainer).save();
     }
