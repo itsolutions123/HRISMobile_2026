@@ -5,7 +5,6 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
-import * as Notifications from 'expo-notifications';
 import { AuthContext } from '../context/AuthContext';
 
 export default function DashboardScreen({ navigation }) {

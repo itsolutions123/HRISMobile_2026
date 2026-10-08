@@ -2,20 +2,10 @@ import React, { useContext } from 'react';
 import { View, Text, LogBox } from 'react-native';
 
 // Suppress Expo Go SDK 53+ push notification warning crash
-LogBox.ignoreLogs(['expo-notifications: Android Push notifications', '`expo-notifications` functionality is not fully supported']);
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import * as Notifications from 'expo-notifications';
-
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
 import GlobalAlertProvider, { setupGlobalAlert } from './src/components/GlobalAlert';
 setupGlobalAlert();
 
