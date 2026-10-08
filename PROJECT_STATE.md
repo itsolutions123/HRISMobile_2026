@@ -1,5 +1,5 @@
 # DTR App (atWork) - Project State
-Last updated: October 7, 2026
+Last updated: October 8, 2026
 Source of truth: rebuilt from the repo files pasted on this date (backend incl. web panel in `main.py`, mobile `src/`, docs, config). Commit hash not captured: run `git log --oneline -1` and add it here. docs/API.md was verified against 56c3675, docs/SECURITY.md against cff48c2.
 Method: code reading only. Nothing below was run against the live server unless marked VERIFIED-RUNTIME. UNVERIFIED items need a command or doc check before anyone builds on them.
 
@@ -41,7 +41,8 @@ F-01 to F-22 were rebuilt from code on 2026-10-07 and are tagged CODE-VERIFIED (
 | F-22 | 2026-10-07 | Local clock-out reminder (D-005, mobile half) | mobile | DashboardScreen `submitPunch` | CODE-VERIFIED, test value left in (B-23), NOT confirmed |
 | F-23 | 2026-10-07 | Add drag-and-drop reordering functionality to elements in the custom form builder modal | web | backend/app/main.py:handleBuilderDrop | User replied awesome to drag and drop testing |
 | F-24 | 2026-10-07 | Fix mobile form date/time pickers and description image height in FormsScreen | mobile | src/screens/FormsScreen.js | Confirmed visually by user on mobile app |
-Next ID: F-25.
+| F-25 | 2026-10-08 | Updated Smart Groups UI to a claymorphism card grid layout | web | backend/app/main.py:renderConnecteamProvisioningTable | cards render and tables load on click |
+Next ID: F-26.
 
 ## Stack (confirmed, do not change without discussion)
 - Backend: FastAPI (Python 3.11, Uvicorn), SQLAlchemy ORM, slowapi (login 5/min, reset-requests 3/hour), bcrypt, python-jose (HS256 JWT, 24h), openpyxl + simpleeval (XLSX export), apscheduler (BackgroundScheduler, auto clock-out)
