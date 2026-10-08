@@ -450,6 +450,27 @@ export default function FormsScreen({ navigation }) {
               );
             }
 
+            if (field.type === 'Header') {
+              return (
+                <View key={idx} style={{ width: '100%', height: field.headerHeight ? parseInt(field.headerHeight) : 150, marginBottom: 24 }}>
+                  {field.headerImg ? (
+                    <Image source={{ uri: field.headerImg }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+                  ) : (
+                    <View style={{ width: '100%', height: '100%', backgroundColor: '#e2e8f0', justifyContent: 'center', alignItems: 'center' }}>
+                      <Text style={{ color: '#64748b' }}>No Header Image</Text>
+                    </View>
+                  )}
+                </View>
+              );
+            }
+            if (field.type === 'Header') {
+              return (
+                <View key={idx} style={{ marginBottom: 24, marginTop: 12, borderBottomWidth: 1, borderBottomColor: '#e2e8f0', paddingBottom: 8 }}>
+                  <Text style={{ fontSize: 18, fontWeight: '700', color: '#1e293b' }}>{label}</Text>
+                  {field.description ? <Text style={{ fontSize: 14, color: '#64748b', marginTop: 4 }}>{field.description}</Text> : null}
+                </View>
+              );
+            }
             return (
               <View key={idx} style={styles.fieldContainer}>
                 <Text style={styles.fieldLabel}>{label} {field.required ? <Text style={{color: '#ef4444'}}>*</Text> : ''}</Text>

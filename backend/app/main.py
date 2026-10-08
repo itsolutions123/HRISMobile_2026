@@ -1100,9 +1100,7 @@ def get_admin_dashboard(path: str = ""):
                                         FORM PREVIEW (PDF PREVIEW)
                                     </div>
                                     <div class="card-custom flex-grow-1 p-4 bg-white rounded-3 border-2 border-dark" style="box-shadow: none; border-style: solid;">
-                                        <div class="border-bottom border-dark border-2 mb-3 pb-2">
-                                            <div class="text-uppercase text-dark fw-bold" style="font-size:0.9rem;">BIGTIME EMPIRE CORPORATION</div>
-                                        </div>
+                                        <!-- Removed hardcoded Bigtime Empire Corp -->
                                         
                                         <div class="border border-dark p-2 mb-3 border-2">
                                             <div class="text-uppercase border-bottom border-dark border-2 mb-2 pb-1 text-dark fw-bold" style="font-size:0.85rem;">DESCRIPTION</div>
@@ -2031,6 +2029,7 @@ def get_admin_dashboard(path: str = ""):
                                 <div class="row g-2">
                                     <div class="col-6"><button class="btn btn-outline-secondary btn-sm w-100 text-start fw-medium" onclick="addModalCanvasBlock(\'Open Ended\')"><i class="bi bi-input-cursor-text text-primary me-2"></i>Open Ended</button></div>
                                     <div class="col-6"><button class="btn btn-outline-secondary btn-sm w-100 text-start fw-medium" onclick="addModalCanvasBlock('Description')"><i class="bi bi-text-paragraph text-success me-2"></i>Description</button></div>
+                                    <div class="col-12"><button class="btn btn-outline-secondary btn-sm w-100 text-start fw-medium" onclick="addModalCanvasBlock('Header')"><i class="bi bi-image text-primary me-2"></i>Header (Letterhead)</button></div>
                                     <div class="col-6"><button class="btn btn-outline-secondary btn-sm w-100 text-start fw-medium" onclick="addModalCanvasBlock('Dropdown')"><i class="bi bi-menu-button-wide text-warning me-2"></i>Dropdown</button></div>
                                     <div class="col-6"><button class="btn btn-outline-secondary btn-sm w-100 text-start fw-medium" onclick="addModalCanvasBlock('Yes/No')"><i class="bi bi-toggle-on text-info me-2"></i>Yes / No</button></div>
                                     <div class="col-6"><button class="btn btn-outline-secondary btn-sm w-100 text-start fw-medium" onclick="addModalCanvasBlock('Location')"><i class="bi bi-geo-alt text-danger me-2"></i>Location</button></div>
@@ -2069,8 +2068,8 @@ def get_admin_dashboard(path: str = ""):
                     </div>
                     <div class="modal-body p-4 bg-secondary-subtle">
                         <div class="card border shadow-sm p-4 mx-auto bg-white rounded-3" style="max-width: 680px; min-height: 500px; font-family: Arial, sans-serif;">
-                            <div class="d-flex justify-content-center align-items-center border-bottom pb-3 mb-3 text-center">
-                                <h5 class="fw-bold text-dark m-0 text-uppercase" id="previewDocHeaderTitle">BIGTIME EMPIRE CORPORATION</h5>
+                            <div class="d-flex justify-content-center align-items-center border-bottom pb-3 mb-3 text-center" id="previewDocHeaderContainer" style="display: none !important;">
+                                <!-- Removed hardcoded Bigtime Empire Corp -->
                             </div>
                             <div id="previewDocFieldsArea" class="d-flex flex-column gap-3 py-2">
                                 <!-- Dynamic form schema fields rendered here -->
@@ -2996,7 +2995,44 @@ def get_admin_dashboard(path: str = ""):
                 let visibleBrands = (selectedBrandView === 'ALL') ? brands : brands.filter(b => b === selectedBrandView);
                 document.getElementById('groups-count-label').innerText = `${allGroups.length} groups total`;
 
-                let panelsHtml = '';
+                let panelsHtml = `<style>
+                    .clay-container { display: flex; flex-wrap: wrap; gap: 24px; padding: 16px 0; justify-content: flex-start; }
+                    .clay-card {
+                        background: #f0f4f8;
+                        border-radius: 24px;
+                        box-shadow: 9px 9px 16px rgb(163,177,198,0.6), -9px -9px 16px rgba(255,255,255, 0.5);
+                        width: 220px;
+                        height: 220px;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: center;
+                        cursor: pointer;
+                        position: relative;
+                        transition: all 0.2s ease;
+                        border: 1px solid rgba(255,255,255,0.4);
+                    }
+                    .clay-card:hover { transform: translateY(-5px); }
+                    .clay-card.active { box-shadow: inset 6px 6px 12px rgb(163,177,198,0.6), inset -6px -6px 12px rgba(255,255,255, 0.5); border: 2px solid #0d6efd; }
+                    .clay-actions { position: absolute; top: 12px; right: 12px; display: flex; gap: 8px; }
+                    .clay-btn {
+                        background: #f0f4f8;
+                        box-shadow: 4px 4px 8px rgb(163,177,198,0.5), -4px -4px 8px rgba(255,255,255, 0.6);
+                        border: none; border-radius: 50%; width: 32px; height: 32px;
+                        display: flex; align-items: center; justify-content: center;
+                        color: #6c757d; transition: all 0.2s ease;
+                    }
+                    .clay-btn:hover { color: #0d6efd; }
+                    .clay-btn:active { box-shadow: inset 2px 2px 4px rgb(163,177,198,0.5), inset -2px -2px 4px rgba(255,255,255, 0.6); }
+                    .clay-table-container {
+                        background: #f0f4f8; border-radius: 24px;
+                        box-shadow: 9px 9px 16px rgb(163,177,198,0.6), -9px -9px 16px rgba(255,255,255, 0.5);
+                        padding: 24px; margin-top: 16px; display: none; margin-bottom: 24px;
+                    }
+                </style>
+                <div class="clay-container" id="clay-cards-grid">`;
+
+                let tablesHtml = `<div id="clay-tables-area" class="w-100">`;
 
                 visibleBrands.forEach((brandName, bIdx) => {
                     const brandGroups = allGroups.filter(g => (g.brand || 'Head Office') === brandName);
@@ -3078,19 +3114,23 @@ def get_admin_dashboard(path: str = ""):
                     });
 
                     panelsHtml += `
-                        <div class="card-custom p-0 overflow-hidden mb-3 shadow-sm border-0">
-                            <div class="p-2 bg-light border-bottom d-flex align-items-center justify-content-between">
-                                <div class="d-flex align-items-center gap-2">
-                                    <i class="bi bi-chevron-right text-warning fs-6" style="cursor:pointer; width:20px; text-align:center;" id="chevron-brand-${bIdx}" onclick="toggleBrandCollapse('${bIdx}')"></i>
-                                    <span class="fw-bold text-dark fs-6" style="cursor:pointer;" onclick="toggleBrandCollapse('${bIdx}')">${brandName}</span>
-                                    <button class="btn btn-sm btn-light border-0 ms-2 py-0 px-1 text-muted hover-primary" title="Rename Brand" onclick="openRenameBrandModal('${brandName}')"><i class="bi bi-pencil fs-7"></i></button>
-                                    <button class="btn btn-sm btn-light border-0 py-0 px-1 text-muted hover-danger" title="Delete Brand" onclick="deleteBrandLocation('${brandName}')"><i class="bi bi-trash fs-7"></i></button>
-                                </div>
-                                <button class="btn btn-sm btn-outline-primary py-1 px-2 fw-medium fs-7" onclick="openAddGroupModal('${brandName}')"><i class="bi bi-plus-lg me-1"></i> Add Group</button>
+                        <div class="clay-card" id="clay-card-${bIdx}" onclick="window.selectClayBrand('${bIdx}')">
+                            <div class="clay-actions">
+                                <button class="clay-btn" title="Rename Brand" onclick="event.stopPropagation(); openRenameBrandModal('${brandName}')"><i class="bi bi-pencil fs-7"></i></button>
+                                <button class="clay-btn text-danger" title="Delete Brand" onclick="event.stopPropagation(); deleteBrandLocation('${brandName}')"><i class="bi bi-trash fs-7"></i></button>
                             </div>
+                            <h4 class="fw-bold text-dark m-0 text-center px-2" style="word-break: break-word;">${brandName}</h4>
+                        </div>
+                    `;
 
-                            <div class="table-responsive" id="brand-body-${bIdx}" style="display: none;">
-                                <table class="table table-hover align-middle m-0">
+                    tablesHtml += `
+                        <div class="clay-table-container" id="brand-body-${bIdx}">
+                            <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
+                                <h5 class="fw-bold m-0"><i class="bi bi-diagram-3 me-2 text-primary"></i> ${brandName} Groups</h5>
+                                <button class="btn btn-primary-custom px-4 rounded-pill shadow-sm" onclick="openAddGroupModal('${brandName}')"><i class="bi bi-plus-lg me-1"></i> Add Group</button>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle m-0 bg-transparent">
                                     <thead>
                                         <tr>
                                             <th width="30"><input type="checkbox" class="form-check-input"></th>
@@ -3102,12 +3142,28 @@ def get_admin_dashboard(path: str = ""):
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        ${rowsHtml || '<tr><td colspan="6" class="text-center text-muted">No groups created under ' + brandName + '.</td></tr>'}
+                                        ${rowsHtml || '<tr><td colspan="6" class="text-center text-muted py-4">No groups created under ' + brandName + '.</td></tr>'}
                                     </tbody>
                                 </table>
                             </div>
-                        </div>`;
+                        </div>
+                    `;
                 });
+
+                panelsHtml += `</div>` + tablesHtml + `</div>`;
+
+                window.selectClayBrand = function(bIdx) {
+                    document.querySelectorAll('.clay-table-container').forEach(el => el.style.display = 'none');
+                    document.querySelectorAll('.clay-card').forEach(el => el.classList.remove('active'));
+                    
+                    const targetTable = document.getElementById('brand-body-' + bIdx);
+                    if(targetTable) {
+                        targetTable.style.display = 'block';
+                        targetTable.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }
+                    const targetCard = document.getElementById('clay-card-' + bIdx);
+                    if(targetCard) targetCard.classList.add('active');
+                };
 
                 document.getElementById('brands-container').innerHTML = panelsHtml;
                 populateDepartmentDropdownOptions();
@@ -4891,7 +4947,15 @@ def get_admin_dashboard(path: str = ""):
 
                 let fields = normalizeFormSchemaFields(activeCustomForm ? (activeCustomForm.schema_fields || activeCustomForm.fields) : []);
                 // top title element removed
-                if (headerEl) headerEl.innerText = activeCustomForm.name;
+                if (headerEl) {
+                    const hasHeaderImg = fields.some(f => f.type === 'Header' && f.headerImg);
+                    if (hasHeaderImg) {
+                        headerEl.parentElement.style.display = 'none';
+                    } else {
+                        headerEl.parentElement.style.display = 'flex';
+                        headerEl.innerText = activeCustomForm.name;
+                    }
+                }
                 // category element removed
 
                 if (areaEl) {
@@ -4904,6 +4968,12 @@ def get_admin_dashboard(path: str = ""):
                             if (f.type === 'Description') {
                                 const descHtml = f.description || f.content || f.label || '';
                                 html += `<div class="my-3 text-dark fs-7 lh-base text-break">${descHtml}</div>`;
+                                return;
+                            }
+                            if (f.type === 'Header') {
+                                html += `<div class="mb-4" style="width: 100%; height: ${f.headerHeight || '150px'};">
+                                            <img src="${f.headerImg || ''}" style="width: 100%; height: 100%; object-fit: cover; object-position: center top;" alt="Letterhead">
+                                         </div>`;
                                 return;
                             }
                             html += `<div class="mb-3">
@@ -5055,7 +5125,7 @@ def get_admin_dashboard(path: str = ""):
                 modalBuilderFields.push({
                     id: id,
                     type: type,
-                    label: type + ' Question',
+                    label: type === 'Header' ? 'Letterhead Image' : type + ' Question',
                     required: false,
                     options: (type === 'Dropdown' || type === 'Task') ? ['Option 1', 'Option 2'] : (type === 'Yes/No' ? ['Yes', 'No'] : [])
                 });
@@ -5089,6 +5159,43 @@ def get_admin_dashboard(path: str = ""):
             
             let descEditorBsModal = null;
             
+            function uploadHeaderImage(idx) {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = 'image/png, image/jpeg, image/webp';
+                input.onchange = (e) => {
+                    const file = e.target.files[0];
+                    if(!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        modalBuilderFields[idx].headerImg = event.target.result;
+                        modalBuilderFields[idx].headerHeight = "150px";
+                        renderModalCanvasBlocks();
+                        
+                        // Wait for render then attach mouseup listener to save height
+                        setTimeout(() => {
+                            const containers = document.querySelectorAll('.header-resize-container');
+                            containers.forEach((el, index) => {
+                                el.addEventListener('mouseup', function() {
+                                    // Update height on the specific field when resized
+                                    let htmlIdx = 0;
+                                    for(let i=0; i<modalBuilderFields.length; i++){
+                                       if(modalBuilderFields[i].type === 'Header') {
+                                           if(htmlIdx === index) {
+                                               modalBuilderFields[i].headerHeight = this.style.height || "150px";
+                                           }
+                                           htmlIdx++;
+                                       }
+                                    }
+                                });
+                            });
+                        }, 100);
+                    };
+                    reader.readAsDataURL(file);
+                };
+                input.click();
+            }
+
             function openElementEditorModal(idx) {
                 const field = modalBuilderFields[idx];
                 if (!field) return;
@@ -5473,6 +5580,11 @@ def get_admin_dashboard(path: str = ""):
                                         <div class="p-2 border rounded bg-light text-dark fs-7 lh-sm overflow-hidden text-truncate desc-preview-content" style="max-height: 60px; cursor: pointer;" onclick="openDescriptionModal(${idx})">
                                             ${(field.description || field.content || field.value) ? (field.description || field.content || field.value) : '<span class="text-muted fst-italic">Click Edit to add rich text content...</span>'}
                                         </div>
+                                    ` : field.type === 'Header' ? `
+                                        <div class="header-resize-container mt-2" style="height: ${field.headerHeight || '150px'};">
+                                            <img src="${field.headerImg || ''}" alt="Header Preview">
+                                            <div class="position-absolute bottom-0 end-0 bg-dark text-white p-1 fs-7 rounded-start opacity-75">Drag bottom edge to resize</div>
+                                        </div>
                                     ` : `
                                         <input type="text" class="form-control form-control-sm fw-medium" value="${field.label}" onchange="updateModalBlockLabel(${idx}, this.value)" placeholder="Field Label">
                                     `}
@@ -5482,7 +5594,11 @@ def get_admin_dashboard(path: str = ""):
                                         <input class="form-check-input" type="checkbox" id="mreq_${idx}" ${field.required ? 'checked' : ''} onchange="updateModalBlockRequired(${idx}, this.checked)">
                                         <label class="form-check-label small text-muted" for="mreq_${idx}">Required</label>
                                     </div>
-                                    <button type="button" class="btn btn-sm btn-link text-decoration-none fw-semibold p-0 text-primary ms-1" onclick="openElementEditorModal(${idx})">Edit</button>
+                                    ${field.type === 'Header' ? `
+                                        <button type="button" class="btn btn-sm btn-link text-decoration-none fw-semibold p-0 text-primary ms-1" onclick="uploadHeaderImage(${idx})">Upload Image</button>
+                                    ` : `
+                                        <button type="button" class="btn btn-sm btn-link text-decoration-none fw-semibold p-0 text-primary ms-1" onclick="openElementEditorModal(${idx})">Edit</button>
+                                    `}
                                 </div>
                             </div>`;
 
@@ -5773,6 +5889,54 @@ def get_admin_dashboard(path: str = ""):
                         descBtn.onclick = () => openDescriptionEditor(fieldId);
                         container.appendChild(descBtn);
                     }
+                } else if (selectEl.value === 'header') {
+                    if (descBtn) descBtn.remove();
+                    if (dropdownBtn) dropdownBtn.remove();
+                    let headerBtn = fieldCard.querySelector('.header-edit-btn');
+                    if (!headerBtn && container) {
+                        headerBtn = document.createElement('button');
+                        headerBtn.type = 'button';
+                        headerBtn.className = 'btn btn-sm btn-outline-primary mt-2 header-edit-btn';
+                        headerBtn.innerHTML = '<i class="bi bi-image me-1"></i> Upload Header Image';
+                        headerBtn.onclick = () => {
+                            const input = document.createElement('input');
+                            input.type = 'file';
+                            input.accept = 'image/png, image/jpeg, image/webp';
+                            input.onchange = (e) => {
+                                const file = e.target.files[0];
+                                if(!file) return;
+                                const reader = new FileReader();
+                                reader.onload = (event) => {
+                                    fieldCard.dataset.headerImg = event.target.result;
+                                    fieldCard.dataset.headerHeight = "150px";
+                                    
+                                    // Visual preview in builder
+                                    let preview = fieldCard.querySelector('.header-resize-container');
+                                    if(!preview) {
+                                        preview = document.createElement('div');
+                                        preview.className = 'header-resize-container mt-3';
+                                        const img = document.createElement('img');
+                                        preview.appendChild(img);
+                                        const note = document.createElement('div');
+                                        note.className = 'position-absolute bottom-0 end-0 bg-dark text-white p-1 fs-7 rounded-start opacity-75';
+                                        note.innerText = 'Drag bottom edge to resize height';
+                                        preview.appendChild(note);
+                                        
+                                        // Save height on mouse up
+                                        preview.addEventListener('mouseup', function() {
+                                            fieldCard.dataset.headerHeight = this.style.height || "150px";
+                                        });
+                                        
+                                        fieldCard.appendChild(preview);
+                                    }
+                                    preview.querySelector('img').src = event.target.result;
+                                };
+                                reader.readAsDataURL(file);
+                            };
+                            input.click();
+                        };
+                        container.appendChild(headerBtn);
+                    }
                 } else if (selectEl.value === 'dropdown') {
                     if (descBtn) descBtn.remove();
                     if (!dropdownBtn && container) {
@@ -5821,6 +5985,7 @@ def get_admin_dashboard(path: str = ""):
                                 <select class="form-select form-select-sm field-type-select" onchange="handleFieldTypeChange(this, '${fieldId}')">
                                     <optgroup label="Layout">
                                         <option value="description">📄 Description</option>
+                                        <option value="header">🖼️ Header (Letterhead)</option>
                                     </optgroup>
                                     <optgroup label="Elements">
                                         <option value="dropdown">≔ Dropdown</option>
@@ -5885,7 +6050,12 @@ def get_admin_dashboard(path: str = ""):
                     const label = card.querySelector('.field-label-input').value.trim() || 'Untitled Field';
                     const type = card.querySelector('.field-type-select').value;
                     const required = card.querySelector('.field-required-check').checked;
-                    fields.push({ label, type, required });
+                    let extra = {};
+                    if(type === 'header') {
+                        extra.headerImg = card.dataset.headerImg || '';
+                        extra.headerHeight = card.dataset.headerHeight || '150px';
+                    }
+                    fields.push({ label, type, required, ...extra });
                 });
 
                 if (submitBtn) submitBtn.disabled = true;
