@@ -47,6 +47,20 @@ async def get_favicon():
 app.include_router(dtr.router)
 app.include_router(forms.router)
 
+import urllib.request
+from fastapi import Response, Query
+
+@app.get("/api/proxy-image")
+def proxy_image(url: str = Query(...)):
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = response.read()
+            content_type = response.headers.get('Content-Type', 'image/jpeg')
+            return Response(content=data, media_type=content_type)
+    except Exception as e:
+        return Response(status_code=400, content=f"Error fetching image: {str(e)}")
+
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime, timedelta
 
@@ -4969,12 +4983,14 @@ def get_admin_dashboard(path: str = ""):
                     if (fields.length === 0) {
                         areaEl.innerHTML = '<div class="text-center text-muted py-4">No fields defined for this form.</div>';
                     } else {
-                        let html = '';
+                        let html = `<div class="text-center border-bottom pb-3 mb-3">
+                            <h4 class="fw-bold text-dark mb-1">${activeCustomForm.name || activeCustomForm.title || 'Form Preview'}</h4>
+                        </div>`;
                         let qNum = 1;
                         fields.forEach((f, idx) => {
                             if (f.type === 'Description') {
                                 const descHtml = f.description || f.content || f.label || '';
-                                html += `<div class="my-3 text-dark fs-7 lh-base text-break">${descHtml}</div>`;
+                                html += `<div class="my-3 text-dark fs-7 lh-base text-break text-center">${descHtml}</div>`;
                                 return;
                             }
                             if (f.type === 'Header') {
@@ -6592,31 +6608,88 @@ def get_admin_dashboard(path: str = ""):
         const submitter = document.getElementById('vs-submitter').innerText;
         const date = document.getElementById('vs-date').innerText;
         const formTitle = (document.getElementById('vs-modal-title') ? document.getElementById('vs-modal-title').innerText : '') || 'Form Submission';
-        
+
+        // Use an off-DOM container just to process images to Base64
         const pdfContainer = document.createElement('div');
+        
+        // Wrap everything in a strict 750px container with border-box
         pdfContainer.innerHTML = `
-            <div style="width: 100%; margin-bottom: 20px; overflow: hidden;">
-                <div style="float: left; width: 70%; text-align: left;">
-                    <h4 style="font-weight: bold; font-family: sans-serif; margin-top: 0; margin-bottom: 8px;">${formTitle}</h4>
-                    <p style="color: #666; font-size: 14px; font-family: sans-serif; margin: 0;">Submitted by: ${submitter} <br> Date: ${date}</p>
+            <div style="width: 750px; max-width: 750px; background: #ffffff; color: #333333; font-family: Helvetica, Arial, sans-serif; padding: 20px; box-sizing: border-box;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%; margin-bottom: 25px; border-bottom: 1px solid #ddd; padding-bottom: 15px; box-sizing: border-box;">
+                    <div style="flex: 1; text-align: left; padding-right: 20px; box-sizing: border-box;">
+                        <h3 style="font-weight: bold; margin: 0 0 8px 0; color: #111;">${formTitle}</h3>
+                        <p style="color: #555; font-size: 14px; margin: 0;">Submitted by: <strong>${submitter}</strong><br>Date: ${date}</p>
+                    </div>
+                    <div style="width: 150px; text-align: right; padding-right: 15px; box-sizing: border-box;">
+                        <img src="/static/logo.png" style="max-height: 60px; max-width: 100%;" alt="Logo">
+                    </div>
                 </div>
-                <div style="float: right; width: 30%; text-align: right;">
-                    <img src="/static/logo.png" style="max-height: 60px; max-width: 100%;" alt="Logo">
+                <div style="width: 100%; max-width: 100%; box-sizing: border-box; overflow-wrap: break-word; word-wrap: break-word;">
+                    ${element.innerHTML}
                 </div>
-                <div style="clear: both;"></div>
             </div>
         `;
-        pdfContainer.appendChild(element.cloneNode(true));
-        
-        const opt = {
-            margin:       15,
-            filename:     `Submission_${submitter.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`,
-            image:        { type: 'jpeg', quality: 0.98 },
-            html2canvas:  { scale: 2, useCORS: true, letterRendering: true },
-            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            pagebreak:    { mode: ['css', 'legacy'] }
-        };
-        html2pdf().set(opt).from(pdfContainer).save();
+
+        const images = pdfContainer.getElementsByTagName('img');
+        const imagePromises = [];
+
+        for (let i = 0; i < images.length; i++) {
+            const img = images[i];
+            img.removeAttribute('loading');
+            // Force inline styles on all images so they behave in the HTML string
+            img.style.maxWidth = '100%';
+            img.style.height = 'auto';
+            img.style.boxSizing = 'border-box';
+            
+            if (img.src && !img.src.startsWith('data:')) {
+                let imgUrl = new URL(img.getAttribute('src') || img.src, window.location.href).href;
+                if (imgUrl.startsWith('http') && !imgUrl.includes(window.location.host)) {
+                    imgUrl = `/api/proxy-image?url=${encodeURIComponent(imgUrl)}`;
+                }
+                const p = new Promise((resolve) => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    const tempImg = new Image();
+                    tempImg.crossOrigin = 'anonymous';
+                    tempImg.onload = () => {
+                        canvas.width = tempImg.width;
+                        canvas.height = tempImg.height;
+                        ctx.drawImage(tempImg, 0, 0);
+                        try {
+                            img.src = canvas.toDataURL('image/png');
+                        } catch(e) {}
+                        resolve();
+                    };
+                    tempImg.onerror = resolve;
+                    tempImg.src = imgUrl + (imgUrl.includes('?') ? '&' : '?') + 't=' + new Date().getTime();
+                });
+                imagePromises.push(p);
+            }
+        }
+
+        Promise.all(imagePromises).then(() => {
+            // Once all images are converted to data URIs, we extract the raw HTML string
+            let finalHtml = pdfContainer.innerHTML;
+            
+            // Aggressively strip out Bootstrap utility classes that cause 100% width overflows
+            finalHtml = finalHtml.replace(/class="[^"]*px-2[^"]*"/g, 'class=""');
+            finalHtml = finalHtml.replace(/class="[^"]*py-1[^"]*"/g, 'class=""');
+            finalHtml = finalHtml.replace(/px-2/g, '');
+            finalHtml = finalHtml.replace(/py-1/g, '');
+
+            const opt = {
+                margin:       10,
+                filename:     `Submission_${submitter.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`,
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true, letterRendering: true },
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            setTimeout(() => {
+                // Passing a string forces html2pdf to use its own perfectly bounded internal iframe
+                html2pdf().set(opt).from(finalHtml).save();
+            }, 300);
+        });
     }
     </script>
 
