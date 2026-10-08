@@ -42,7 +42,8 @@ F-01 to F-22 were rebuilt from code on 2026-10-07 and are tagged CODE-VERIFIED (
 | F-23 | 2026-10-07 | Add drag-and-drop reordering functionality to elements in the custom form builder modal | web | backend/app/main.py:handleBuilderDrop | User replied awesome to drag and drop testing |
 | F-24 | 2026-10-07 | Fix mobile form date/time pickers and description image height in FormsScreen | mobile | src/screens/FormsScreen.js | Confirmed visually by user on mobile app |
 | F-25 | 2026-10-08 | Updated Smart Groups UI to a claymorphism card grid layout | web | backend/app/main.py:renderConnecteamProvisioningTable | cards render and tables load on click |
-Next ID: F-26.
+| F-26 | 2026-10-08 | Adjusted PDF export layout for forms to left-align title and submitter, and added optimized company logo to the right. | backend, web | backend/app/main.py (downloadSubmissionPDF, get_logo) | verified layout on web panel |
+Next ID: F-27.
 
 ## Stack (confirmed, do not change without discussion)
 - Backend: FastAPI (Python 3.11, Uvicorn), SQLAlchemy ORM, slowapi (login 5/min, reset-requests 3/hour), bcrypt, python-jose (HS256 JWT, 24h), openpyxl + simpleeval (XLSX export), apscheduler (BackgroundScheduler, auto clock-out)

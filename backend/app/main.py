@@ -14,6 +14,13 @@ from .auth_utils import get_password_hash
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="HRIS DTR Backend API")
+
+@app.get("/static/logo.png")
+def get_logo():
+    import os
+    from fastapi.responses import FileResponse
+    logo_path = os.path.join(os.path.dirname(__file__), "static", "logo.png")
+    return FileResponse(logo_path)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -6588,9 +6595,15 @@ def get_admin_dashboard(path: str = ""):
         
         const pdfContainer = document.createElement('div');
         pdfContainer.innerHTML = `
-            <div style="text-align: center; margin-bottom: 20px;">
-                <h4 style="font-weight: bold; font-family: sans-serif;">${formTitle}</h4>
-                <p style="color: #666; font-size: 14px; font-family: sans-serif;">Submitted by: ${submitter} <br> Date: ${date}</p>
+            <div style="width: 100%; margin-bottom: 20px; overflow: hidden;">
+                <div style="float: left; width: 70%; text-align: left;">
+                    <h4 style="font-weight: bold; font-family: sans-serif; margin-top: 0; margin-bottom: 8px;">${formTitle}</h4>
+                    <p style="color: #666; font-size: 14px; font-family: sans-serif; margin: 0;">Submitted by: ${submitter} <br> Date: ${date}</p>
+                </div>
+                <div style="float: right; width: 30%; text-align: right;">
+                    <img src="/static/logo.png" style="max-height: 60px; max-width: 100%;" alt="Logo">
+                </div>
+                <div style="clear: both;"></div>
             </div>
         `;
         pdfContainer.appendChild(element.cloneNode(true));
